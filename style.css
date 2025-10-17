@@ -1,0 +1,67 @@
+:root{
+    --itau-blue: #003366;
+    --itau-orange: #FF6600;
+    --muted: #6b7280;
+    --card-bg: #ffffff;
+    --page-bg: #f7fbff;
+}
+
+[data-testid="stAppViewContainer"] {
+    background-color: var(--page-bg);
+}
+
+.topbar{
+    background: linear-gradient(90deg, #003366 0%, #002a4d 100%);
+    padding: 12px 20px;
+    color: white;
+    border-radius: 8px;
+    margin-bottom: 18px;
+}
+
+.main-title{
+    font-size: 22px;
+    font-weight: 700;
+    text-align: center;
+    color: var(--itau-blue);
+    margin: 6px 0;
+}
+
+.section-title-center{
+    text-align:center;
+    font-weight:700;
+    color:var(--itau-blue);
+    font-size:20px;
+    margin: 6px 0 12px 0;
+}
+
+.project-card{
+    background: var(--card-bg);
+    border: 1px solid #e6eef8;
+    border-radius: 10px;
+    padding: 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    margin-bottom: 10px;
+}
+
+.stButton>button {
+    background: linear-gradient(180deg, var(--itau-orange) 0%, #e65b00 100%);
+    border: none;
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-weight: 600;
+}
+
+.small-muted { color: var(--muted); }
+
+.metric-card{
+    background:#fff;
+    padding:12px;
+    border-radius:8px;
+    border:1px solid #e6eef8;
+    text-align:center;
+}
+
+.project-card h5{
+    margin: 0; font-size: 16px; color: var(--itau-blue);
+}
