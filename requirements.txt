@@ -1,5 +1,10 @@
 streamlit
 pandas
+plotly
 streamlit-calendar
+openpyxl
+xlsxwriter
+streamlit-option-menu
+streamlit-aggrid
 
 
