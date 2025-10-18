@@ -37,16 +37,16 @@ def tela_cadastro_usuario():
         senha = st.text_input("Senha", type="password", key="cad_senha")
         if st.form_submit_button("Cadastrar"):
             if not nome or not email:
-                st.error("Preencha Nome e Email.")
+                st.toast("Preencha Nome e Email.")
                 return
             df = utils.carregar_usuarios()
             if email.lower() in df["Email"].astype(str).str.lower().values:
-                st.error("Email já cadastrado!")
+                st.toast("Email já cadastrado!")
             else:
                 nova_linha = pd.DataFrame([[nome, email, senha]], columns=df.columns)
                 df = pd.concat([df, nova_linha], ignore_index=True)
                 utils.salvar_usuario(df)
-                st.success("Usuário cadastrado!")
+              st.toast("Usuário cadastrado!")
                 st.session_state.cadastro = False
                 st.rerun()
     if st.button("Voltar para Login"):
@@ -87,7 +87,7 @@ def tela_cadastro_projeto():
                 nova_linha_data[pergunta] = resposta
         
         if utils.adicionar_projeto_db(nova_linha_data):
-            st.success(f"Projeto '{projeto_nome}' cadastrado!"); st.session_state["tela_cadastro_proj"] = False; st.rerun()
+            st.toast(f"Projeto '{projeto_nome}' cadastrado!"); st.session_state["tela_cadastro_proj"] = False; st.rerun()
 
 def tela_projetos():
     st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True)
@@ -237,9 +237,9 @@ def tela_projetos():
                 if 'finalizad' in status_final.lower():
                     total_etapas_config = len(etapas_do_projeto)
                     if len(novas_etapas_marcadas) < total_etapas_config and total_etapas_config > 0:
-                        st.error(f"ERRO: Para finalizar, todas as {total_etapas_config} etapas devem ser marcadas.", icon="🚨"); st.stop()
+                        st.toast(f"ERRO: Para finalizar, todas as {total_etapas_config} etapas devem ser marcadas.", icon="🚨"); st.stop()
                     if not nova_data_finalizacao:
-                        st.error("ERRO: Se o status é 'Finalizada', a Data de Finalização é obrigatória.", icon="🚨"); st.stop()
+                        st.toast("ERRO: Se o status é 'Finalizada', a Data de Finalização é obrigatória.", icon="🚨"); st.stop()
                 
                 log_final = row.get("Log Agendamento", "") if pd.notna(row.get("Log Agendamento")) else ""
                 agendamento_antigo = row['Agendamento']
@@ -269,7 +269,7 @@ def tela_projetos():
                 }
 
                 if utils.atualizar_projeto_db(project_id, updates):
-                    st.success(f"Projeto '{novo_projeto}' (ID: {project_id}) atualizado.")
+                   st.toast(f"Projeto '{novo_projeto}' (ID: {project_id}) atualizado.")
                     st.rerun()
 
             st.markdown("---")
@@ -309,4 +309,5 @@ def main():
         tela_projetos()
 
 if __name__ == "__main__":
+
     main()
