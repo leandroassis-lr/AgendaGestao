@@ -6,5 +6,6 @@ openpyxl
 xlsxwriter
 streamlit-option-menu
 streamlit-aggrid
+st-turso
 
 
