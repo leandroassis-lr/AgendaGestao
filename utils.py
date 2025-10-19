@@ -95,31 +95,30 @@ def atualizar_projeto_db(project_id, updates: dict):
         st.toast(f"Erro ao atualizar projeto: {e}", icon="🔥")
         return False
 
+from sqlalchemy import text
+
 def adicionar_projeto_db(data: dict):
-    """Adiciona um novo projeto ao banco usando exec_driver_sql com parâmetros nomeados."""
     engine = get_engine()
     if engine is None:
         return False
-
+    
     try:
-        # Normaliza os nomes das colunas para o banco
         db_data = {
             key.replace(' ', '_').replace('ç', 'c').replace('ê', 'e').replace('ã', 'a'): value
             for key, value in data.items()
         }
-
+        
         cols_str = ', '.join([f'"{c}"' for c in db_data.keys()])
         placeholders = ', '.join([f":{c}" for c in db_data.keys()])
         sql = f"INSERT INTO projetos ({cols_str}) VALUES ({placeholders})"
-        values = db_data  # dicionário com parâmetros nomeados
-
+        sql_stmt = text(sql)
+        
         with engine.connect() as conn:
-            conn.exec_driver_sql(sql, values)  # Executa com parâmetros nomeados
+            conn.execute(sql_stmt, **db_data)  # Passa parâmetros nomeados
             conn.commit()
-
+        
         st.cache_data.clear()
         return True
-
     except Exception as e:
         st.toast(f"Erro ao adicionar projeto: {e}", icon="🔥")
         return False
@@ -241,6 +240,7 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
 
 
 
