@@ -96,17 +96,26 @@ def atualizar_projeto_db(project_id, updates: dict):
         return False
 
 from sqlalchemy import text
+from datetime import date, datetime
 
 def adicionar_projeto_db(data: dict):
     engine = get_engine()
     if engine is None:
         return False
     
+    def sanitize_value(val):
+        if isinstance(val, (int, float, type(None))):
+            return val
+        if isinstance(val, (date, datetime)):
+            return val
+        return str(val)
+    
     try:
-        db_data = {
+        db_data_raw = {
             key.replace(' ', '_').replace('ç', 'c').replace('ê', 'e').replace('ã', 'a'): value
             for key, value in data.items()
         }
+        db_data = {k: sanitize_value(v) for k, v in db_data_raw.items()}
         
         cols_str = ', '.join([f'"{c}"' for c in db_data.keys()])
         placeholders = ', '.join([f":{c}" for c in db_data.keys()])
@@ -114,7 +123,7 @@ def adicionar_projeto_db(data: dict):
         sql_stmt = text(sql)
         
         with engine.connect() as conn:
-            conn.execute(sql_stmt, parameters=db_data)  # Passa parâmetros via dict no argumento parameters
+            conn.execute(sql_stmt, parameters=db_data)
             conn.commit()
         
         st.cache_data.clear()
@@ -122,7 +131,6 @@ def adicionar_projeto_db(data: dict):
     except Exception as e:
         st.toast(f"Erro ao adicionar projeto: {e}", icon="🔥")
         return False
-
         
 def excluir_projeto_db(project_id):
     engine = get_engine()
@@ -241,6 +249,7 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
 
 
 
