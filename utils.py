@@ -14,7 +14,7 @@ CONFIG_TABS = {
     "status": ["Status"],
     "agencias": ["Agência"],
     "projetos_nomes": ["Nome do Projeto"],
-    "tecnicos": ["Tecnico"],
+    "tecnicos": ["Técnico"],
     "sla": ["Nome do Projeto", "Demanda", "Prazo (dias)"],
     "perguntas": ["Pergunta", "Tipo (texto, numero, data)"],
     "etapas_evolucao": ["Nome do Projeto", "Etapa"]
@@ -63,8 +63,8 @@ def carregar_projetos_db():
             )
         df.rename(columns={
             'Descricao': 'Descrição',
-            'Agencia': 'Agencia',
-            'Tecnico': 'Tecnico',
+            'Agencia': 'Agência',
+            'Tecnico': 'Técnico',
             'Observacao': 'Observação',
             'Data_Abertura': 'Data de Abertura',
             'Data_Finalizacao': 'Data de Finalização',
@@ -112,7 +112,7 @@ def atualizar_projeto_db(project_id, updates: dict):
         return False
     try:
         updates_sanitized = {
-            key.replace(' ', '_').replace('ç', 'c').replace('ê', 'e').replace('ã', 'a'): val
+            key.replace(' ', '_').replace('ç', 'c').replace('ê', 'e').replace('é', 'e').replace('ã', 'a'): val
             for key, val in updates.items()
         }
         set_clause = ", ".join([f'"{k}" = :{k}' for k in updates_sanitized.keys()])
@@ -258,6 +258,7 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
 
 
 
