@@ -8,6 +8,8 @@ from sqlalchemy import inspect, text
 
 # Importa TODAS as nossas funções do arquivo utils.py
 import utils
+# ...
+utils.load_css()
 
 # ----------------- Helpers -----------------
 def _to_date_safe(val):
@@ -225,4 +227,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
