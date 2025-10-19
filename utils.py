@@ -19,7 +19,7 @@ CONFIG_TABS = {
 }
 
 # =========================================================================
-# NOVA SEÇÃO: CONEXÃO COM O BANCO DE DADOS (TURSO + SQLAlchemy)
+# SEÇÃO DE CONEXÃO (CORRIGIDA)
 # =========================================================================
 
 @st.cache_resource  # Usamos cache_resource para o "motor" da conexão
@@ -30,19 +30,31 @@ def get_engine():
     """
     try:
         # 1. Puxa as credenciais dos "Secrets" do Streamlit
-        # Você DEVE configurar isso no Streamlit Cloud
-        db_url = st.secrets["libsql://agendagestao-leandroassis-lr.aws-us-east-1.turso.io"]
-        db_token = st.secrets["eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3NjA3NTY0OTcsImlkIjoiY2I1Yzk2MzUtMDkxZS00YTkwLWJkYTEtMmMzOWE1ODY4NmQxIiwicmlkIjoiNWZhMmZmYjMtYmNmYS00OGQzLTk1YjYtYzJjNmNkYTE5ZTg1In0.mmVsUvbBYYlo1DZlD-pfe-YEPDS35De2TzYySVypvOaqKk9it3RzZXwMBiSun5FouG73RrGwJuLKv1X4Kix8AQ"]
+        #    (Estes devem ser os NOMES das chaves no painel do Streamlit Cloud)
+        db_url = st.secrets["TURSO_DB_URL"]
+        db_token = st.secrets["TURSO_AUTH_TOKEN"]
         
-        # 2. Monta a URL de conexão do SQLAlchemy
-        connection_url = f"sqlite+libsql:///?authToken={db_token}&database={db_url}"
+        # 2. VERIFICA se o usuário colocou "libsql://" por engano no secret
+        if db_url.startswith("libsql://"):
+            db_url = db_url[9:] # Remove o prefixo
+            
+        # 3. Monta a URL de conexão CORRETA
+        #    O formato é: "sqlite+dialeto://hostname"
+        connection_url = f"sqlite+libsql://{db_url}"
         
-        # 3. Cria o "motor" (engine) da conexão
-        # 'check_same_thread=False' é OBRIGATÓRIO para SQLite no Streamlit
-        engine = create_engine(connection_url, connect_args={"check_same_thread": False})
+        # 4. Cria o "motor" (engine) da conexão
+        #    O 'auth_token' vai nos 'connect_args'
+        engine = create_engine(
+            connection_url, 
+            connect_args={
+                "auth_token": db_token,
+                "check_same_thread": False # OBRIGATÓRIO para Streamlit
+            }
+        )
         return engine
     
     except KeyError as e:
+        # Agora a mensagem de erro será clara
         st.error(f"Erro Crítico: A credencial {e} não foi encontrada nos 'Secrets' do Streamlit.")
         st.info("Por favor, adicione TURSO_DB_URL e TURSO_AUTH_TOKEN aos Secrets do seu app.")
         return None
@@ -51,7 +63,7 @@ def get_engine():
         return None
 
 # =========================================================================
-# FUNÇÕES DO BANCO DE DADOS (Atualizadas para SQLAlchemy)
+# FUNÇÕES DO BANCO DE DADOS (Inalteradas)
 # =========================================================================
 
 @st.cache_data(ttl=60)
