@@ -196,9 +196,9 @@ def tela_projetos():
             st.markdown(f"{agencia_text}")
         with col_status:
             st.markdown(
-                f"""<div style="height:100%;display:flex;align-items:center;justify-content:flex-end;">
-                <span style="background-color:{status_color_name};color:black;padding:8px 15px;border-radius:5px;font-weight:bold;font-size:0.9em;">{status_text}</span>
-                </div>""",
+                f\"\"\"<div style=\"height:100%;display:flex;align-items:center;justify-content:flex-end;\">
+                <span style=\"background-color:{status_color_name};color:black;padding:8px 15px;border-radius:5px;font-weight:bold;font-size:0.9em;\">{status_text}</span>
+                </div>\"\"\",
                 unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -334,6 +334,10 @@ def main():
         return
 
     st.sidebar.title(f"Bem-vindo(a), {st.session_state.get('usuario', 'Visitante')}! 📋")
+    st.sidebar.divider()
+    # Adiciona botão para inspecionar banco
+    if st.sidebar.button("🔍 Inspecionar Banco"):
+        utils.inspecionar_banco()
     st.sidebar.divider()
     # O Streamlit criará a navegação para as outras páginas aqui!
     st.sidebar.divider()
