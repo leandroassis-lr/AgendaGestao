@@ -4,7 +4,7 @@ from datetime import date, datetime
 import re
 import html
 import io
-from sqlalchemy import inspect, text
+from sqlalchemy import text
 
 # Importa TODAS as nossas funções do arquivo utils.py
 import utils 
@@ -57,34 +57,41 @@ def inspecionar_banco():
         st.error(f"Erro ao consultar dados: {e}")
 
 # ----------------- Função para Exportar Banco em Excel -----------------
+import io
+import pandas as pd
+from sqlalchemy import text
+
 def exportar_banco_excel():
     engine = utils.get_engine()
     if engine is None:
         st.error("Não foi possível conectar ao banco")
-        return
-
+        return None
     try:
         with engine.connect() as conn:
             resultado = conn.execute(text("SELECT * FROM projetos"))
             linhas = resultado.mappings().all()
-            if not linhas:
-                st.info("Tabela 'projetos' está vazia")
-                return
-            df = pd.DataFrame(linhas)
-
-            output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                df.to_excel(writer, index=False, sheet_name='Projetos')
-            data = output.getvalue()
-
-            st.download_button(
-                label="📥 Download dos dados em Excel",
-                data=data,
-                file_name="projetos.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+        if not linhas:
+            st.info("Tabela 'projetos' está vazia")
+            return None
+        df = pd.DataFrame(linhas)
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            df.to_excel(writer, index=False, sheet_name='Projetos')
+        return output.getvalue()
     except Exception as e:
         st.error(f"Erro ao exportar dados: {e}")
+        return None
+
+# No seu main(), na sidebar:
+
+excel_data = exportar_banco_excel()
+if excel_data:
+    st.sidebar.download_button(
+        label="📥 Exportar banco para Excel",
+        data=excel_data,
+        file_name="projetos.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
 # ----------------- Configuração da Página e CSS -----------------
 st.set_page_config(page_title="Projetos - GESTÃO", page_icon="📋", layout="wide")
@@ -133,3 +140,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
