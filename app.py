@@ -71,18 +71,24 @@ if st.session_state.view == "listar":
                 cols[2].markdown(f"👷 {row.get('Técnico', '')}")
                 cols[3].markdown(f"<span style='color:{cor_status}'>{row.get('Status', '')}</span>", unsafe_allow_html=True)
                 cols[4].markdown(f"<span style='color:{cor_sla}'>{row['SLA']}</span>", unsafe_allow_html=True)
-                with cols[5]:
-                    if st.button("✏️", key=f"edit_{row['ID']}"):
-                        abrir_formulario_edicao(row["ID"])
-                        st.rerun() # Adicionar rerun AQUI, fora do callback, é seguro.
-                    
-                    if st.button("🗑️", key=f"del_{row['ID']}"):
-                        if excluir_projeto_db(row["ID"]):
-                            st.success("Projeto excluído com sucesso!")
-                            # st.rerun() # REMOVIDO - O rerun do success/info já é suficiente
-                        else:
-                            st.error("Erro ao excluir o projeto.")
-                        st.rerun() # Força a atualização da lista após a tentativa de exclusão
+               # CÓDIGO CORRIGIDO
+with cols[5]:
+    # Usar on_click é a forma mais segura para navegação
+    st.button(
+        "✏️", 
+        key=f"edit_{row['ID']}", 
+        on_click=abrir_formulario_edicao, 
+        args=(row["ID"],) # Passa o ID para a função
+    )
+    
+    # Para o botão de excluir, simplesmente não chame o st.rerun()
+    if st.button("🗑️", key=f"del_{row['ID']}"):
+        if excluir_projeto_db(row["ID"]):
+            st.success("Projeto excluído com sucesso!")
+        else:
+            st.error("Erro ao excluir o projeto.")
+        # O rerun automático do Streamlit irá recarregar a lista
+        # após exibir a mensagem de sucesso/erro.
 
 
     st.divider()
@@ -163,3 +169,4 @@ else: # if st.session_state.view == "novo" or st.session_state.view == "editar":
             st.error("❌ Erro ao salvar o projeto.")
 
     st.button("⬅️ Voltar", on_click=voltar_para_lista)
+
