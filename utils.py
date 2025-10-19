@@ -96,6 +96,7 @@ def atualizar_projeto_db(project_id, updates: dict):
         return False
 
 from sqlalchemy import text
+import json
 from datetime import date, datetime
 
 def adicionar_projeto_db(data: dict):
@@ -104,11 +105,18 @@ def adicionar_projeto_db(data: dict):
         return False
     
     def sanitize_value(val):
-        if isinstance(val, (int, float, type(None))):
+        if val is None:
+            return None
+        if isinstance(val, (int, float, bool)):
             return val
         if isinstance(val, (date, datetime)):
             return val
-        return str(val)
+        if isinstance(val, str):
+            return val
+        try:
+            return json.dumps(val)
+        except Exception:
+            return str(val)
     
     try:
         db_data_raw = {
@@ -249,6 +257,7 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
 
 
 
