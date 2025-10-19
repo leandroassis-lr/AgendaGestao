@@ -134,18 +134,15 @@ def adicionar_projeto_db(data: dict):
         return False
 
     try:
-        # Normaliza os nomes das colunas para o banco
         db_data = {
             key.replace(' ', '_').replace('ç', 'c').replace('ê', 'e').replace('ã', 'a'): value
             for key, value in data.items()
         }
 
-        # Monta a query com placeholders nomeados (sem aspas nas colunas)
         cols_str = ', '.join(db_data.keys())
-        placeholders = ', '.join([f':{c}' for c in db_data.keys()])
+        placeholders = ', '.join([f":{c}" for c in db_data.keys()])
         sql = f"INSERT INTO projetos ({cols_str}) VALUES ({placeholders})"
 
-        # Executa a query passando o dicionário diretamente
         with engine.connect() as conn:
             conn.execute(text(sql), db_data)
             conn.commit()
@@ -260,5 +257,6 @@ def calcular_sla(projeto_row, df_sla):
         if dias_restantes < 0: return f"Atrasado em {-dias_restantes}d", "#EF5350"
         elif dias_restantes == 0: return "SLA Vence Hoje!", "#FFA726"
         else: return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
 
 
