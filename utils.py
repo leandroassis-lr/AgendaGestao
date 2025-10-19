@@ -107,21 +107,19 @@ def sanitize_value(val):
         return str(val)
 
 def atualizar_projeto_db(project_id, updates: dict):
-    """
-    Atualiza o projeto com id `project_id` aplicando os valores do dicionário `updates` no banco de dados.
-    """
     engine = get_engine()
     if engine is None:
         return False
     try:
-        # Sanitiza as chaves e valores
-        updates_sanitized = {k.replace(' ', '_').replace('ç', 'c').replace('ê', 'e').replace('ã', 'a'): v for k, v in updates.items()}
-        set_clause = ", ".join([f'"{k}"=:{k}' for k in updates_sanitized.keys()])
+        updates_sanitized = {
+            key.replace(' ', '_').replace('ç', 'c').replace('ê', 'e').replace('ã', 'a'): val
+            for key, val in updates.items()
+        }
+        set_clause = ", ".join([f'"{k}" = :{k}' for k in updates_sanitized.keys()])
         sql = f'UPDATE projetos SET {set_clause} WHERE ID = :project_id'
         params = updates_sanitized.copy()
         params['project_id'] = project_id
         sql_stmt = text(sql)
-        
         with engine.connect() as conn:
             conn.execute(sql_stmt, params)
             conn.commit()
@@ -260,4 +258,5 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
 
