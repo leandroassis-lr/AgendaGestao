@@ -48,7 +48,7 @@ def tela_cadastro_usuario():
                 utils.salvar_usuario(df) # <-- ATENÇÃO: ISTO VAI FALHAR NO STREAMLIT CLOUD
                 st.toast("Usuário cadastrado!")
                 st.session_state.cadastro = False
-                st.rerun()
+                # st.rerun() # <-- REMOVIDO (Conflito com o toast)
     if st.button("Voltar para Login"):
         st.session_state.cadastro = False
         st.rerun()
@@ -87,7 +87,9 @@ def tela_cadastro_projeto():
                 nova_linha_data[pergunta] = resposta
         
         if utils.adicionar_projeto_db(nova_linha_data):
-            st.toast(f"Projeto '{projeto_nome}' cadastrado!"); st.session_state["tela_cadastro_proj"] = False; st.rerun()
+            st.toast(f"Projeto '{projeto_nome}' cadastrado!")
+            st.session_state["tela_cadastro_proj"] = False
+            # st.rerun() # <-- REMOVIDO (Redundante, utils.adicionar_projeto_db já limpa o cache)
 
 def tela_projetos():
     st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True)
@@ -229,9 +231,7 @@ def tela_projetos():
                 btn_salvar_card = st.form_submit_button("💾 Salvar Alterações")
                 
             if btn_salvar_card:
-                
-                # --- INÍCIO DA CORREÇÃO 1: LÓGICA DE VALIDAÇÃO ---
-                validacao_passou = True # Flag para controlar a validação
+                validacao_passou = True 
                 status_final = novo_status_selecionado
                 
                 if row['Status'] == 'NÃO INICIADA' and len(novas_etapas_marcadas) > 0:
@@ -242,18 +242,13 @@ def tela_projetos():
                     total_etapas_config = len(etapas_do_projeto)
                     if len(novas_etapas_marcadas) < total_etapas_config and total_etapas_config > 0:
                         st.toast(f"ERRO: Para finalizar, todas as {total_etapas_config} etapas devem ser marcadas.", icon="🚨")
-                        validacao_passou = False # <--- ALTERADO
-                        # st.stop() FOI REMOVIDO
+                        validacao_passou = False
                     
                     if not nova_data_finalizacao:
                         st.toast("ERRO: Se o status é 'Finalizada', a Data de Finalização é obrigatória.", icon="🚨")
-                        validacao_passou = False # <--- ALTERADO
-                        # st.stop() FOI REMOVIDO
+                        validacao_passou = False
 
-                # Só executa o salvamento se a validação tiver passado
                 if validacao_passou: 
-                # --- FIM DA CORREÇÃO 1 ---
-
                     log_final = row.get("Log Agendamento", "") if pd.notna(row.get("Log Agendamento")) else ""
                     agendamento_antigo = row['Agendamento']
                     novo_agendamento_dt = pd.to_datetime(novo_agendamento) if novo_agendamento else pd.NaT
@@ -283,18 +278,14 @@ def tela_projetos():
 
                     if utils.atualizar_projeto_db(project_id, updates):
                        st.toast(f"Projeto '{novo_projeto}' (ID: {project_id}) atualizado.")
-                       st.rerun()
+                       # st.rerun() # <-- REMOVIDO (Redundante)
 
             st.markdown("---")
             
-            # --- INÍCIO DA CORREÇÃO 2: BOTÃO EXCLUIR ---
             if st.button("🗑️ Excluir Projeto", key=f"btn_excluir_{project_id}", type="primary"):
                 if utils.excluir_projeto_db(project_id):
-                    pass # O st.rerun() FOI REMOVIDO DAQUI
-                # A função utils.excluir_projeto_db JÁ limpa o cache (st.cache_data.clear())
-                # o que força o recarregamento (rerun) de forma segura.
-                # Chamar st.rerun() aqui era redundante e causava o erro.
-            # --- FIM DA CORREÇÃO 2 ---
+                    pass # st.rerun() JÁ TINHA SIDO REMOVIDO, MANTÉM ASSIM.
+                
 
 # ----------------- CONTROLE PRINCIPAL -----------------
 def main():
@@ -330,3 +321,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
