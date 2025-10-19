@@ -6,7 +6,5 @@ openpyxl
 xlsxwriter
 streamlit-option-menu
 streamlit-aggrid
-st-turso==0.1.1
+libsql-client[sqlalchemy]
 sqlalchemy
-
-
