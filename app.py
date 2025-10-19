@@ -7,6 +7,21 @@ import html
 # Importa TODAS as nossas funções do arquivo utils.py
 import utils 
 
+# ----------------- Helpers -----------------
+def _to_date_safe(val):
+    """Converte várias representações (str, pd.Timestamp, datetime, date) para datetime.date ou None."""
+    if val is None:
+        return None
+    if isinstance(val, date) and not isinstance(val, datetime):
+        return val
+    try:
+        ts = pd.to_datetime(val, errors='coerce')
+        if pd.isna(ts):
+            return None
+        return ts.date()
+    except Exception:
+        return None
+
 # ----------------- Configuração da Página e CSS -----------------
 st.set_page_config(page_title="Projetos - GESTÃO", page_icon="📋", layout="wide")
 utils.load_css() # Carrega o CSS do arquivo utils
@@ -87,7 +102,9 @@ def tela_cadastro_projeto():
                 nova_linha_data[pergunta] = resposta
         
         if utils.adicionar_projeto_db(nova_linha_data):
-            st.success(f"Projeto '{projeto_nome}' cadastrado!"); st.session_state["tela_cadastro_proj"] = False; st.rerun()
+            st.success(f"Projeto '{projeto_nome}' cadastrado!")
+            st.session_state["tela_cadastro_proj"] = False
+            st.rerun()
 
 def tela_projetos():
     st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True)
@@ -99,7 +116,9 @@ def tela_projetos():
     if df.empty:
         st.info("Nenhum projeto cadastrado ainda.")
         return
-    df['Agendamento_str'] = df['Agendamento'].dt.strftime("%d/%m/%y").fillna('N/A')
+
+    # Normaliza agendamento para string segura
+    df['Agendamento_str'] = pd.to_datetime(df['Agendamento'], errors='coerce').dt.strftime("%d/%m/%y").fillna('N/A')
 
     st.markdown("#### 🔍 Filtros e Busca")
     termo_busca = st.text_input("Buscar", key="termo_busca", placeholder="Digite um termo para buscar...")
@@ -118,11 +137,15 @@ def tela_projetos():
                 opcoes = ["Todos"] + sorted(df[campo].astype(str).unique().tolist())
                 filtros[campo] = st.selectbox(f"Filtrar por {campo}", opcoes, key=f"filtro_{utils.clean_key(campo)}")
 
-    data_existente = df['Agendamento'].dropna()
+    data_existente = pd.to_datetime(df['Agendamento'], errors='coerce').dropna()
     data_min = data_existente.min().date() if not data_existente.empty else date.today()
     data_max = data_existente.max().date() if not data_existente.empty else date.today()
-    with col3: st.markdown("Agendamento (De):"); data_inicio_filtro = st.date_input("De", value=data_min, key="filtro_data_start", label_visibility="collapsed", format="DD/MM/YYYY")
-    with col4: st.markdown("Agendamento (Até):"); data_fim_filtro = st.date_input("Até", value=data_max, key="filtro_data_end", label_visibility="collapsed", format="DD/MM/YYYY")
+    with col3:
+        st.markdown("Agendamento (De):")
+        data_inicio_filtro = st.date_input("De", value=data_min, key="filtro_data_start", label_visibility="collapsed", format="DD/MM/YYYY")
+    with col4:
+        st.markdown("Agendamento (Até):")
+        data_fim_filtro = st.date_input("Até", value=data_max, key="filtro_data_end", label_visibility="collapsed", format="DD/MM/YYYY")
 
     df_filtrado = df.copy()
     for campo, valor in filtros.items():
@@ -130,7 +153,8 @@ def tela_projetos():
             df_filtrado = df_filtrado[df_filtrado[campo].astype(str) == valor]
     if data_inicio_filtro and data_fim_filtro:
         agendamento_dates = pd.to_datetime(df_filtrado['Agendamento'], errors='coerce').dt.date
-        df_filtrado = df_filtrado[agendamento_dates.between(data_inicio_filtro, data_fim_filtro, inclusive="both")]
+        mask = agendamento_dates.notna() & (agendamento_dates >= data_inicio_filtro) & (agendamento_dates <= data_fim_filtro)
+        df_filtrado = df_filtrado[mask.fillna(False)]
     if termo_busca:
         termo = termo_busca.lower().strip()
         mask_busca = df_filtrado.apply(lambda row: row.astype(str).str.lower().str.contains(termo, na=False).any(), axis=1)
@@ -139,20 +163,23 @@ def tela_projetos():
     st.markdown("---")
     st.info(f"Projetos encontrados: {len(df_filtrado)}")
     
-    agencia_options = ["N/A"] + utils.carregar_config("agencias")["Agência"].tolist()
-    tecnico_options = ["N/A"] + utils.carregar_config("tecnicos")["Técnico"].tolist()
-    status_options = utils.carregar_config("status")["Status"].tolist()
+    agencias_cfg = utils.carregar_config("agencias")
+    tecnicos_cfg = utils.carregar_config("tecnicos")
+    agencia_options = ["N/A"] + (agencias_cfg["Agência"].tolist() if not agencias_cfg.empty else [])
+    tecnico_options = ["N/A"] + (tecnicos_cfg["Técnico"].tolist() if not tecnicos_cfg.empty else [])
+    status_options = utils.carregar_config("status")["Status"].tolist() if not utils.carregar_config("status").empty else []
 
     for _, row in df_filtrado.iterrows():
         project_id = row['ID']
         
-        status_text = html.escape(str(row['Status'])) if pd.notna(row['Status']) else 'N/A'
+        status_raw = row['Status'] if pd.notna(row['Status']) else 'N/A'
+        status_text = html.escape(str(status_raw))
         analista_text = html.escape(str(row['Analista'])) if pd.notna(row['Analista']) else 'N/A'
         agencia_text = html.escape(str(row.get("Agência", "N/A")))
         projeto_text = html.escape(str(row.get("Projeto", "N/A")))
         demanda_text = html.escape(str(row.get("Demanda", "N/A")))
         tecnico_text = html.escape(str(row.get("Técnico", "N/A")))
-        status_color_name = utils.get_status_color(status_text)
+        status_color_name = utils.get_status_color(str(status_raw))
         sla_text, sla_color = utils.calcular_sla(row, df_sla)
 
         st.markdown("<div class='project-card'>", unsafe_allow_html=True)
@@ -168,7 +195,11 @@ def tela_projetos():
             st.markdown(f"**Agência:**")
             st.markdown(f"{agencia_text}")
         with col_status:
-            st.markdown(f"""<div style="height:100%;display:flex;align-items:center;justify-content:flex-end;"><span style="background-color:{status_color_name};color:black;padding:8px 15px;border-radius:5px;font-weight:bold;font-size:0.9em;">{status_text}</span></div>""", unsafe_allow_html=True)
+            st.markdown(
+                f"""<div style="height:100%;display:flex;align-items:center;justify-content:flex-end;">
+                <span style="background-color:{status_color_name};color:black;padding:8px 15px;border-radius:5px;font-weight:bold;font-size:0.9em;">{status_text}</span>
+                </div>""",
+                unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
         with st.expander(f"Ver/Editar Detalhes - ID: {project_id}"):
@@ -200,11 +231,14 @@ def tela_projetos():
                     idx_status = status_selecionaveis.index(row['Status']) if row['Status'] in status_selecionaveis else 0
                     novo_status_selecionado = st.selectbox("Status", status_selecionaveis, index=idx_status, key=f"status_{project_id}")
                 with c2:
-                    nova_data_abertura = st.date_input("Data Abertura", value=row['Data de Abertura'] if pd.notna(row['Data de Abertura']) else None, key=f"abertura_{project_id}", format="DD/MM/YYYY")
+                    abertura_default = _to_date_safe(row.get('Data de Abertura'))
+                    nova_data_abertura = st.date_input("Data Abertura", value=abertura_default, key=f"abertura_{project_id}", format="DD/MM/YYYY")
                 with c3:
-                    novo_agendamento = st.date_input("Agendamento", value=row['Agendamento'] if pd.notna(row['Agendamento']) else None, key=f"agend_{project_id}", format="DD/MM/YYYY")
+                    agendamento_default = _to_date_safe(row.get('Agendamento'))
+                    novo_agendamento = st.date_input("Agendamento", value=agendamento_default, key=f"agend_{project_id}", format="DD/MM/YYYY")
                 with c4:
-                    nova_data_finalizacao = st.date_input("Data Finalização", value=row['Data de Finalização'] if pd.notna(row['Data de Finalização']) else None, key=f"final_{project_id}", format="DD/MM/YYYY")
+                    finalizacao_default = _to_date_safe(row.get('Data de Finalização'))
+                    nova_data_finalizacao = st.date_input("Data Finalização", value=finalizacao_default, key=f"final_{project_id}", format="DD/MM/YYYY")
 
                 st.markdown("#### Detalhes do Projeto")
                 c5,c6,c7 = st.columns(3)
@@ -221,9 +255,9 @@ def tela_projetos():
                     idx_tec = tecnico_options.index(tecnico_val) if tecnico_val in tecnico_options else 0
                     novo_tecnico = st.selectbox("Técnico", tecnico_options, index=idx_tec, key=f"tecnico_{project_id}")
 
-                nova_demanda = st.text_input("Demanda", value=row['Demanda'], key=f"demanda_{project_id}")
-                nova_descricao = st.text_area("Descrição", value=row['Descrição'], key=f"desc_{project_id}")
-                nova_observacao = st.text_area("Observação / Pendências", value=row['Observação'], key=f"obs_{project_id}")
+                nova_demanda = st.text_input("Demanda", value=row.get('Demanda', ''), key=f"demanda_{project_id}")
+                nova_descricao = st.text_area("Descrição", value=row.get('Descrição', ''), key=f"desc_{project_id}")
+                nova_observacao = st.text_area("Observação / Pendências", value=row.get('Observação', ''), key=f"obs_{project_id}")
                 log_agendamento_existente = row.get("Log Agendamento", "") if pd.notna(row.get("Log Agendamento")) else ""
                 st.text_area("Histórico de Agendamento", value=log_agendamento_existente, height=100, disabled=True, key=f"log_{project_id}")
 
@@ -235,26 +269,34 @@ def tela_projetos():
                     status_final = 'EM ANDAMENTO'
                     st.info("Status alterado para 'EM ANDAMENTO'!")
                 
+                # Normaliza datas inseridas pelo usuário
+                nova_data_abertura_date = _to_date_safe(nova_data_abertura)
+                nova_data_finalizacao_date = _to_date_safe(nova_data_finalizacao)
+                novo_agendamento_date = _to_date_safe(novo_agendamento)
+
                 if 'finalizad' in status_final.lower():
                     total_etapas_config = len(etapas_do_projeto)
-                    if len(novas_etapas_marcadas) < total_etapas_config and total_etapas_config > 0:
-                        st.error(f"ERRO: Para finalizar, todas as {total_etapas_config} etapas devem ser marcadas.", icon="🚨"); st.stop()
-                    if not nova_data_finalizacao:
-                        st.error("ERRO: Se o status é 'Finalizada', a Data de Finalização é obrigatória.", icon="🚨"); st.stop()
+                    if total_etapas_config > 0 and len(novas_etapas_marcadas) < total_etapas_config:
+                        st.error(f"ERRO: Para finalizar, todas as {total_etapas_config} etapas devem ser marcadas.", icon="🚨")
+                        st.stop()
+                    if not nova_data_finalizacao_date:
+                        st.error("ERRO: Se o status é 'Finalizada', a Data de Finalização é obrigatória.", icon="🚨")
+                        st.stop()
                 
                 log_final = row.get("Log Agendamento", "") if pd.notna(row.get("Log Agendamento")) else ""
-                agendamento_antigo = row['Agendamento']
-                novo_agendamento_dt = pd.to_datetime(novo_agendamento) if novo_agendamento else pd.NaT
-                if (pd.isna(agendamento_antigo) and pd.notna(novo_agendamento_dt)) or (pd.notna(agendamento_antigo) and agendamento_antigo != novo_agendamento_dt):
-                     data_antiga_str = agendamento_antigo.strftime('%d/%m/%Y') if pd.notna(agendamento_antigo) else "N/A"
-                     data_nova_str = novo_agendamento_dt.strftime('%d/%m/%Y') if pd.notna(novo_agendamento_dt) else "N/A"
-                     hoje_str = date.today().strftime('%d/%m/%Y')
-                     nova_entrada_log = f"Em {hoje_str}: alterado de '{data_antiga_str}' para '{data_nova_str}'."
-                     log_final = f"{log_final}\n{nova_entrada_log}".strip()
+                agendamento_antigo = row.get('Agendamento', None)
+                agendamento_antigo_date = _to_date_safe(agendamento_antigo)
+
+                if (agendamento_antigo_date is None and novo_agendamento_date is not None) or (agendamento_antigo_date is not None and novo_agendamento_date != agendamento_antigo_date):
+                    data_antiga_str = agendamento_antigo_date.strftime('%d/%m/%Y') if agendamento_antigo_date else "N/A"
+                    data_nova_str = novo_agendamento_date.strftime('%d/%m/%Y') if novo_agendamento_date else "N/A"
+                    hoje_str = date.today().strftime('%d/%m/%Y')
+                    nova_entrada_log = f"Em {hoje_str}: alterado de '{data_antiga_str}' para '{data_nova_str}'."
+                    log_final = f"{log_final}\n{nova_entrada_log}".strip()
 
                 updates = {
                     "Status": status_final,
-                    "Agendamento": novo_agendamento.strftime('%Y-%m-%d') if novo_agendamento else None,
+                    "Agendamento": novo_agendamento_date.strftime('%Y-%m-%d') if novo_agendamento_date else None,
                     "Analista": novo_analista,
                     "Agência": nova_agencia,
                     "Gestor": novo_gestor,
@@ -263,8 +305,8 @@ def tela_projetos():
                     "Demanda": nova_demanda,
                     "Descrição": nova_descricao,
                     "Observação": nova_observacao,
-                    "Data de Abertura": nova_data_abertura.strftime('%Y-%m-%d') if nova_data_abertura else None,
-                    "Data de Finalização": nova_data_finalizacao.strftime('%Y-%m-%d') if nova_data_finalizacao else None,
+                    "Data de Abertura": nova_data_abertura_date.strftime('%Y-%m-%d') if nova_data_abertura_date else None,
+                    "Data de Finalização": nova_data_finalizacao_date.strftime('%Y-%m-%d') if nova_data_finalizacao_date else None,
                     "Etapas Concluidas": ",".join(novas_etapas_marcadas),
                     "Log Agendamento": log_final
                 }
@@ -275,7 +317,8 @@ def tela_projetos():
 
             st.markdown("---")
             if st.button("🗑️ Excluir Projeto", key=f"btn_excluir_{project_id}", type="primary"):
-                if utils.excluir_projeto_db(project_id): st.rerun()
+                if utils.excluir_projeto_db(project_id):
+                    st.rerun()
 
 # ----------------- CONTROLE PRINCIPAL -----------------
 def main():
