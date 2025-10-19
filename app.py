@@ -45,8 +45,8 @@ def tela_cadastro_usuario():
             else:
                 nova_linha = pd.DataFrame([[nome, email, senha]], columns=df.columns)
                 df = pd.concat([df, nova_linha], ignore_index=True)
-                utils.salvar_usuario(df)
-              st.toast("Usuário cadastrado!")
+                utils.salvar_usuario(df) # <-- ATENÇÃO: ISTO VAI FALHAR NO STREAMLIT CLOUD
+                st.toast("Usuário cadastrado!")
                 st.session_state.cadastro = False
                 st.rerun()
     if st.button("Voltar para Login"):
@@ -227,9 +227,13 @@ def tela_projetos():
                 st.text_area("Histórico de Agendamento", value=log_agendamento_existente, height=100, disabled=True, key=f"log_{project_id}")
 
                 btn_salvar_card = st.form_submit_button("💾 Salvar Alterações")
-            
+                
             if btn_salvar_card:
+                
+                # --- INÍCIO DA CORREÇÃO 1: LÓGICA DE VALIDAÇÃO ---
+                validacao_passou = True # Flag para controlar a validação
                 status_final = novo_status_selecionado
+                
                 if row['Status'] == 'NÃO INICIADA' and len(novas_etapas_marcadas) > 0:
                     status_final = 'EM ANDAMENTO'
                     st.toast("Status alterado para 'EM ANDAMENTO'!")
@@ -237,44 +241,60 @@ def tela_projetos():
                 if 'finalizad' in status_final.lower():
                     total_etapas_config = len(etapas_do_projeto)
                     if len(novas_etapas_marcadas) < total_etapas_config and total_etapas_config > 0:
-                        st.toast(f"ERRO: Para finalizar, todas as {total_etapas_config} etapas devem ser marcadas.", icon="🚨"); st.stop()
+                        st.toast(f"ERRO: Para finalizar, todas as {total_etapas_config} etapas devem ser marcadas.", icon="🚨")
+                        validacao_passou = False # <--- ALTERADO
+                        # st.stop() FOI REMOVIDO
+                    
                     if not nova_data_finalizacao:
-                        st.toast("ERRO: Se o status é 'Finalizada', a Data de Finalização é obrigatória.", icon="🚨"); st.stop()
-                
-                log_final = row.get("Log Agendamento", "") if pd.notna(row.get("Log Agendamento")) else ""
-                agendamento_antigo = row['Agendamento']
-                novo_agendamento_dt = pd.to_datetime(novo_agendamento) if novo_agendamento else pd.NaT
-                if (pd.isna(agendamento_antigo) and pd.notna(novo_agendamento_dt)) or (pd.notna(agendamento_antigo) and agendamento_antigo != novo_agendamento_dt):
-                     data_antiga_str = agendamento_antigo.strftime('%d/%m/%Y') if pd.notna(agendamento_antigo) else "N/A"
-                     data_nova_str = novo_agendamento_dt.strftime('%d/%m/%Y') if pd.notna(novo_agendamento_dt) else "N/A"
-                     hoje_str = date.today().strftime('%d/%m/%Y')
-                     nova_entrada_log = f"Em {hoje_str}: alterado de '{data_antiga_str}' para '{data_nova_str}'."
-                     log_final = f"{log_final}\n{nova_entrada_log}".strip()
+                        st.toast("ERRO: Se o status é 'Finalizada', a Data de Finalização é obrigatória.", icon="🚨")
+                        validacao_passou = False # <--- ALTERADO
+                        # st.stop() FOI REMOVIDO
 
-                updates = {
-                    "Status": status_final,
-                    "Agendamento": novo_agendamento.strftime('%Y-%m-%d') if novo_agendamento else None,
-                    "Analista": novo_analista,
-                    "Agência": nova_agencia,
-                    "Gestor": novo_gestor,
-                    "Projeto": novo_projeto,
-                    "Técnico": novo_tecnico,
-                    "Demanda": nova_demanda,
-                    "Descrição": nova_descricao,
-                    "Observação": nova_observacao,
-                    "Data de Abertura": nova_data_abertura.strftime('%Y-%m-%d') if nova_data_abertura else None,
-                    "Data de Finalização": nova_data_finalizacao.strftime('%Y-%m-%d') if nova_data_finalizacao else None,
-                    "Etapas Concluidas": ",".join(novas_etapas_marcadas),
-                    "Log Agendamento": log_final
-                }
+                # Só executa o salvamento se a validação tiver passado
+                if validacao_passou: 
+                # --- FIM DA CORREÇÃO 1 ---
 
-                if utils.atualizar_projeto_db(project_id, updates):
-                   st.toast(f"Projeto '{novo_projeto}' (ID: {project_id}) atualizado.")
-                    st.rerun()
+                    log_final = row.get("Log Agendamento", "") if pd.notna(row.get("Log Agendamento")) else ""
+                    agendamento_antigo = row['Agendamento']
+                    novo_agendamento_dt = pd.to_datetime(novo_agendamento) if novo_agendamento else pd.NaT
+                    if (pd.isna(agendamento_antigo) and pd.notna(novo_agendamento_dt)) or (pd.notna(agendamento_antigo) and agendamento_antigo != novo_agendamento_dt):
+                            data_antiga_str = agendamento_antigo.strftime('%d/%m/%Y') if pd.notna(agendamento_antigo) else "N/A"
+                            data_nova_str = novo_agendamento_dt.strftime('%d/%m/%Y') if pd.notna(novo_agendamento_dt) else "N/A"
+                            hoje_str = date.today().strftime('%d/%m/%Y')
+                            nova_entrada_log = f"Em {hoje_str}: alterado de '{data_antiga_str}' para '{data_nova_str}'."
+                            log_final = f"{log_final}\n{nova_entrada_log}".strip()
+
+                    updates = {
+                        "Status": status_final,
+                        "Agendamento": novo_agendamento.strftime('%Y-%m-%d') if novo_agendamento else None,
+                        "Analista": novo_analista,
+                        "Agência": nova_agencia,
+                        "Gestor": novo_gestor,
+                        "Projeto": novo_projeto,
+                        "Técnico": novo_tecnico,
+                        "Demanda": nova_demanda,
+                        "Descrição": nova_descricao,
+                        "Observação": nova_observacao,
+                        "Data de Abertura": nova_data_abertura.strftime('%Y-%m-%d') if nova_data_abertura else None,
+                        "Data de Finalização": nova_data_finalizacao.strftime('%Y-%m-%d') if nova_data_finalizacao else None,
+                        "Etapas Concluidas": ",".join(novas_etapas_marcadas),
+                        "Log Agendamento": log_final
+                    }
+
+                    if utils.atualizar_projeto_db(project_id, updates):
+                       st.toast(f"Projeto '{novo_projeto}' (ID: {project_id}) atualizado.")
+                       st.rerun()
 
             st.markdown("---")
+            
+            # --- INÍCIO DA CORREÇÃO 2: BOTÃO EXCLUIR ---
             if st.button("🗑️ Excluir Projeto", key=f"btn_excluir_{project_id}", type="primary"):
-                if utils.excluir_projeto_db(project_id): st.rerun()
+                if utils.excluir_projeto_db(project_id):
+                    pass # O st.rerun() FOI REMOVIDO DAQUI
+                # A função utils.excluir_projeto_db JÁ limpa o cache (st.cache_data.clear())
+                # o que força o recarregamento (rerun) de forma segura.
+                # Chamar st.rerun() aqui era redundante e causava o erro.
+            # --- FIM DA CORREÇÃO 2 ---
 
 # ----------------- CONTROLE PRINCIPAL -----------------
 def main():
@@ -309,5 +329,4 @@ def main():
         tela_projetos()
 
 if __name__ == "__main__":
-
     main()
