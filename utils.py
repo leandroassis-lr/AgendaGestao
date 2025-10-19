@@ -14,7 +14,7 @@ CONFIG_TABS = {
     "status": ["Status"],
     "agencias": ["Agência"],
     "projetos_nomes": ["Nome do Projeto"],
-    "tecnicos": ["Técnico"],
+    "tecnicos": ["Tecnico"],
     "sla": ["Nome do Projeto", "Demanda", "Prazo (dias)"],
     "perguntas": ["Pergunta", "Tipo (texto, numero, data)"],
     "etapas_evolucao": ["Nome do Projeto", "Etapa"]
@@ -258,6 +258,7 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
 
 
 
