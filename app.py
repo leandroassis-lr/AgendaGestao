@@ -43,16 +43,15 @@ def inspecionar_banco():
         st.write(f"- {col['name']} ({col['type']})")
 
     try:
-       with engine.connect() as conn:
-    resultado = conn.execute(text("SELECT * FROM projetos LIMIT 10"))
-    linhas = resultado.mappings().all()  # Obtém lista de dicts (mapeamento das colunas)
-    if linhas:
-        st.write("Exemplos de registros na tabela 'projetos':")
-        for linha in linhas:
-            st.write(linha)  # linha já é um dict
-    else:
-        st.write("Tabela 'projetos' está vazia")
-
+        with engine.connect() as conn:
+            resultado = conn.execute(text("SELECT * FROM projetos LIMIT 10"))
+            linhas = resultado.mappings().all()  # Indenta este bloco todo!
+            if linhas:
+                st.write("Exemplos de registros na tabela 'projetos':")
+                for linha in linhas:
+                    st.write(linha)
+            else:
+                st.write("Tabela 'projetos' está vazia")
     except Exception as e:
         st.error(f"Erro ao consultar dados: {e}")
 
@@ -277,4 +276,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
