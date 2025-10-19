@@ -114,7 +114,7 @@ def adicionar_projeto_db(data: dict):
         sql_stmt = text(sql)
         
         with engine.connect() as conn:
-            conn.execute(sql_stmt, **db_data)  # Passa parâmetros nomeados
+            conn.execute(sql_stmt, parameters=db_data)  # Passa parâmetros via dict no argumento parameters
             conn.commit()
         
         st.cache_data.clear()
@@ -122,6 +122,7 @@ def adicionar_projeto_db(data: dict):
     except Exception as e:
         st.toast(f"Erro ao adicionar projeto: {e}", icon="🔥")
         return False
+
         
 def excluir_projeto_db(project_id):
     engine = get_engine()
@@ -240,6 +241,7 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
 
 
 
