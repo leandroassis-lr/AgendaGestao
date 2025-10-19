@@ -128,23 +128,25 @@ def atualizar_projeto_db(project_id, updates: dict):
         return False
 
 def adicionar_projeto_db(data: dict):
-    """Adiciona um novo projeto ao banco usando placeholders nomeados corretamente."""
+    """Adiciona um novo projeto ao banco usando placeholders posicionais."""
     engine = get_engine()
     if engine is None:
         return False
 
     try:
+        # Normaliza os nomes das colunas para o banco
         db_data = {
             key.replace(' ', '_').replace('ç', 'c').replace('ê', 'e').replace('ã', 'a'): value
             for key, value in data.items()
         }
 
-        cols_str = ', '.join(db_data.keys())
-        placeholders = ', '.join([f":{c}" for c in db_data.keys()])
+        cols_str = ', '.join([f'"{c}"' for c in db_data.keys()])
+        placeholders = ', '.join(['?' for _ in db_data])
         sql = f"INSERT INTO projetos ({cols_str}) VALUES ({placeholders})"
+        values = tuple(db_data.values())  # Tupla é o formato aceito
 
         with engine.connect() as conn:
-            conn.execute(text(sql), db_data)
+            conn.execute(text(sql), values)
             conn.commit()
 
         st.cache_data.clear()
@@ -152,8 +154,7 @@ def adicionar_projeto_db(data: dict):
 
     except Exception as e:
         st.toast(f"Erro ao adicionar projeto: {e}", icon="🔥")
-        return False
-        
+        return False        
 def excluir_projeto_db(project_id):
     """Exclui um projeto do banco com base no ID."""
     engine = get_engine()
@@ -257,6 +258,7 @@ def calcular_sla(projeto_row, df_sla):
         if dias_restantes < 0: return f"Atrasado em {-dias_restantes}d", "#EF5350"
         elif dias_restantes == 0: return "SLA Vence Hoje!", "#FFA726"
         else: return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
 
 
 
