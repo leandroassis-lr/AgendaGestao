@@ -196,11 +196,11 @@ def tela_projetos():
             st.markdown(f"{agencia_text}")
         with col_status:
             st.markdown(
-               st.markdown(
     f"""<div style="height:100%;display:flex;align-items:center;justify-content:flex-end;">
     <span style="background-color:{status_color_name};color:black;padding:8px 15px;border-radius:5px;font-weight:bold;font-size:0.9em;">{status_text}</span>
     </div>""",
-    unsafe_allow_html=True)
+    unsafe_allow_html=True
+)
 
         with st.expander(f"Ver/Editar Detalhes - ID: {project_id}"):
             with st.form(f"form_edicao_card_{project_id}"):
@@ -358,4 +358,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
