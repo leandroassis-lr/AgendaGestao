@@ -63,8 +63,8 @@ def carregar_projetos_db():
             )
         df.rename(columns={
             'Descricao': 'Descrição',
-            'Agencia': 'Agência',
-            'Tecnico': 'Técnico',
+            'Agencia': 'Agencia',
+            'Tecnico': 'Tecnico',
             'Observacao': 'Observação',
             'Data_Abertura': 'Data de Abertura',
             'Data_Finalizacao': 'Data de Finalização',
@@ -258,5 +258,6 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
 
 
