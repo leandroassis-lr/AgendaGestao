@@ -37,16 +37,16 @@ def tela_cadastro_usuario():
         senha = st.text_input("Senha", type="password", key="cad_senha")
         if st.form_submit_button("Cadastrar"):
             if not nome or not email:
-                st.toast("Preencha Nome e Email.")
+                st.error("Preencha Nome e Email.")
                 return
             df = utils.carregar_usuarios()
             if email.lower() in df["Email"].astype(str).str.lower().values:
-                st.toast("Email já cadastrado!")
+                st.error("Email já cadastrado!")
             else:
                 nova_linha = pd.DataFrame([[nome, email, senha]], columns=df.columns)
                 df = pd.concat([df, nova_linha], ignore_index=True)
                 utils.salvar_usuario(df)
-              st.toast("Usuário cadastrado!")
+                st.success("Usuário cadastrado!")
                 st.session_state.cadastro = False
                 st.rerun()
     if st.button("Voltar para Login"):
@@ -87,7 +87,7 @@ def tela_cadastro_projeto():
                 nova_linha_data[pergunta] = resposta
         
         if utils.adicionar_projeto_db(nova_linha_data):
-            st.toast(f"Projeto '{projeto_nome}' cadastrado!"); st.session_state["tela_cadastro_proj"] = False; st.rerun()
+            st.success(f"Projeto '{projeto_nome}' cadastrado!"); st.session_state["tela_cadastro_proj"] = False; st.rerun()
 
 def tela_projetos():
     st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True)
@@ -183,7 +183,8 @@ def tela_projetos():
                     total_etapas = len(etapas_do_projeto)
                     num_etapas_concluidas = len(etapas_concluidas_lista)
                     progresso = num_etapas_concluidas / total_etapas if total_etapas > 0 else 0
-                    st.progress(progresso, text=f"{num_etapas_concluidas} de {total_etapas} etapas concluídas ({progresso:.0%})")
+                    st.progress(progresso)
+                    st.caption(f"{num_etapas_concluidas} de {total_etapas} etapas concluídas ({progresso:.0%})")
                     for etapa in etapas_do_projeto["Etapa"]:
                         marcado = st.checkbox(etapa, value=(etapa in etapas_concluidas_lista), key=f"chk_{project_id}_{utils.clean_key(etapa)}")
                         if marcado: novas_etapas_marcadas.append(etapa)
@@ -232,14 +233,14 @@ def tela_projetos():
                 status_final = novo_status_selecionado
                 if row['Status'] == 'NÃO INICIADA' and len(novas_etapas_marcadas) > 0:
                     status_final = 'EM ANDAMENTO'
-                    st.toast("Status alterado para 'EM ANDAMENTO'!")
+                    st.info("Status alterado para 'EM ANDAMENTO'!")
                 
                 if 'finalizad' in status_final.lower():
                     total_etapas_config = len(etapas_do_projeto)
                     if len(novas_etapas_marcadas) < total_etapas_config and total_etapas_config > 0:
-                        st.toast(f"ERRO: Para finalizar, todas as {total_etapas_config} etapas devem ser marcadas.", icon="🚨"); st.stop()
+                        st.error(f"ERRO: Para finalizar, todas as {total_etapas_config} etapas devem ser marcadas.", icon="🚨"); st.stop()
                     if not nova_data_finalizacao:
-                        st.toast("ERRO: Se o status é 'Finalizada', a Data de Finalização é obrigatória.", icon="🚨"); st.stop()
+                        st.error("ERRO: Se o status é 'Finalizada', a Data de Finalização é obrigatória.", icon="🚨"); st.stop()
                 
                 log_final = row.get("Log Agendamento", "") if pd.notna(row.get("Log Agendamento")) else ""
                 agendamento_antigo = row['Agendamento']
@@ -269,7 +270,7 @@ def tela_projetos():
                 }
 
                 if utils.atualizar_projeto_db(project_id, updates):
-                   st.toast(f"Projeto '{novo_projeto}' (ID: {project_id}) atualizado.")
+                    st.success(f"Projeto '{novo_projeto}' (ID: {project_id}) atualizado.")
                     st.rerun()
 
             st.markdown("---")
@@ -309,5 +310,4 @@ def main():
         tela_projetos()
 
 if __name__ == "__main__":
-
     main()
