@@ -1,10 +1,11 @@
 import streamlit as st
 import pandas as pd
 import os
-from datetime import date
+from datetime import date, datetime
 import re
 import html
 from sqlalchemy import create_engine, text
+import json
 
 # --- CONFIGURAÇÕES GLOBAIS ---
 CONFIG_FILE = "config.xlsx"
@@ -43,56 +44,48 @@ def get_engine():
         st.error(f"Erro ao conectar ao banco de dados: {e}")
         return None
 
-@st.cache_data(ttl=60)
-def carregar_projetos_db():
-    engine = get_engine()
-    if engine is None:
-        return pd.DataFrame()
-    try:
-        query = "SELECT * FROM projetos ORDER BY ID DESC"
-        with engine.connect() as conn:
-            df = pd.read_sql_query(
-                sql=text(query),
-                con=conn,
-                parse_dates={
-                    "Agendamento": {"errors": "coerce"},
-                    "Data_Abertura": {"errors": "coerce"},
-                    "Data_Finalizacao": {"errors": "coerce"}
-                }
-            )
-        df.rename(columns={
-            'Descricao': 'Descrição', 'Agencia': 'Agência', 'Tecnico': 'Técnico',
-            'Observacao': 'Observação', 'Data_Abertura': 'Data de Abertura',
-            'Data_Finalizacao': 'Data de Finalização', 'Log_Agendamento': 'Log Agendamento',
-            'Etapas_Concluidas': 'Etapas Concluidas'
-        }, inplace=True)
-        return df
-    except Exception as e:
-        if "no such table" in str(e):
-            st.error("Erro: A tabela 'projetos' não foi encontrada no Turso. Verifique se as tabelas foram criadas corretamente.")
-        else:
-            st.error(f"Erro ao carregar projetos: {e}")
-        return pd.DataFrame()
+# ... Outras funções permanecem iguais ...
 
-def atualizar_projeto_db(project_id, updates: dict):
+# Função para sanitizar os valores antes do banco
+def sanitize_value(val):
+    if val is None:
+        return None
+    if isinstance(val, (int, float, bool)):
+        return val
+    if isinstance(val, (date, datetime)):
+        return val
+    if isinstance(val, str):
+        return val
+    try:
+        return json.dumps(val)
+    except Exception:
+        return str(val)
+
+def adicionar_projeto_db(data: dict):
     engine = get_engine()
     if engine is None:
         return False
+    
     try:
-        db_updates = {
+        db_data_raw = {
             key.replace(' ', '_').replace('ç', 'c').replace('ê', 'e').replace('ã', 'a'): value
-            for key, value in updates.items()
+            for key, value in data.items()
         }
-        set_clause = ", ".join([f'"{key}" = ?' for key in db_updates.keys()])
-        sql = f"UPDATE projetos SET {set_clause} WHERE ID = ?"
-        values = list(db_updates.values()) + [project_id]
+        db_data = {k: sanitize_value(v) for k, v in db_data_raw.items()}
+        
+        cols_str = ', '.join([f'"{c}"' for c in db_data.keys()])
+        placeholders = ', '.join([f":{c}" for c in db_data.keys()])
+        sql = f"INSERT INTO projetos ({cols_str}) VALUES ({placeholders})"
+        sql_stmt = text(sql)
+        
         with engine.connect() as conn:
-            conn.execute(text(sql), values)
+            conn.execute(sql_stmt, parameters=db_data)
             conn.commit()
+        
         st.cache_data.clear()
         return True
     except Exception as e:
-        st.toast(f"Erro ao atualizar projeto: {e}", icon="🔥")
+        st.toast(f"Erro ao adicionar projeto: {e}", icon="🔥")
         return False
 
 from sqlalchemy import text
@@ -257,6 +250,7 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
 
 
 
