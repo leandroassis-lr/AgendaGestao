@@ -29,34 +29,31 @@ def get_engine():
     Esta função usa os "Secrets" do Streamlit.
     """
     try:
-        # 1. Puxa as credenciais dos "Secrets" do Streamlit
-        #    (Estes devem ser os NOMES das chaves no painel do Streamlit Cloud)
-        db_url = st.secrets["TURSO_DB_URL"]
-        db_token = st.secrets["TURSO_AUTH_TOKEN"]
+        # 1. Puxa as credenciais com NOMES SIMPLES
+        db_url_value = st.secrets["db_url"]
+        db_token_value = st.secrets["db_token"]
         
         # 2. VERIFICA se o usuário colocou "libsql://" por engano no secret
-        if db_url.startswith("libsql://"):
-            db_url = db_url[9:] # Remove o prefixo
+        if db_url_value.startswith("libsql://"):
+            db_url_value = db_url_value[9:] # Remove o prefixo
             
         # 3. Monta a URL de conexão CORRETA
-        #    O formato é: "sqlite+dialeto://hostname"
-        connection_url = f"sqlite+libsql://{db_url}"
+        connection_url = f"sqlite+libsql://{db_url_value}"
         
         # 4. Cria o "motor" (engine) da conexão
-        #    O 'auth_token' vai nos 'connect_args'
         engine = create_engine(
             connection_url, 
             connect_args={
-                "auth_token": db_token,
+                "auth_token": db_token_value,
                 "check_same_thread": False # OBRIGATÓRIO para Streamlit
             }
         )
         return engine
     
     except KeyError as e:
-        # Agora a mensagem de erro será clara
+        # Esta mensagem de erro agora mostrará a nova chave se falhar
         st.error(f"Erro Crítico: A credencial {e} não foi encontrada nos 'Secrets' do Streamlit.")
-        st.info("Por favor, adicione TURSO_DB_URL e TURSO_AUTH_TOKEN aos Secrets do seu app.")
+        st.info("Por favor, adicione 'db_url' e 'db_token' (minúsculos) aos Secrets do seu app.")
         return None
     except Exception as e:
         st.error(f"Erro ao conectar ao banco de dados: {e}")
@@ -283,3 +280,4 @@ def calcular_sla(projeto_row, df_sla):
         if dias_restantes < 0: return f"Atrasado em {-dias_restantes}d", "#EF5350"
         elif dias_restantes == 0: return "SLA Vence Hoje!", "#FFA726"
         else: return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
