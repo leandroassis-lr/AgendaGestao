@@ -96,7 +96,7 @@ def atualizar_projeto_db(project_id, updates: dict):
         return False
 
 def adicionar_projeto_db(data: dict):
-    """Adiciona um novo projeto ao banco usando exec_driver_sql com placeholders posicionais."""
+    """Adiciona um novo projeto ao banco usando exec_driver_sql com parâmetros nomeados."""
     engine = get_engine()
     if engine is None:
         return False
@@ -109,12 +109,12 @@ def adicionar_projeto_db(data: dict):
         }
 
         cols_str = ', '.join([f'"{c}"' for c in db_data.keys()])
-        placeholders = ', '.join(['?' for _ in db_data])
+        placeholders = ', '.join([f":{c}" for c in db_data.keys()])
         sql = f"INSERT INTO projetos ({cols_str}) VALUES ({placeholders})"
-        values = tuple(db_data.values())  # Tupla simples
+        values = db_data  # dicionário com parâmetros nomeados
 
         with engine.connect() as conn:
-            conn.exec_driver_sql(sql, values)  # ✅ Usa exec_driver_sql
+            conn.exec_driver_sql(sql, values)  # Executa com parâmetros nomeados
             conn.commit()
 
         st.cache_data.clear()
@@ -123,6 +123,7 @@ def adicionar_projeto_db(data: dict):
     except Exception as e:
         st.toast(f"Erro ao adicionar projeto: {e}", icon="🔥")
         return False
+        
 def excluir_projeto_db(project_id):
     engine = get_engine()
     if engine is None:
@@ -240,5 +241,6 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
 
 
