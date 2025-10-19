@@ -19,7 +19,7 @@ CONFIG_TABS = {
 }
 
 # =========================================================================
-# SEÇÃO DE CONEXÃO (CORRIGIDA)
+# SEÇÃO DE CONEXÃO (CORRIGIDA PARA CONEXÃO SEGURA)
 # =========================================================================
 
 @st.cache_resource  # Usamos cache_resource para o "motor" da conexão
@@ -38,7 +38,9 @@ def get_engine():
             db_url_value = db_url_value[9:] # Remove o prefixo
             
         # 3. Monta a URL de conexão CORRETA
-        connection_url = f"sqlite+libsql://{db_url_value}"
+        #    A MUDANÇA ESTÁ AQUI: Adicionamos "/?secure=true"
+        #    Isso força o driver a usar uma conexão segura (WSS/HTTPS)
+        connection_url = f"sqlite+libsql://{db_url_value}/?secure=true"
         
         # 4. Cria o "motor" (engine) da conexão
         engine = create_engine(
@@ -73,17 +75,15 @@ def carregar_projetos_db():
     try:
         query = "SELECT * FROM projetos ORDER BY ID DESC"
         
-        # Usamos 'with engine.connect()' para rodar a query
         with engine.connect() as conn:
             df = pd.read_sql_query(
-                sql=text(query),  # Usar text() é uma boa prática
+                sql=text(query),
                 con=conn,
                 parse_dates={"Agendamento": {"errors": "coerce"},
                              "Data_Abertura": {"errors": "coerce"},
                              "Data_Finalizacao": {"errors": "coerce"}}
             )
         
-        # Sua lógica original de renomear colunas (mantida)
         df.rename(columns={
             'Descricao': 'Descrição', 'Agencia': 'Agência', 'Tecnico': 'Técnico',
             'Observacao': 'Observação', 'Data_Abertura': 'Data de Abertura',
@@ -93,7 +93,6 @@ def carregar_projetos_db():
         return df
         
     except Exception as e:
-        # Seu tratamento de erro original (mantido)
         if "no such table" in str(e):
             st.error(f"Erro: A tabela 'projetos' não foi encontrada no Turso. "
                      f"Verifique se as tabelas foram criadas corretamente.")
@@ -108,27 +107,24 @@ def atualizar_projeto_db(project_id, updates: dict):
         return False
         
     try:
-        # Sua lógica original de conversão de nomes de colunas (mantida)
         db_updates = {
             key.replace(' ', '_').replace('ç', 'c').replace('ê', 'e').replace('ã', 'a'): value
             for key, value in updates.items()
         }
         
-        # Sua lógica original de SQL (mantida)
         set_clause = ", ".join([f'"{key}" = ?' for key in db_updates.keys()])
         sql = f"UPDATE projetos SET {set_clause} WHERE ID = ?"
         values = list(db_updates.values()) + [project_id]
 
-        # Usamos 'with engine.connect()' para executar a atualização
         with engine.connect() as conn:
             conn.execute(text(sql), values)
-            conn.commit()  # Salva a transação
+            conn.commit()
             
-        st.cache_data.clear() # Limpa o cache
+        st.cache_data.clear()
         return True
         
     except Exception as e:
-        st.toast(f"Erro ao atualizar projeto: {e}", icon="🔥") # Seu toast (mantido)
+        st.toast(f"Erro ao atualizar projeto: {e}", icon="🔥")
         return False
 
 def adicionar_projeto_db(data: dict):
@@ -138,28 +134,25 @@ def adicionar_projeto_db(data: dict):
         return False
         
     try:
-        # Sua lógica original de conversão de nomes de colunas (mantida)
         db_data = {
             key.replace(' ', '_').replace('ç', 'c').replace('ê', 'e').replace('ã', 'a'): value
             for key, value in data.items()
         }
         
-        # Sua lógica original de SQL (mantida)
         cols_str = ', '.join([f'"{c}"' for c in db_data.keys()])
         placeholders = ', '.join(['?'] * len(db_data))
         sql = f"INSERT INTO projetos ({cols_str}) VALUES ({placeholders})"
         values = list(db_data.values())
         
-        # Usamos 'with engine.connect()' para executar a inserção
         with engine.connect() as conn:
             conn.execute(text(sql), values)
-            conn.commit() # Salva a transação
+            conn.commit()
             
-        st.cache_data.clear() # Limpa o cache
+        st.cache_data.clear()
         return True
         
     except Exception as e:
-        st.toast(f"Erro ao adicionar projeto: {e}", icon="🔥") # Seu toast (mantido)
+        st.toast(f"Erro ao adicionar projeto: {e}", icon="🔥")
         return False
 
 def excluir_projeto_db(project_id):
@@ -169,30 +162,23 @@ def excluir_projeto_db(project_id):
         return False
         
     try:
-        # Sua lógica original de SQL (mantida)
         sql = 'DELETE FROM projetos WHERE ID = ?'
         
-        # Usamos 'with engine.connect()' para executar a exclusão
         with engine.connect() as conn:
-            conn.execute(text(sql), (project_id,)) # Passa o ID como uma tupla
-            conn.commit() # Salva a transação
+            conn.execute(text(sql), (project_id,))
+            conn.commit()
             
-        st.cache_data.clear() # Limpa o cache
-        st.toast("Projeto excluído!", icon="✅") # Seu toast (mantido)
+        st.cache_data.clear()
+        st.toast("Projeto excluído!", icon="✅")
         return True
         
     except Exception as e:
-        st.toast(f"Erro ao excluir projeto: {e}", icon="🔥") # Seu toast (mantido)
+        st.toast(f"Erro ao excluir projeto: {e}", icon="🔥")
         return False
 
 # =========================================================================
 # O RESTO DO SEU ARQUIVO UTILS.PY (INTACTO)
 # =========================================================================
-
-# --- FUNÇÕES DE CONFIGURAÇÃO E UTILITÁRIOS ---
-# (O resto do teu código permanece igual)
-# ATENÇÃO: As funções que usam .xlsx (salvar_config, salvar_usuario)
-# ainda vão falhar no Streamlit Cloud, como discutimos.
 
 def load_css():
     css_path = "style.css"
@@ -200,9 +186,7 @@ def load_css():
         with open(css_path, "r", encoding="utf-8") as f:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
     else:
-        # Fallback CSS (O seu código original tinha "..." aqui)
         st.markdown("""<style> 
-            /* Adicione um CSS básico aqui se o arquivo falhar */
             .stButton>button {
                 border-radius: 5px;
             }
@@ -222,23 +206,17 @@ def carregar_config(tab_name):
         return pd.DataFrame(columns=cols)
 
 def salvar_config(df, tab_name):
-    # (código mantido como no seu original)
     st.error("ERRO DE DEPLOY: A função 'salvar_config' não funciona no Streamlit Cloud. Os dados do Excel são somente leitura.")
-    # ATENÇÃO: ISTO VAI FALHAR NO STREAMLIT CLOUD
     pass
 
 def carregar_usuarios():
     if os.path.exists(USUARIOS_FILE): return pd.read_excel(USUARIOS_FILE)
     else:
         df = pd.DataFrame(columns=["Nome", "Email", "Senha"])
-        # ATENÇÃO: ISTO VAI FALHAR NO STREAMLIT CLOUD
-        # df.to_excel(USUARIOS_FILE, index=False) 
         return df
 
 def salvar_usuario(df):
     st.error("ERRO DE DEPLOY: A função 'salvar_usuario' não funciona no Streamlit Cloud. Os dados do Excel são somente leitura.")
-    # ATENÇÃO: ISTO VAI FALHAR NO STREAMLIT CLOUD
-    # df.to_excel(USUARIOS_FILE, index=False)
     pass
 
 def autenticar_direto(email):
@@ -280,4 +258,3 @@ def calcular_sla(projeto_row, df_sla):
         if dias_restantes < 0: return f"Atrasado em {-dias_restantes}d", "#EF5350"
         elif dias_restantes == 0: return "SLA Vence Hoje!", "#FFA726"
         else: return f"SLA: {dias_restantes}d restantes", "#66BB6F"
-
