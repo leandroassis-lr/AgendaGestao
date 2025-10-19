@@ -1,11 +1,14 @@
 import streamlit as st
 import pandas as pd
 import os
+# import sqlite3  # Removido
 from datetime import date
 import re
 import html
-from sqlalchemy import text
+from sqlalchemy import text  # Adicionado
 
+# --- CONFIGURAÇÕES GLOIS ---
+# DB_FILE = "gestao_projetos.db"  # Removido
 CONFIG_FILE = "config.xlsx"
 USUARIOS_FILE = "usuarios.xlsx"
 CONFIG_TABS = {
@@ -15,15 +18,21 @@ CONFIG_TABS = {
     "etapas_evolucao": ["Nome do Projeto", "Etapa"]
 }
 
+# --- FUNÇÕES DO BANCO DE DADOS ---
+
 @st.cache_data(ttl=60)
 def carregar_projetos_db():
     try:
+        # Conecta usando os "Secrets"
         conn = st.connection("turso", type="sql")
+        
         query = "SELECT * FROM projetos ORDER BY ID DESC"
+        
         df = conn.query(query,
                         parse_dates={"Agendamento": {"errors": "coerce"},
                                      "Data_Abertura": {"errors": "coerce"},
                                      "Data_Finalizacao": {"errors": "coerce"}})
+        
         df.rename(columns={
             'Descricao': 'Descrição', 'Agencia': 'Agência', 'Tecnico': 'Técnico',
             'Observacao': 'Observação', 'Data_Abertura': 'Data de Abertura',
@@ -33,15 +42,16 @@ def carregar_projetos_db():
         return df
     except Exception as e:
         if "no such table" in str(e):
-            st.error("Erro: A tabela 'projetos' não foi encontrada no Turso. Lembra-te de executar a Etapa 4 (Migrar os dados antigos).")
+            st.error(f"Erro: A tabela 'projetos' não foi encontrada no Turso. "
+                     f"Lembra-te de executar a Etapa 4 (Migrar os dados antigos).")
         else:
             st.error(f"Erro ao carregar projetos: {e}")
         return pd.DataFrame()
 
 def atualizar_projeto_db(project_id, updates: dict):
-    """Retorna (success: bool, message: str)"""
     try:
         conn = st.connection("turso", type="sql")
+        
         db_updates = {
             key.replace(' ', '_').replace('ç', 'c').replace('ê', 'e').replace('ã', 'a'): value
             for key, value in updates.items()
@@ -53,16 +63,17 @@ def atualizar_projeto_db(project_id, updates: dict):
         with conn.session as s:
             s.execute(text(sql), values)
             s.commit()
-
+        
         st.cache_data.clear()
-        return True, f"Projeto (ID: {project_id}) atualizado com sucesso."
+        return True
     except Exception as e:
-        return False, f"Erro ao atualizar projeto: {e}"
+        st.toast(f"Erro ao atualizar projeto: {e}", icon="🔥") # <-- ALTERADO (toast)
+        return False
 
 def adicionar_projeto_db(data: dict):
-    """Retorna (success: bool, message: str)"""
     try:
         conn = st.connection("turso", type="sql")
+        
         db_data = {
             key.replace(' ', '_').replace('ç', 'c').replace('ê', 'e').replace('ã', 'a'): value
             for key, value in data.items()
@@ -70,30 +81,37 @@ def adicionar_projeto_db(data: dict):
         cols_str = ', '.join([f'"{c}"' for c in db_data.keys()])
         placeholders = ', '.join(['?'] * len(db_data))
         sql = f"INSERT INTO projetos ({cols_str}) VALUES ({placeholders})"
-
+        
         with conn.session as s:
             s.execute(text(sql), list(db_data.values()))
             s.commit()
-
+            
         st.cache_data.clear()
-        return True, "Projeto adicionado com sucesso."
+        return True
     except Exception as e:
-        return False, f"Erro ao adicionar projeto: {e}"
+        st.toast(f"Erro ao adicionar projeto: {e}", icon="🔥") # <-- ALTERADO (toast)
+        return False
 
 def excluir_projeto_db(project_id):
-    """Retorna (success: bool, message: str)"""
     try:
         conn = st.connection("turso", type="sql")
         sql = 'DELETE FROM projetos WHERE ID = ?'
-
+        
         with conn.session as s:
             s.execute(text(sql), (project_id,))
             s.commit()
-
+            
         st.cache_data.clear()
-        return True, "Projeto excluído com sucesso."
+        st.toast("Projeto excluído!", icon="✅") # <-- ALTERADO (toast)
+        return True
     except Exception as e:
-        return False, f"Erro ao excluir projeto: {e}"
+        st.toast(f"Erro ao excluir projeto: {e}", icon="🔥") # <-- ALTERADO (toast)
+        return False
+
+# --- FUNÇÕES DE CONFIGURAÇÃO E UTILITÁRIOS ---
+# (O resto do teu código permanece igual)
+# ATENÇÃO: As funções que usam .xlsx (salvar_config, salvar_usuario)
+# ainda vão falhar no Streamlit Cloud, como discutimos.
 
 def load_css():
     css_path = "style.css"
@@ -101,7 +119,8 @@ def load_css():
         with open(css_path, "r", encoding="utf-8") as f:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
     else:
-        st.markdown("""<style>/* fallback */</style>""", unsafe_allow_html=True)
+        # Fallback CSS
+        st.markdown("""<style>...</style>""", unsafe_allow_html=True)
 
 @st.cache_data(ttl=3600)
 def carregar_config(tab_name):
@@ -117,17 +136,20 @@ def carregar_config(tab_name):
         return pd.DataFrame(columns=cols)
 
 def salvar_config(df, tab_name):
-    # Mantido como placeholder — salvar em xlsx no Cloud falhará sem filesystem persistente
+    # (código mantido como no seu original)
+    # ATENÇÃO: ISTO VAI FALHAR NO STREAMLIT CLOUD
     pass
 
 def carregar_usuarios():
     if os.path.exists(USUARIOS_FILE): return pd.read_excel(USUARIOS_FILE)
     else:
         df = pd.DataFrame(columns=["Nome", "Email", "Senha"])
+        # ATENÇÃO: ISTO VAI FALHAR NO STREAMLIT CLOUD
+        # df.to_excel(USUARIOS_FILE, index=False) 
         return df
 
 def salvar_usuario(df):
-    # Mantido, mas no Cloud pode falhar
+    # ATENÇÃO: ISTO VAI FALHAR NO STREAMLIT CLOUD
     df.to_excel(USUARIOS_FILE, index=False)
 
 def autenticar_direto(email):
