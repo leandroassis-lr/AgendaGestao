@@ -112,7 +112,14 @@ def tela_cadastro_projeto():
 
 def tela_projetos():
     st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True)
-    # [Seu código para mostrar projetos...]
+    
+    df = utils.carregar_projetos_db()
+    if df.empty:
+        st.info("Nenhum projeto cadastrado ainda.")
+        return
+
+    # Mostra o DataFrame com projetos filtrável e ordenável
+    st.dataframe(df)
 
 # ----------------- Função para Inspecionar Banco -----------------
 def inspecionar_banco():
@@ -218,3 +225,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
