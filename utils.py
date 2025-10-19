@@ -96,26 +96,29 @@ def atualizar_projeto_db(project_id, updates: dict):
         return False
 
 def adicionar_projeto_db(data: dict):
-    """Adiciona um novo projeto ao banco usando formato compatível com SQLAlchemy."""
+    """Adiciona um novo projeto ao banco usando placeholders posicionais corretamente."""
     engine = get_engine()
     if engine is None:
         return False
+
     try:
         db_data = {
             key.replace(' ', '_').replace('ç', 'c').replace('ê', 'e').replace('ã', 'a'): value
             for key, value in data.items()
         }
+
         cols_str = ', '.join([f'"{c}"' for c in db_data.keys()])
         placeholders = ', '.join(['?' for _ in db_data])
         sql = f"INSERT INTO projetos ({cols_str}) VALUES ({placeholders})"
-        values = [tuple(db_data.values())]  # Lista de tuplas
+        values = tuple(db_data.values())  # Tupla simples
 
         with engine.connect() as conn:
-            conn.execute(text(sql), values)
+            conn.exec_driver_sql(sql, values)  # ✅ Usa exec_driver_sql para parâmetros posicionais
             conn.commit()
 
         st.cache_data.clear()
         return True
+
     except Exception as e:
         st.toast(f"Erro ao adicionar projeto: {e}", icon="🔥")
         return False
@@ -237,3 +240,4 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
