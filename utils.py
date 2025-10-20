@@ -11,11 +11,8 @@ import json
 CONFIG_FILE = "config.xlsx"
 USUARIOS_FILE = "usuarios.xlsx"
 CONFIG_TABS = {
-    "status": ["Status"],
-    "agencias": ["Agência"],
-    "projetos_nomes": ["Nome do Projeto"],
-    "tecnicos": ["Técnico"],
-    "sla": ["Nome do Projeto", "Demanda", "Prazo (dias)"],
+    "status": ["Status"], "agencias": ["Agência"], "projetos_nomes": ["Nome do Projeto"],
+    "tecnicos": ["Técnico"], "sla": ["Nome do Projeto", "Demanda", "Prazo (dias)"],
     "perguntas": ["Pergunta", "Tipo (texto, numero, data)"],
     "etapas_evolucao": ["Nome do Projeto", "Etapa"]
 }
@@ -43,38 +40,41 @@ def get_engine():
     except Exception as e:
         st.error(f"Erro ao conectar ao banco de dados: {e}")
         return None
+# =========================================================================
+# FUNÇÕES DO BANCO DE DADOS (Inalteradas)
+# =========================================================================
 
 @st.cache_data(ttl=60)
 def carregar_projetos_db():
+    """Carrega todos os projetos do banco de dados Turso."""
     engine = get_engine()
     if engine is None:
-        return pd.DataFrame()
+        return pd.DataFrame() # Retorna um DF vazio se a conexão falhar
+
     try:
         query = "SELECT * FROM projetos ORDER BY ID DESC"
+        
         with engine.connect() as conn:
             df = pd.read_sql_query(
                 sql=text(query),
                 con=conn,
-                parse_dates={
-                    "Agendamento": {"errors": "coerce"},
-                    "Data_Abertura": {"errors": "coerce"},
-                    "Data_Finalizacao": {"errors": "coerce"}
-                }
+                parse_dates={"Agendamento": {"errors": "coerce"},
+                             "Data_Abertura": {"errors": "coerce"},
+                             "Data_Finalizacao": {"errors": "coerce"}}
             )
+        
         df.rename(columns={
-            'Descricao': 'Descrição',
-            'Agencia': 'Agência',
-            'Tecnico': 'Técnico',
-            'Observacao': 'Observação',
-            'Data_Abertura': 'Data de Abertura',
-            'Data_Finalizacao': 'Data de Finalização',
-            'Log_Agendamento': 'Log Agendamento',
+            'Descricao': 'Descrição', 'Agencia': 'Agência', 'Tecnico': 'Técnico',
+            'Observacao': 'Observação', 'Data_Abertura': 'Data de Abertura',
+            'Data_Finalizacao': 'Data de Finalização', 'Log_Agendamento': 'Log Agendamento',
             'Etapas_Concluidas': 'Etapas Concluidas'
         }, inplace=True)
         return df
+        
     except Exception as e:
-        if "no such table" in str(e).lower():
-            st.error("Erro: A tabela 'projetos' não foi encontrada no banco.")
+        if "no such table" in str(e):
+            st.error(f"Erro: A tabela 'projetos' não foi encontrada no Turso. "
+                     f"Verifique se as tabelas foram criadas corretamente.")
         else:
             st.error(f"Erro ao carregar projetos: {e}")
         return pd.DataFrame()
@@ -258,6 +258,7 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
 
 
 
