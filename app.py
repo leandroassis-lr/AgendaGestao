@@ -56,7 +56,6 @@ def tela_cadastro_usuario():
                 st.error("Preencha Nome e Email.")
                 return
             
-            # --- MUDANÇA AQUI ---
             # Carrega usuários do banco de dados
             df = utils.carregar_usuarios_db() 
             
@@ -66,7 +65,6 @@ def tela_cadastro_usuario():
                 nova_linha = pd.DataFrame([[nome, email, senha]], columns=["Nome", "Email", "Senha"]) # Colunas corretas
                 df = pd.concat([df, nova_linha], ignore_index=True)
                 
-                # --- MUDANÇA AQUI ---
                 # Salva usuários no banco de dados
                 if utils.salvar_usuario_db(df): 
                     st.success("Usuário cadastrado!")
@@ -85,7 +83,6 @@ def tela_cadastro_projeto():
         st.rerun()
     st.subheader("Cadastrar Novo Projeto")
     
-    # --- MUDANÇA AQUI ---
     # Carrega perguntas do banco de dados
     perguntas_customizadas = utils.carregar_config_db("perguntas") 
     
@@ -123,7 +120,6 @@ def tela_cadastro_projeto():
 def tela_projetos():
     st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True)
     
-    # --- MUDANÇAS AQUI ---
     df = utils.carregar_projetos_db()
     df_sla = utils.carregar_config_db("sla") 
     df_etapas_config = utils.carregar_config_db("etapas_evolucao") 
@@ -179,7 +175,6 @@ def tela_projetos():
     st.markdown("---")
     st.info(f"Projetos encontrados: {len(df_filtrado)}")
     
-    # --- MUDANÇAS AQUI ---
     agencias_cfg = utils.carregar_config_db("agencias")
     tecnicos_cfg = utils.carregar_config_db("tecnicos")
     status_options_df = utils.carregar_config_db("status") # Pega o DataFrame
@@ -195,12 +190,10 @@ def tela_projetos():
         status_text = html.escape(str(status_raw))
         analista_text = html.escape(str(row['Analista'])) if pd.notna(row['Analista']) else 'N/A'
         
-        # --- CORREÇÕES DE ACENTUAÇÃO AQUI ---
-        agencia_text = html.escape(str(row.get("Agência", "N/A"))) # <-- CORRIGIDO
+        agencia_text = html.escape(str(row.get("Agência", "N/A")))
         projeto_text = html.escape(str(row.get("Projeto", "N/A")))
-        demanda_text = html.escape(str(row.get("Demanda", "N/A")))
-        tecnico_text = html.escape(str(row.get("Técnico", "N/A"))) # <-- CORRIGIDO
-        # --- FIM DAS CORREÇÕES ---
+        # demanda_text = html.escape(str(row.get("Demanda", "N/A"))) # (Removido a pedido)
+        # tecnico_text = html.escape(str(row.get("Técnico", "N/A"))) # (Removido a pedido)
         
         status_color_name = utils.get_status_color(str(status_raw))
         sla_text, sla_color = utils.calcular_sla(row, df_sla)
@@ -210,13 +203,18 @@ def tela_projetos():
         with col_info:
             st.markdown(f"<h6>📅 {row['Agendamento_str']}</h6>", unsafe_allow_html=True)
             st.markdown(f"<h5 style='margin:2px 0'>{projeto_text.upper()}</h5>", unsafe_allow_html=True)
-            st.markdown(f"<small style='color:var(--muted);'>{demanda_text} - {tecnico_text}</small>", unsafe_allow_html=True)
+            
+            # --- MUDANÇA 1: LINHA REMOVIDA ---
+            # st.markdown(f"<small style='color:var(--muted);'>{demanda_text} - {tecnico_text}</small>", unsafe_allow_html=True)
+            
         with col_analista:
             st.markdown(f"**Analista:** {analista_text}")
             st.markdown(f"<p style='color:{sla_color}; font-weight:bold;'>{sla_text}</p>", unsafe_allow_html=True)
+            
         with col_agencia:
-            st.markdown(f"**Agência:**")
-            st.markdown(f"{agencia_text}")
+            # --- MUDANÇA 2: JUNTOU LABEL E VALOR ---
+            st.markdown(f"**Agência:** {agencia_text}") 
+            
         with col_status:
             st.markdown(
                 f"""<div style="height:100%;display:flex;align-items:center;justify-content:flex-end;">
@@ -359,6 +357,7 @@ def main():
     # ==========================================================
     # FERRAMENTA DE MIGRAÇÃO (PODE REMOVER SE JÁ USOU)
     # ==========================================================
+    # (Recomendado remover este bloco 'with st.expander...')
     with st.expander("🚨 FERRAMENTA DE MIGRAÇÃO (USO ÚNICO) 🚨"):
         st.warning("Clique neste botão APENAS UMA VEZ para copiar os dados dos arquivos Excel (config.xlsx, usuarios.xlsx) para o banco de dados Turso. Após o sucesso, remova este bloco de código do app.py.")
         
