@@ -111,10 +111,9 @@ def tela_cadastro_projeto():
             "Projeto": projeto_nome
         }
         for pergunta, resposta in respostas_customizadas.items():
-            if isinstance(resposta, date):
-                nova_linha_data[pergunta] = resposta.strftime('%Y-%m-%d')
-            else:
-                nova_linha_data[pergunta] = resposta
+            # A função normalize_key em utils.py cuidará de formatar
+            # as chaves (ex: AGÊNCIA -> Agencia)
+            nova_linha_data[pergunta] = resposta
         
         if utils.adicionar_projeto_db(nova_linha_data):
             st.success(f"Projeto '{projeto_nome}' cadastrado!")
@@ -144,7 +143,8 @@ def tela_projetos():
     filtros = {}
     for campo, col in campos_select_1.items():
         with col:
-            if campo in df.columns:
+            # Verifica se o campo (com acento) existe no DataFrame
+            if campo in df.columns: 
                 opcoes = ["Todos"] + sorted(df[campo].astype(str).unique().tolist())
                 filtros[campo] = st.selectbox(f"Filtrar por {campo}", opcoes, key=f"filtro_{utils.clean_key(campo)}")
     for campo, col in campos_select_2.items():
@@ -194,10 +194,14 @@ def tela_projetos():
         status_raw = row['Status'] if pd.notna(row['Status']) else 'N/A'
         status_text = html.escape(str(status_raw))
         analista_text = html.escape(str(row['Analista'])) if pd.notna(row['Analista']) else 'N/A'
-        agencia_text = html.escape(str(row.get("Agencia", "N/A")))
+        
+        # --- CORREÇÕES DE ACENTUAÇÃO AQUI ---
+        agencia_text = html.escape(str(row.get("Agência", "N/A"))) # <-- CORRIGIDO
         projeto_text = html.escape(str(row.get("Projeto", "N/A")))
         demanda_text = html.escape(str(row.get("Demanda", "N/A")))
-        tecnico_text = html.escape(str(row.get("Tecnico", "N/A")))
+        tecnico_text = html.escape(str(row.get("Técnico", "N/A"))) # <-- CORRIGIDO
+        # --- FIM DAS CORREÇÕES ---
+        
         status_color_name = utils.get_status_color(str(status_raw))
         sla_text, sla_color = utils.calcular_sla(row, df_sla)
 
@@ -263,7 +267,7 @@ def tela_projetos():
                 c5,c6,c7 = st.columns(3)
                 with c5: novo_projeto = st.text_input("Projeto", value=row['Projeto'], key=f"proj_{project_id}")
                 with c6: novo_analista = st.text_input("Analista", value=row['Analista'], key=f"analista_{project_id}")
-                with c7: novo_gestor = st.text_input("Gestor", value=row['Gestor'], key=f"gestor_{project_id}")
+                with c7: novo_gestor = st.text_input("Gestor", value=row.get('Gestor', ''), key=f"gestor_{project_id}") # .get() para segurança
                 c8,c9 = st.columns(2)
                 with c8: 
                     agencia_val = row.get('Agência', '')
@@ -352,6 +356,55 @@ def main():
             tela_login()
         return
 
+    # ==========================================================
+    # FERRAMENTA DE MIGRAÇÃO (PODE REMOVER SE JÁ USOU)
+    # ==========================================================
+    with st.expander("🚨 FERRAMENTA DE MIGRAÇÃO (USO ÚNICO) 🚨"):
+        st.warning("Clique neste botão APENAS UMA VEZ para copiar os dados dos arquivos Excel (config.xlsx, usuarios.xlsx) para o banco de dados Turso. Após o sucesso, remova este bloco de código do app.py.")
+        
+        if st.button("EXECUTAR MIGRAÇÃO DE DADOS"):
+            try:
+                st.subheader("Migrando Configurações...")
+                # Puxa a lista de abas do utils.py
+                tabs_config = list(utils.CONFIG_TABS_EXCEL.keys()) 
+                prog_bar_config = st.progress(0, text="Migrando configurações...")
+                
+                for i, tab_name in enumerate(tabs_config):
+                    # Carrega do Excel
+                    df_excel = utils._carregar_config_excel(tab_name) 
+                    if not df_excel.empty:
+                        # Salva no DB
+                        if utils.salvar_config_db(df_excel, tab_name): 
+                            st.write(f"✅ Aba '{tab_name}' migrada com sucesso.")
+                        else:
+                            st.error(f"❌ Falha ao salvar '{tab_name}' no DB.")
+                    else:
+                        st.write(f"ℹ️ Aba '{tab_name}' estava vazia no Excel. Pulando.")
+                    prog_bar_config.progress((i + 1) / len(tabs_config), text=f"Migrando: {tab_name}")
+                
+                st.subheader("Migrando Usuários...")
+                # Carrega do Excel
+                df_usuarios_excel = utils._carregar_usuarios_excel() 
+                if not df_usuarios_excel.empty:
+                    # Salva no DB
+                    if utils.salvar_usuario_db(df_usuarios_excel): 
+                        st.success("✅ Usuários migrados com sucesso!")
+                    else:
+                        st.error("❌ Falha ao salvar usuários no DB.")
+                else:
+                    st.info("ℹ️ Arquivo 'usuarios.xlsx' estava vazio. Pulando.")
+                
+                st.balloons()
+                st.success("🎉 MIGRAÇÃO CONCLUÍDA! 🎉")
+                st.info("Pode recarregar a página (F5). Você pode remover este expander do 'app.py' agora.")
+                st.cache_data.clear() # Limpa todo o cache
+                
+            except Exception as e:
+                st.error(f"Ocorreu um erro durante a migação: {e}")
+    # ==========================================================
+    # FIM DA FERRAMENTA DE MIGRAÇÃO
+    # ==========================================================
+
     st.sidebar.title(f"Bem-vindo(a), {st.session_state.get('usuario', 'Visitante')}! 📋")
     st.sidebar.divider()
     # O Streamlit criará a navegação para as outras páginas aqui!
@@ -373,4 +426,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
