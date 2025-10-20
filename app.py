@@ -175,10 +175,10 @@ def tela_projetos():
         status_raw = row['Status'] if pd.notna(row['Status']) else 'N/A'
         status_text = html.escape(str(status_raw))
         analista_text = html.escape(str(row['Analista'])) if pd.notna(row['Analista']) else 'N/A'
-        agencia_text = html.escape(str(row.get("Agência", "N/A")))
+        agencia_text = html.escape(str(row.get("Agencia", "N/A")))
         projeto_text = html.escape(str(row.get("Projeto", "N/A")))
         demanda_text = html.escape(str(row.get("Demanda", "N/A")))
-        tecnico_text = html.escape(str(row.get("Técnico", "N/A")))
+        tecnico_text = html.escape(str(row.get("Tecnico", "N/A")))
         status_color_name = utils.get_status_color(str(status_raw))
         sla_text, sla_color = utils.calcular_sla(row, df_sla)
 
@@ -354,3 +354,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
