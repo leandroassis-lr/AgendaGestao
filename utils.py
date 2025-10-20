@@ -8,8 +8,7 @@ from sqlalchemy import create_engine, text
 import json
 
 # --- CONFIGURAÇÕES GLOBAIS ---
-CONFIG_FILE = "config.xlsx"
-USUARIOS_FILE = "usuarios.xlsx"
+
 # Renomeado para a migração
 CONFIG_TABS_EXCEL = { 
     "status": ["Status"], "agencias": ["Agência"], "projetos_nomes": ["Nome do Projeto"],
@@ -319,40 +318,6 @@ def salvar_usuario_db(df):
         return False
 
 # =========================================================================
-# FUNÇÕES ANTIGAS (EXCEL - Apenas para migração)
-# =========================================================================
-
-@st.cache_data(ttl=3600) # Cache longo, só lemos uma vez
-def _carregar_config_excel(tab_name):
-    """Função ANTIGA: Lê do config.xlsx (apenas para migração)."""
-    cols = CONFIG_TABS_EXCEL.get(tab_name, [])
-    if os.path.exists(CONFIG_FILE):
-        try:
-            df = pd.read_excel(CONFIG_FILE, sheet_name=tab_name)
-            if not all(col in df.columns for col in cols):
-                df = pd.DataFrame(columns=cols)
-            return df.astype(str).replace('nan', '')
-        except Exception as e:
-            st.warning(f"Aba '{tab_name}' não encontrada no {CONFIG_FILE}. {e}")
-            return pd.DataFrame(columns=cols)
-    else:
-        st.warning(f"Arquivo {CONFIG_FILE} não encontrado para migração.")
-        return pd.DataFrame(columns=cols)
-
-def _carregar_usuarios_excel():
-    """Função ANTIGA: Lê do usuarios.xlsx (apenas para migração)."""
-    if os.path.exists(USUARIOS_FILE):
-        try:
-            return pd.read_excel(USUARIOS_FILE)
-        except Exception as e:
-            st.warning(f"Erro ao ler {USUARIOS_FILE}: {e}")
-            return pd.DataFrame(columns=["Nome", "Email", "Senha"])
-    else:
-        st.warning(f"Arquivo {USUARIOS_FILE} não encontrado para migração.")
-        return pd.DataFrame(columns=["Nome", "Email", "Senha"])
-
-
-# =========================================================================
 # FUNÇÕES UTILITÁRIAS (Modificadas ou Inalteradas)
 # =========================================================================
 
@@ -425,3 +390,4 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
