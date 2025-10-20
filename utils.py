@@ -318,12 +318,6 @@ def salvar_usuario_db(df):
         return False
 
 # =========================================================================
-# FUNÇÕES ANTIGAS (EXCEL - Remova se já fez a limpeza)
-# =========================================================================
-# ... (funções _carregar_config_excel, etc.)
-
-
-# =========================================================================
 # FUNÇÕES UTILITÁRIAS 
 # =========================================================================
 
@@ -384,3 +378,4 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
