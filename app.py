@@ -352,55 +352,6 @@ def main():
             tela_login()
         return
 
-    # ==========================================================
-    # FERRAMENTA DE MIGRAÇÃO (ADICIONADA AQUI)
-    # ==========================================================
-    with st.expander("🚨 FERRAMENTA DE MIGRAÇÃO (USO ÚNICO) 🚨"):
-        st.warning("Clique neste botão APENAS UMA VEZ para copiar os dados dos arquivos Excel (config.xlsx, usuarios.xlsx) para o banco de dados Turso. Após o sucesso, remova este bloco de código do app.py.")
-        
-        if st.button("EXECUTAR MIGRAÇÃO DE DADOS"):
-            try:
-                st.subheader("Migrando Configurações...")
-                # Puxa a lista de abas do utils.py
-                tabs_config = list(utils.CONFIG_TABS_EXCEL.keys()) 
-                prog_bar_config = st.progress(0, text="Migrando configurações...")
-                
-                for i, tab_name in enumerate(tabs_config):
-                    # Carrega do Excel
-                    df_excel = utils._carregar_config_excel(tab_name) 
-                    if not df_excel.empty:
-                        # Salva no DB
-                        if utils.salvar_config_db(df_excel, tab_name): 
-                            st.write(f"✅ Aba '{tab_name}' migrada com sucesso.")
-                        else:
-                            st.error(f"❌ Falha ao salvar '{tab_name}' no DB.")
-                    else:
-                        st.write(f"ℹ️ Aba '{tab_name}' estava vazia no Excel. Pulando.")
-                    prog_bar_config.progress((i + 1) / len(tabs_config), text=f"Migrando: {tab_name}")
-                
-                st.subheader("Migrando Usuários...")
-                # Carrega do Excel
-                df_usuarios_excel = utils._carregar_usuarios_excel() 
-                if not df_usuarios_excel.empty:
-                    # Salva no DB
-                    if utils.salvar_usuario_db(df_usuarios_excel): 
-                        st.success("✅ Usuários migrados com sucesso!")
-                    else:
-                        st.error("❌ Falha ao salvar usuários no DB.")
-                else:
-                    st.info("ℹ️ Arquivo 'usuarios.xlsx' estava vazio. Pulando.")
-                
-                st.balloons()
-                st.success("🎉 MIGRAÇÃO CONCLUÍDA! 🎉")
-                st.info("Pode recarregar a página (F5). Você pode remover este expander do 'app.py' agora.")
-                st.cache_data.clear() # Limpa todo o cache
-                
-            except Exception as e:
-                st.error(f"Ocorreu um erro durante a migração: {e}")
-    # ==========================================================
-    # FIM DA FERRAMENTA DE MIGRAÇÃO
-    # ==========================================================
-
     st.sidebar.title(f"Bem-vindo(a), {st.session_state.get('usuario', 'Visitante')}! 📋")
     st.sidebar.divider()
     # O Streamlit criará a navegação para as outras páginas aqui!
@@ -422,3 +373,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
