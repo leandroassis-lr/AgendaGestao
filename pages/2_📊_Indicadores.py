@@ -15,7 +15,11 @@ utils.load_css()
 def tela_dashboard():
     st.markdown("<div class='section-title-center'>INDICADORES</div>", unsafe_allow_html=True)
     df_original = utils.carregar_projetos_db()
-    df_sla_config = utils.carregar_config("sla")
+    
+    # --- CORREÇÃO AQUI ---
+    # Trocamos carregar_config por carregar_config_db
+    df_sla_config = utils.carregar_config_db("sla")
+    # --- FIM DA CORREÇÃO ---
 
     if df_original.empty:
         st.info("Nenhum projeto cadastrado para exibir o dashboard.")
