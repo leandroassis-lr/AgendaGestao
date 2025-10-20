@@ -8,14 +8,10 @@ from sqlalchemy import create_engine, text
 import json
 
 # --- CONFIGURAÇÕES GLOBAIS ---
-
-# Renomeado para a migração
-CONFIG_TABS_EXCEL = { 
-    "status": ["Status"], "agencias": ["Agência"], "projetos_nomes": ["Nome do Projeto"],
-    "tecnicos": ["Técnico"], "sla": ["Nome do Projeto", "Demanda", "Prazo (dias)"],
-    "perguntas": ["Pergunta", "Tipo (texto, numero, data)"],
-    "etapas_evolucao": ["Nome do Projeto", "Etapa"]
-}
+# ESTAS VARIÁVEIS SÓ SÃO USADAS PELA LIMPEZA FINAL
+# CONFIG_FILE = "config.xlsx"
+# USUARIOS_FILE = "usuarios.xlsx"
+# CONFIG_TABS_EXCEL = { ... }
 
 # =========================================================================
 # NOVA FUNÇÃO: Criação de Tabelas
@@ -99,7 +95,7 @@ def get_engine():
         return None
 
 # =========================================================================
-# FUNÇÕES DO BANCO DE DADOS (PROJETOS - Inalteradas)
+# FUNÇÕES DO BANCO DE DADOS (PROJETOS)
 # =========================================================================
 
 @st.cache_data(ttl=60)
@@ -121,6 +117,8 @@ def carregar_projetos_db():
                              "Data_Finalizacao": {"errors": "coerce"}}
             )
         
+        # Esta função renomeia as colunas do DB (ex: Data_Abertura)
+        # para nomes amigáveis (ex: Data de Abertura)
         df.rename(columns={
             'Descricao': 'Descrição', 'Agencia': 'Agência', 'Tecnico': 'Técnico',
             'Observacao': 'Observação', 'Data_Abertura': 'Data de Abertura',
@@ -165,16 +163,21 @@ def sanitize_value(val):
     except Exception:
         return str(val)
 
-# Função atualizar_projeto_db (Inalterada)
+# Função atualizar_projeto_db (CORRIGIDA)
 def atualizar_projeto_db(project_id, updates: dict):
     engine = get_engine()
     if engine is None:
         return False
     try:
+        # --- CORREÇÃO AQUI ---
+        # Remove ' de ' ANTES de substituir espaços por '_'
         updates_sanitized = {
-            key.replace(' ', '_').replace('ç', 'c').replace('ê', 'e').replace('é', 'e').replace('ã', 'a'): val
+            key.replace(' de ', ' ').replace(' ', '_').replace('ç', 'c').replace('ê', 'e').replace('é', 'e').replace('ã', 'a'): val
             for key, val in updates.items()
         }
+        # Agora 'Data de Abertura' vira 'Data Abertura' e depois 'Data_Abertura' (Correto!)
+        # --- FIM DA CORREÇÃO ---
+
         set_clause = ", ".join([f'"{k}" = :{k}' for k in updates_sanitized.keys()])
         sql = f'UPDATE projetos SET {set_clause} WHERE ID = :project_id'
         params = updates_sanitized.copy()
@@ -190,16 +193,20 @@ def atualizar_projeto_db(project_id, updates: dict):
         st.toast(f"Erro ao atualizar projeto: {e}", icon="🔥")
         return False
 
-# Função adicionar_projeto_db (Inalterada)
+# Função adicionar_projeto_db (CORRIGIDA)
 def adicionar_projeto_db(data: dict):
     engine = get_engine()
     if engine is None:
         return False
     try:
+        # --- CORREÇÃO AQUI ---
+        # Remove ' de ' ANTES de substituir espaços por '_'
         db_data_raw = {
-            key.replace(' ', '_').replace('ç', 'c').replace('ê', 'e').replace('ã', 'a'): value
+            key.replace(' de ', ' ').replace(' ', '_').replace('ç', 'c').replace('ê', 'e').replace('ã', 'a'): value
             for key, value in data.items()
         }
+        # --- FIM DA CORREÇÃO ---
+
         db_data = {k: sanitize_value(v) for k, v in db_data_raw.items()}
         cols_str = ', '.join([f'"{c}"' for c in db_data.keys()])
         placeholders = ', '.join([f":{c}" for c in db_data.keys()])
@@ -304,18 +311,40 @@ def salvar_usuario_db(df):
     engine = get_engine()
     if engine is None: return False
     try:
+        df_to_save = df.copy()
+        
+        if 'E-mail' in df_to_save.columns:
+            df_to_save.rename(columns={'E-mail': 'Email'}, inplace=True)
+        
+        colunas_tabela = ['Nome', 'Email', 'Senha']
+        
+        # Filtra o DataFrame para ter apenas as colunas que a tabela aceita
+        # (Ignora colunas extras como 'ID' se vierem do Excel)
+        colunas_presentes = [col for col in colunas_tabela if col in df_to_save.columns]
+        df_final = df_to_save[colunas_presentes]
+
         with engine.connect() as conn:
-            # 1. Apaga todos os usuários existentes
             conn.execute(text("DELETE FROM usuarios"))
-            # 2. Insere os novos usuários do DataFrame (se não estiver vazio)
-            if not df.empty:
-                df.to_sql('usuarios', con=conn, if_exists='append', index=False)
+            
+            if not df_final.empty:
+                df_final.to_sql('usuarios', con=conn, if_exists='append', index=False)
+                
             conn.commit()
         st.cache_data.clear()
         return True
     except Exception as e:
-        st.error(f"Erro ao salvar usuários no DB: {e}")
+        st.error(f"Erro ao salvar usuários no DB: {e}") 
         return False
+
+# =========================================================================
+# FUNÇÕES ANTIGAS (EXCEL - Removidas ou para remover)
+# (Mantenha se você ainda não fez a limpeza final)
+# =========================================================================
+
+# @st.cache_data(ttl=3600)
+# def _carregar_config_excel(tab_name): ...
+# def _carregar_usuarios_excel(): ...
+
 
 # =========================================================================
 # FUNÇÕES UTILITÁRIAS (Modificadas ou Inalteradas)
@@ -349,9 +378,6 @@ def get_status_color(status):
         return "#64B5F6"
 
 def calcular_sla(projeto_row, df_sla):
-    # Esta função está perfeita.
-    # Ela já recebe 'df_sla', então o app.py só precisa
-    # chamar carregar_config_db("sla") e passar o resultado para ela.
     data_agendamento = pd.to_datetime(projeto_row.get("Agendamento"), errors='coerce')
     data_finalizacao = pd.to_datetime(projeto_row.get("Data de Finalização"), errors='coerce')
     projeto_nome = projeto_row.get("Projeto", "")
@@ -390,4 +416,3 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
-
