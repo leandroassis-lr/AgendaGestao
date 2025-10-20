@@ -6,7 +6,7 @@ import re
 import html
 from sqlalchemy import create_engine, text
 import json
-import math # <-- ADICIONADO AQUI
+import math
 
 # --- CONFIGURAÇÕES GLOBAIS ---
 # (Seu código de config aqui, se você ainda não o limpou)
@@ -121,7 +121,6 @@ def carregar_projetos_db():
         st.error(f"Erro ao carregar projetos: {e}")
         return pd.DataFrame()
 
-# Função para aplicar CSS customizado (Inalterada)
 def load_css():
     css_path = "style.css"
     if os.path.exists(css_path):
@@ -130,57 +129,62 @@ def load_css():
     else:
         st.markdown("""<style> .stButton>button { border-radius: 5px; } </style>""", unsafe_allow_html=True)
 
-# =========================================================================
-# FUNÇÃO sanitize_value (CORRIGIDA)
-# =========================================================================
 def sanitize_value(val):
-    """
-    Converte tipos de dados do Python (como date, NaN) para formatos
-    que o banco de dados (libsql/SQLite) entende.
-    """
-    if val is None:
-        return None
-    
-    # Converte 'Not a Number' (NaN) para None (SQL NULL)
-    if isinstance(val, float) and math.isnan(val):
-        return None
-        
-    if isinstance(val, (int, float, bool)):
-        return val # Números e booleanos são seguros
-        
-    # Converte objetos 'datetime' para string
-    if isinstance(val, datetime):
-        return val.strftime('%Y-%m-%d %H:%M:%S')
-        
-    # Converte objetos 'date' para string
-    if isinstance(val, date):
-        return val.strftime('%Y-%m-%d')
-        
-    if isinstance(val, str):
-        return val # Strings são seguras
-        
-    # Fallbacks (para listas, dicts, etc.)
-    try:
-        return json.dumps(val)
-    except Exception:
-        return str(val)
+    if val is None: return None
+    if isinstance(val, float) and math.isnan(val): return None
+    if isinstance(val, (int, float, bool)): return val
+    if isinstance(val, datetime): return val.strftime('%Y-%m-%d %H:%M:%S')
+    if isinstance(val, date): return val.strftime('%Y-%m-%d')
+    if isinstance(val, str): return val
+    try: return json.dumps(val)
+    except Exception: return str(val)
+
 # =========================================================================
-# FIM DA CORREÇÃO
+# NOVA FUNÇÃO DE AJUDA PARA NORMALIZAR CHAVES
+# =========================================================================
+def normalize_key(key):
+    """
+    Normaliza uma chave de dicionário (nome da coluna) para corresponder
+    exatamente ao esquema do banco de dados (ex: 'Agencia', 'Data_Abertura').
+    Trata maiúsculas, minúsculas, acentos e espaços.
+    """
+    k = str(key).lower() # 1. Converte para minúsculo (ex: "agência")
+    
+    # 2. Remove acentos comuns
+    k = k.replace('ç', 'c').replace('ê', 'e').replace('é', 'e').replace('ã', 'a')
+    k = k.replace('á', 'a').replace('í', 'i').replace('ó', 'o').replace('ú', 'u')
+    
+    # 3. Trata casos especiais (ex: "data de abertura" -> "data abertura")
+    k = k.replace(' de ', ' ')
+    
+    # 4. Substitui espaços por underscore (ex: "data abertura" -> "data_abertura")
+    k = k.replace(' ', '_')
+    
+    # 5. Converte para a capitalização EXATA do banco de dados
+    if k == 'data_abertura': return 'Data_Abertura'
+    if k == 'data_finalizacao': return 'Data_Finalizacao'
+    if k == 'log_agendamento': return 'Log_Agendamento'
+    if k == 'etapas_concluidas': return 'Etapas_Concluidas'
+    if k == 'respostas_perguntas': return 'Respostas_Perguntas'
+    
+    # Para todos os outros (agencia, tecnico, status, etc.)
+    return k.capitalize() 
+# =========================================================================
+# FIM DA NOVA FUNÇÃO
 # =========================================================================
 
-# Função atualizar_projeto_db (Corrigida anteriormente)
+# Função atualizar_projeto_db (CORRIGIDA)
 def atualizar_projeto_db(project_id, updates: dict):
     engine = get_engine()
     if engine is None:
         return False
     try:
-        updates_sanitized = {
-            key.replace(' de ', ' ').replace(' ', '_').replace('ç', 'c').replace('ê', 'e').replace('é', 'e').replace('ã', 'a'): val
-            for key, val in updates.items()
-        }
-        
-        # --- ADIÇÃO: Sanitiza os valores também ---
-        updates_final = {k: sanitize_value(v) for k, v in updates_sanitized.items()}
+        # --- CORREÇÃO AQUI ---
+        # Usa a nova função normalize_key
+        updates_normalized = {normalize_key(key): val for key, val in updates.items()}
+        # --- FIM DA CORREÇÃO ---
+
+        updates_final = {k: sanitize_value(v) for k, v in updates_normalized.items()}
         
         set_clause = ", ".join([f'"{k}" = :{k}' for k in updates_final.keys()])
         sql = f'UPDATE projetos SET {set_clause} WHERE ID = :project_id'
@@ -197,21 +201,18 @@ def atualizar_projeto_db(project_id, updates: dict):
         st.toast(f"Erro ao atualizar projeto: {e}", icon="🔥")
         return False
 
-# Função adicionar_projeto_db (Corrigida anteriormente e agora com sanitize)
+# Função adicionar_projeto_db (CORRIGIDA)
 def adicionar_projeto_db(data: dict):
     engine = get_engine()
     if engine is None:
         return False
     try:
-        db_data_raw = {
-            key.replace(' de ', ' ').replace(' ', '_').replace('ç', 'c').replace('ê', 'e').replace('ã', 'a'): value
-            for key, value in data.items()
-        }
+        # --- CORREÇÃO AQUI ---
+        # Usa a nova função normalize_key
+        db_data_normalized = {normalize_key(key): value for key, value in data.items()}
+        # --- FIM DA CORREÇÃO ---
         
-        # --- MUDANÇA PRINCIPAL AQUI ---
-        # Agora usamos a nova função sanitize_value em CADA valor
-        db_data = {k: sanitize_value(v) for k, v in db_data_raw.items()}
-        # --- FIM DA MUDANÇA ---
+        db_data = {k: sanitize_value(v) for k, v in db_data_normalized.items()}
         
         cols_str = ', '.join([f'"{c}"' for c in db_data.keys()])
         placeholders = ', '.join([f":{c}" for c in db_data.keys()])
@@ -244,7 +245,7 @@ def excluir_projeto_db(project_id):
         return False
 
 # =========================================================================
-# NOVAS FUNÇÕES (CONFIGURAÇÕES - via DB)
+# FUNÇÕES DE CONFIGURAÇÃO E USUÁRIOS (Inalteradas)
 # =========================================================================
 
 @st.cache_data(ttl=600)
@@ -281,10 +282,6 @@ def salvar_config_db(df, tab_name):
     except Exception as e:
         st.error(f"Erro ao salvar configuração '{tab_name}' no DB: {e}")
         return False
-
-# =========================================================================
-# NOVAS FUNÇÕES (USUÁRIOS - via DB)
-# =========================================================================
 
 @st.cache_data(ttl=600)
 def carregar_usuarios_db():
