@@ -12,9 +12,22 @@ import io # Necessário para a exportação para Excel
 def get_db_connection():
     """Cria e gerencia a conexão com o banco de dados PostgreSQL."""
     try:
-        conn = psycopg2.connect(**st.secrets["postgres"])
+        secrets = st.secrets["postgres"]
+        # --- CORREÇÃO APLICADA AQUI ---
+        # Mapeia manualmente as chaves do secrets.toml para os argumentos corretos
+        conn = psycopg2.connect(
+            host=secrets["PGHOST"],
+            port=secrets["PGPORT"],
+            user=secrets["PGUSER"],
+            password=secrets["PGPASSWORD"],
+            dbname=secrets["PGDATABASE"]
+        )
         conn.autocommit = True
         return conn
+    except KeyError as e:
+        st.error(f"Erro Crítico: A credencial '{e}' não foi encontrada na seção [postgres] dos 'Secrets'.")
+        st.info("Verifique se as chaves 'PGHOST', 'PGPORT', 'PGUSER', 'PGPASSWORD', 'PGDATABASE' estão corretas.")
+        return None
     except Exception as e:
         st.error(f"Erro ao conectar ao banco de dados: {e}")
         return None
@@ -211,6 +224,10 @@ def calcular_sla(projeto_row, df_sla):
     return "SLA: N/A", "gray" # Placeholder
 
 def calcular_sla(projeto_row, df_sla):
+    # ... (código completo)
+    return "SLA: N/A", "gray" # Placeholder
+
+def calcular_sla(projeto_row, df_sla):
     data_agendamento = pd.to_datetime(projeto_row.get("Agendamento"), errors='coerce')
     data_finalizacao = pd.to_datetime(projeto_row.get("Data de Finalização"), errors='coerce')
     
@@ -236,4 +253,5 @@ def calcular_sla(projeto_row, df_sla):
             return f"Atrasado em {-dias_restantes}d", "#EF5350"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6A"
+
 
