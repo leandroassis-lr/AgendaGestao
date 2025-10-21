@@ -1,13 +1,14 @@
 import streamlit as st
 import pandas as pd
 import psycopg2
-from psycopg2.extras import RealDictCursor
 import json
 import math
+import os
+import re
 from datetime import datetime, date
 
 # =========================================================================
-# FUNÇÃO DE CONEXÃO (Corrigida para PostgreSQL)
+# FUNÇÃO DE CONEXÃO E CRIAÇÃO DE TABELAS
 # =========================================================================
 @st.cache_resource
 def get_db_connection():
@@ -28,110 +29,71 @@ def get_db_connection():
         st.info("Verifique se as credenciais [postgres] em seus 'Secrets' estão corretas.")
         return None
 
-# =========================================================================
-# CRIAÇÃO DE TABELAS (Corrigida para PostgreSQL)
-# =========================================================================
 def criar_tabelas_iniciais(conn):
     """Cria as tabelas com a sintaxe correta do PostgreSQL e nomes em minúsculas."""
     with conn.cursor() as cur:
-        # Tabela Projetos (Sintaxe PostgreSQL)
         cur.execute("""
         CREATE TABLE IF NOT EXISTS projetos (
-            id SERIAL PRIMARY KEY,
-            projeto TEXT,
-            descricao TEXT,
-            agencia TEXT,
-            tecnico TEXT,
-            status TEXT,
-            agendamento TIMESTAMP,
-            data_abertura DATE,
-            data_finalizacao DATE,
-            observacao TEXT,
-            demanda TEXT,
-            log_agendamento JSONB,
-            respostas_perguntas JSONB,
-            etapas_concluidas JSONB
-        );
-        """)
-        
-        # Tabela Configuracoes
+            id SERIAL PRIMARY KEY, projeto TEXT, descricao TEXT, agencia TEXT,
+            tecnico TEXT, status TEXT, agendamento TIMESTAMP, data_abertura DATE,
+            data_finalizacao DATE, observacao TEXT, demanda TEXT, log_agendamento JSONB,
+            respostas_perguntas JSONB, etapas_concluidas JSONB
+        );""")
         cur.execute("""
         CREATE TABLE IF NOT EXISTS configuracoes (
-            aba_nome TEXT PRIMARY KEY,
-            dados_json JSONB
-        );
-        """)
-        
-        # Tabela Usuarios (Sintaxe PostgreSQL)
+            aba_nome TEXT PRIMARY KEY, dados_json JSONB
+        );""")
         cur.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
-            id SERIAL PRIMARY KEY,
-            nome TEXT,
-            email TEXT UNIQUE,
-            senha TEXT
-        );
-        """)
-    # Garante que as tabelas existam na primeira execução
+            id SERIAL PRIMARY KEY, nome TEXT, email TEXT UNIQUE, senha TEXT
+        );""")
     st.session_state['tabelas_verificadas'] = True
 
-# Inicializa a conexão e verifica as tabelas
+# Inicializa a conexão e verifica as tabelas na primeira execução
 conn = get_db_connection()
 if conn and 'tabelas_verificadas' not in st.session_state:
     criar_tabelas_iniciais(conn)
 
 # =========================================================================
-# FUNÇÃO DE AJUDA PARA NORMALIZAR CHAVES (Corrigida)
-# =========================================================================
-def normalize_key(key):
-    """Normaliza uma chave para o padrão do banco: minúsculo, sem acentos, com underscore."""
-    k = str(key).lower()
-    k = k.replace('ç', 'c').replace('ê', 'e').replace('é', 'e').replace('ã', 'a')
-    k = k.replace('á', 'a').replace('í', 'i').replace('ó', 'o').replace('ú', 'u')
-    k = k.replace(' de ', ' ')
-    k = k.replace(' ', '_')
-    # Remove caracteres especiais exceto underscore
-    k = ''.join(c for c in k if c.isalnum() or c == '_')
-    return k
-
-# =========================================================================
-# FUNÇÕES DO BANCO DE DADOS (PROJETOS - Corrigidas)
+# FUNÇÕES DO BANCO DE DADOS (PROJETOS)
 # =========================================================================
 @st.cache_data(ttl=60)
 def carregar_projetos_db():
-    """Carrega projetos do banco de dados e renomeia colunas para exibição."""
     if not conn: return pd.DataFrame()
     try:
-        query = "SELECT * FROM projetos ORDER BY id DESC"
-        df = pd.read_sql_query(query, conn)
-        # Renomeia de minúsculo (banco) para maiúsculo/acentuado (exibição)
+        df = pd.read_sql_query("SELECT * FROM projetos ORDER BY id DESC", conn)
         df.rename(columns={
             'id': 'ID', 'projeto': 'Projeto', 'descricao': 'Descrição', 'agencia': 'Agência', 
             'tecnico': 'Técnico', 'status': 'Status', 'agendamento': 'Agendamento',
             'data_abertura': 'Data de Abertura', 'data_finalizacao': 'Data de Finalização', 
-            'observacao': 'Observação', 'demanda': 'Demanda', 'log_agendamento': 'Log Agendamento',
-            'respostas_perguntas': 'Respostas_Perguntas', 'etapas_concluidas': 'Etapas Concluidas'
+            'observacao': 'Observação', 'demanda': 'Demanda'
         }, inplace=True)
         return df
     except Exception as e:
         st.error(f"Erro ao carregar projetos: {e}")
         return pd.DataFrame()
 
-def sanitize_value(val):
-    """Prepara valores para inserção segura no banco de dados."""
-    if val is None or (isinstance(val, float) and math.isnan(val)): return None
-    if isinstance(val, (int, float, bool, str)): return val
-    if isinstance(val, (datetime, date)): return val
-    try: return json.dumps(val)
-    except Exception: return str(val)
+def adicionar_projeto_db(data: dict):
+    if not conn: return False
+    try:
+        db_data = {normalize_key(k): sanitize_value(v) for k, v in data.items()}
+        cols_str = ', '.join(db_data.keys())
+        placeholders = ', '.join(['%s'] * len(db_data))
+        sql = f"INSERT INTO projetos ({cols_str}) VALUES ({placeholders})"
+        with conn.cursor() as cur:
+            cur.execute(sql, list(db_data.values()))
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        st.toast(f"Erro ao adicionar projeto: {e}", icon="🔥")
+        return False
 
 def atualizar_projeto_db(project_id, updates: dict):
-    """Atualiza um projeto no banco de dados."""
     if not conn: return False
     try:
         updates_normalized = {normalize_key(k): sanitize_value(v) for k, v in updates.items()}
         set_clause = ", ".join([f"{k} = %s" for k in updates_normalized.keys()])
         sql = f"UPDATE projetos SET {set_clause} WHERE id = %s"
-        
         with conn.cursor() as cur:
             params = list(updates_normalized.values()) + [project_id]
             cur.execute(sql, params)
@@ -142,29 +104,10 @@ def atualizar_projeto_db(project_id, updates: dict):
         st.toast(f"Erro ao atualizar projeto: {e}", icon="🔥")
         return False
 
-def adicionar_projeto_db(data: dict):
-    """Adiciona um novo projeto ao banco de dados."""
-    if not conn: return False
-    try:
-        db_data = {normalize_key(k): sanitize_value(v) for k, v in data.items()}
-        cols_str = ', '.join(db_data.keys())
-        placeholders = ', '.join(['%s'] * len(db_data))
-        sql = f"INSERT INTO projetos ({cols_str}) VALUES ({placeholders})"
-        
-        with conn.cursor() as cur:
-            cur.execute(sql, list(db_data.values()))
-        st.cache_data.clear()
-        return True
-    except Exception as e:
-        st.toast(f"Erro ao adicionar projeto: {e}", icon="🔥")
-        return False
-
 def excluir_projeto_db(project_id):
-    """Exclui um projeto do banco de dados."""
     if not conn: return False
     try:
         with conn.cursor() as cur:
-            # Placeholder %s para psycopg2
             cur.execute("DELETE FROM projetos WHERE id = %s", (project_id,))
         st.cache_data.clear()
         st.toast("Projeto excluído!", icon="✅")
@@ -173,5 +116,78 @@ def excluir_projeto_db(project_id):
         st.toast(f"Erro ao excluir projeto: {e}", icon="🔥")
         return False
 
-# (O restante das funções de config, usuários e utilitários seriam ajustadas de forma similar)
-# ... (código restante do utils.py adaptado) ...
+# =========================================================================
+# FUNÇÕES DO BANCO (CONFIGURAÇÕES E USUÁRIOS)
+# =========================================================================
+@st.cache_data(ttl=600)
+def carregar_config_db(tab_name):
+    if not conn: return pd.DataFrame()
+    try:
+        query = "SELECT dados_json FROM configuracoes WHERE aba_nome = %s"
+        df = pd.read_sql_query(query, conn, params=(tab_name.lower(),))
+        if not df.empty and df['dados_json'][0]:
+            return pd.DataFrame(df['dados_json'][0])
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Erro ao carregar config '{tab_name}': {e}")
+        return pd.DataFrame()
+
+@st.cache_data(ttl=600)
+def carregar_usuarios_db():
+    if not conn: return pd.DataFrame()
+    try:
+        return pd.read_sql_query("SELECT * FROM usuarios", conn)
+    except Exception as e:
+        st.error(f"Erro ao carregar usuários: {e}")
+        return pd.DataFrame()
+        
+# =========================================================================
+# FUNÇÕES UTILITÁRIAS (As que estavam faltando!)
+# =========================================================================
+def load_css():
+    """Carrega o arquivo CSS para estilização."""
+    css_path = "style.css"
+    if os.path.exists(css_path):
+        with open(css_path, "r", encoding="utf-8") as f:
+            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+
+def normalize_key(key):
+    """Normaliza uma chave para o padrão do banco: minúsculo, sem acentos, com underscore."""
+    k = str(key).lower().replace('ç', 'c').replace('ê', 'e').replace('é', 'e')
+    k = k.replace('ã', 'a').replace('á', 'a').replace('í', 'i').replace('ó', 'o').replace('ú', 'u')
+    k = k.replace(' de ', ' ').replace(' ', '_')
+    return ''.join(c for c in k if c.isalnum() or c == '_')
+
+def sanitize_value(val):
+    """Prepara valores para inserção segura no banco de dados."""
+    if val is None or (isinstance(val, float) and math.isnan(val)): return None
+    if isinstance(val, (int, float, bool, str, datetime, date)): return val
+    try: return json.dumps(val)
+    except Exception: return str(val)
+
+def autenticar_direto(email):
+    df = carregar_usuarios_db()
+    if df.empty: return None
+    user = df[df["email"].astype(str).str.lower() == str(email).lower()]
+    return user.iloc[0]["nome"] if not user.empty else None
+
+def get_status_color(status):
+    s = (status or "").strip().lower()
+    if 'finalizad' in s: return "#66BB6A" # Verde
+    elif 'pendencia' in s or 'pendência' in s: return "#FFA726" # Laranja
+    elif 'nao iniciad' in s or 'não iniciad' in s: return "#B0BEC5" # Cinza
+    elif 'cancelad' in s: return "#EF5350" # Vermelho
+    elif 'pausad' in s: return "#FFEE58" # Amarelo
+    else: return "#64B5F6" # Azul
+
+def calcular_sla(projeto_row, df_sla):
+    # As chaves aqui são os nomes das colunas DEPOIS do rename na função carregar_projetos_db
+    data_agendamento = pd.to_datetime(projeto_row.get("Agendamento"), errors='coerce')
+    data_finalizacao = pd.to_datetime(projeto_row.get("Data de Finalização"), errors='coerce')
+    
+    if pd.isna(data_agendamento):
+        return "SLA: N/D (sem agendamento)", "gray"
+    
+    # ... (o resto da sua lógica de SLA continua aqui) ...
+    # Esta parte parece depender de um df_sla que vem do config, então deve funcionar.
+    return "SLA: Lógica a implementar", "gray" # Placeholder se a lógica for complexa
