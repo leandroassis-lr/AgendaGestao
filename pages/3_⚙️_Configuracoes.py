@@ -14,14 +14,20 @@ CONFIG_TABS = {
 }
 
 def carregar_e_preparar_df(tab_name):
-    """Carrega um DataFrame e garante que ele tenha as colunas esperadas."""
+    """Carrega um DataFrame e garante que ele tenha as colunas esperadas com os dtypes corretos."""
     df = utils.carregar_config_db(tab_name)
     expected_cols = CONFIG_TABS.get(tab_name, [])
     
-    # Adiciona colunas faltantes para garantir a compatibilidade com o data_editor
     for col in expected_cols:
         if col not in df.columns:
-            df[col] = pd.Series(dtype='object')
+            # --- CORREÇÃO APLICADA AQUI ---
+            # Define o dtype correto para a nova coluna para evitar erros de tipo
+            if col == "Prazo (dias)":
+                # Coluna numérica precisa de um tipo numérico (float para aceitar valores nulos/NaN)
+                df[col] = pd.Series(dtype='float64') 
+            else:
+                # Colunas de texto usam 'object'
+                df[col] = pd.Series(dtype='object')
     return df
 
 def carregar_lista_segura(nome_aba):
@@ -46,19 +52,17 @@ def tela_sla():
     
     if not lista_projetos:
         st.warning("Cadastre primeiro os 'Nomes de Projetos' na aba 'Gerenciar Listas de Opções' para poder adicionar regras de SLA.")
-        # Impede a renderização do editor se a lista de projetos estiver vazia
         return
 
     col_config = {
         "Nome do Projeto": st.column_config.SelectboxColumn("Projeto", options=lista_projetos, required=True),    
         "Demanda": st.column_config.TextColumn("Demanda/Tipo (Opcional)"),    
-        "Prazo (dias)": st.column_config.NumberColumn("Prazo (dias)", min_value=1, required=True, step=1)
+        "Prazo (dias)": st.column_config.NumberColumn("Prazo (dias)", min_value=1, required=True, step=1, format="%d")
     }
     
     df_editado = st.data_editor(df_sla, column_config=col_config, hide_index=True, num_rows="dynamic", key="data_editor_sla", use_container_width=True)
     
     if st.button("💾 Salvar Tabela de SLA", key="btn_salvar_sla"):
-        # Remove linhas onde as colunas obrigatórias estão vazias
         df_final = df_editado.dropna(subset=["Nome do Projeto", "Prazo (dias)"], how='any').copy()
         
         if utils.salvar_config_db(df_final, "sla"):
@@ -105,7 +109,7 @@ def tela_gerenciar_listas():
                 coluna_principal = CONFIG_TABS[tab_name][0]
                 df_final = df_editado.dropna(subset=[coluna_principal], how='any').copy()
                 
-                if tab_name == "perguntas" and df_final["Pergunta"].duplicated().any():
+                if tab_name == "perguntas" and "Pergunta" in df_final.columns and df_final["Pergunta"].duplicated().any():
                     st.error("Perguntas não podem ter nomes duplicados.")
                 else:
                     if utils.salvar_config_db(df_final, tab_name):
