@@ -144,4 +144,3 @@ if st.sidebar.button("Logout", use_container_width=True, key="logout_config"):
     st.rerun()
 
 tela_configuracoes()
-
