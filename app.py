@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import psycopg2.extras
-from utils_postgres import get_db_connection, normalize_key # Importa do seu novo utils.py
+from utils import get_db_connection, normalize_key # Importa do seu novo utils.py
 
 # =========================================================================
 # FUNÇÕES DE IMPORTAÇÃO
@@ -166,3 +166,4 @@ if project_file:
                     importar_dados_tabela(conn, df_projects, 'projetos', project_col_mapping)
     except Exception as e:
         st.error(f"Não foi possível ler o arquivo de projetos: {e}")
+
