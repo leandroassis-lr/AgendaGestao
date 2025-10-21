@@ -329,15 +329,16 @@ def tela_projetos():
                         st.rerun()
 
     st.markdown("---")
-    # --- AJUSTE DE LAYOUT: Paginação mais clean ---
+    # --- AJUSTE DE LAYOUT FINAL: Paginação alinhada à direita ---
     if total_pages > 1:
-        col_prev, col_page_info, col_next = st.columns([2, 1, 2])
+        col_info, col_prev, col_next = st.columns([5, 1.5, 1.5]) 
+        with col_info:
+            # Adiciona um espaço para não ficar colado na borda
+            st.markdown(f"<div style='text-align: left; margin-top: 10px;'>Página <b>{st.session_state.page_number + 1}</b> de <b>{total_pages}</b></div>", unsafe_allow_html=True)
         with col_prev:
             if st.button("⬅️ Anterior", use_container_width=True, disabled=(st.session_state.page_number == 0)):
                 st.session_state.page_number -= 1
                 st.rerun()
-        with col_page_info:
-            st.markdown(f"<div style='text-align: center; margin-top: 5px;'>Pág<br><b>{st.session_state.page_number + 1}/{total_pages}</b></div>", unsafe_allow_html=True)
         with col_next:
             if st.button("Próxima ➡️", use_container_width=True, disabled=(st.session_state.page_number >= total_pages - 1)):
                 st.session_state.page_number += 1
