@@ -6,6 +6,7 @@ import math
 import os
 import re
 from datetime import datetime, date
+from io import StringIO
 
 # =========================================================================
 # FUNÇÃO DE CONEXÃO E CRIAÇÃO DE TABELAS
@@ -55,8 +56,71 @@ if conn and 'tabelas_verificadas' not in st.session_state:
     criar_tabelas_iniciais(conn)
 
 # =========================================================================
-# FUNÇÕES DO BANCO DE DADOS (PROJETOS)
+# FUNÇÕES DO BANCO (CONFIGURAÇÕES E USUÁRIOS)
 # =========================================================================
+@st.cache_data(ttl=600)
+def carregar_config_db(tab_name):
+    """Carrega uma configuração do banco de dados a partir de um JSON."""
+    if not conn: return pd.DataFrame()
+    try:
+        query = "SELECT dados_json FROM configuracoes WHERE aba_nome = %s"
+        # Usamos read_sql_query para buscar a linha
+        df_raw = pd.read_sql_query(query, conn, params=(tab_name.lower(),))
+        
+        # --- CORREÇÃO APLICADA AQUI ---
+        if not df_raw.empty and df_raw['dados_json'][0]:
+            # Pegamos o valor (que é um texto JSON ou um dict/list)
+            json_data = df_raw['dados_json'][0]
+            
+            # Se for um texto, usamos read_json. Se já for uma lista/dict, usamos DataFrame.
+            if isinstance(json_data, str):
+                # Usamos StringIO para que o read_json leia o texto diretamente
+                return pd.read_json(StringIO(json_data))
+            else:
+                # Se o driver já converteu para lista/dict, criamos o DataFrame
+                return pd.DataFrame(json_data)
+        
+        # Se não encontrar nada, retorna um DataFrame vazio
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Erro ao carregar config '{tab_name}': {e}")
+        return pd.DataFrame()
+
+
+@st.cache_data(ttl=600)
+def carregar_usuarios_db():
+    if not conn: return pd.DataFrame()
+    try:
+        return pd.read_sql_query("SELECT * FROM usuarios", conn)
+    except Exception as e:
+        st.error(f"Erro ao carregar usuários: {e}")
+        return pd.DataFrame()
+
+def salvar_config_db(df, tab_name):
+    """Salva um DataFrame de configuração no banco (INSERT ou UPDATE)."""
+    if not conn: return False
+    try:
+        tab_name = tab_name.lower()
+        dados_json = df.to_json(orient='records')
+        sql = """
+        INSERT INTO configuracoes (aba_nome, dados_json)
+        VALUES (%s, %s)
+        ON CONFLICT (aba_nome) DO UPDATE SET
+            dados_json = EXCLUDED.dados_json;
+        """
+        with conn.cursor() as cur:
+            cur.execute(sql, (tab_name, dados_json))
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        st.error(f"Erro ao salvar configuração '{tab_name}': {e}")
+        return False
+
+# =========================================================================
+# (O restante do arquivo utils.py permanece o mesmo)
+# ...
+# =========================================================================
+# FUNÇÕES DO BANCO DE DADOS (PROJETOS)
 @st.cache_data(ttl=60)
 def carregar_projetos_db():
     if not conn: return pd.DataFrame()
@@ -116,62 +180,20 @@ def excluir_projeto_db(project_id):
         st.toast(f"Erro ao excluir projeto: {e}", icon="🔥")
         return False
 
-# =========================================================================
-# FUNÇÕES DO BANCO (CONFIGURAÇÕES E USUÁRIOS)
-# =========================================================================
-# =========================================================================
-# FUNÇÕES DO BANCO (CONFIGURAÇÕES E USUÁRIOS)
-# =========================================================================
-@st.cache_data(ttl=600)
-def carregar_config_db(tab_name):
-    # ... (código existente) ...
-
-@st.cache_data(ttl=600)
-def carregar_usuarios_db():
-    # ... (código existente) ...
-
-def salvar_config_db(df, tab_name):
-    """Salva um DataFrame de configuração no banco (INSERT ou UPDATE)."""
-    if not conn: return False
-    try:
-        # Garante que o nome da aba esteja em minúsculas
-        tab_name = tab_name.lower()
-        dados_json = df.to_json(orient='records')
-        
-        sql = """
-        INSERT INTO configuracoes (aba_nome, dados_json)
-        VALUES (%s, %s)
-        ON CONFLICT (aba_nome) DO UPDATE SET
-            dados_json = EXCLUDED.dados_json;
-        """
-        with conn.cursor() as cur:
-            cur.execute(sql, (tab_name, dados_json))
-        
-        st.cache_data.clear() # Limpa o cache para recarregar os dados
-        return True
-    except Exception as e:
-        st.error(f"Erro ao salvar configuração '{tab_name}': {e}")
-        return False
-        
-# =========================================================================
-# FUNÇÕES UTILITÁRIAS (As que estavam faltando!)
-# =========================================================================
+# FUNÇÕES UTILITÁRIAS
 def load_css():
-    """Carrega o arquivo CSS para estilização."""
     css_path = "style.css"
     if os.path.exists(css_path):
         with open(css_path, "r", encoding="utf-8") as f:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
 def normalize_key(key):
-    """Normaliza uma chave para o padrão do banco: minúsculo, sem acentos, com underscore."""
     k = str(key).lower().replace('ç', 'c').replace('ê', 'e').replace('é', 'e')
     k = k.replace('ã', 'a').replace('á', 'a').replace('í', 'i').replace('ó', 'o').replace('ú', 'u')
     k = k.replace(' de ', ' ').replace(' ', '_')
     return ''.join(c for c in k if c.isalnum() or c == '_')
 
 def sanitize_value(val):
-    """Prepara valores para inserção segura no banco de dados."""
     if val is None or (isinstance(val, float) and math.isnan(val)): return None
     if isinstance(val, (int, float, bool, str, datetime, date)): return val
     try: return json.dumps(val)
@@ -185,12 +207,12 @@ def autenticar_direto(email):
 
 def get_status_color(status):
     s = (status or "").strip().lower()
-    if 'finalizad' in s: return "#66BB6A" # Verde
-    elif 'pendencia' in s or 'pendência' in s: return "#FFA726" # Laranja
-    elif 'nao iniciad' in s or 'não iniciad' in s: return "#B0BEC5" # Cinza
-    elif 'cancelad' in s: return "#EF5350" # Vermelho
-    elif 'pausad' in s: return "#FFEE58" # Amarelo
-    else: return "#64B5F6" # Azul
+    if 'finalizad' in s: return "#66BB6A"
+    elif 'pendencia' in s or 'pendência' in s: return "#FFA726"
+    elif 'nao iniciad' in s or 'não iniciad' in s: return "#B0BEC5"
+    elif 'cancelad' in s: return "#EF5350"
+    elif 'pausad' in s: return "#FFEE58"
+    else: return "#64B5F6"
 
 def calcular_sla(projeto_row, df_sla):
     data_agendamento = pd.to_datetime(projeto_row.get("Agendamento"), errors='coerce')
