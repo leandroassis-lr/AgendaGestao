@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import utils # Importa nosso arquivo de utilidades
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime # <--- CORREÇÃO AQUI
 
 # Dependência opcional
 try:
