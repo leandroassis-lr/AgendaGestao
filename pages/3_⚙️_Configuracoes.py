@@ -21,16 +21,16 @@ def carregar_e_preparar_df(tab_name):
     # Etapa 1: Garantir que todas as colunas esperadas existam
     for col in expected_cols:
         if col not in df.columns:
-            if col == "Prazo (dias)":
-                df[col] = pd.Series(dtype='float64') 
-            else:
-                df[col] = pd.Series(dtype='object')
+            df[col] = pd.Series(dtype='object') # Cria como tipo genérico primeiro
 
-    # --- CORREÇÃO DEFINITIVA APLICADA AQUI ---
-    # Etapa 2: Forçar a conversão de tipo para colunas numéricas após o carregamento
-    if "Prazo (dias)" in df.columns:
-        # Converte a coluna para número. Se encontrar um texto, transforma em Nulo (NaN).
-        df["Prazo (dias)"] = pd.to_numeric(df["Prazo (dias)"], errors='coerce')
+    # Etapa 2: Forçar a conversão de tipo para todas as colunas
+    for col in expected_cols:
+        if col == "Prazo (dias)":
+            # Converte para numérico, transformando erros em Nulo (NaN)
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+        else:
+            # Converte todas as outras colunas para string, preenchendo nulos com texto vazio
+            df[col] = df[col].astype(str).replace('nan', '')
 
     return df
 
@@ -38,7 +38,6 @@ def carregar_lista_segura(nome_aba):
     """Função de ajuda para carregar uma lista de uma coluna, de forma segura."""
     df = utils.carregar_config_db(nome_aba)
     if not df.empty and len(df.columns) > 0:
-        # Pega a primeira coluna, seja qual for o nome dela
         return df[df.columns[0]].dropna().tolist()
     return []
 
@@ -144,3 +143,4 @@ if st.sidebar.button("Logout", use_container_width=True, key="logout_config"):
     st.rerun()
 
 tela_configuracoes()
+
