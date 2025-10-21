@@ -17,7 +17,6 @@ def carregar_lista_segura(nome_aba):
     """Função de ajuda para carregar uma lista de uma coluna, de forma segura."""
     df = utils.carregar_config_db(nome_aba)
     if not df.empty and len(df.columns) > 0:
-        # Pega a primeira coluna, independentemente do nome dela
         return df[df.columns[0]].dropna().tolist()
     return []
 
@@ -31,23 +30,30 @@ def tela_sla():
     """)
     
     df_sla = utils.carregar_config_db("sla")
-    # --- CORREÇÃO AQUI ---
     lista_projetos = carregar_lista_segura("projetos_nomes")
     
+    # --- CORREÇÃO APLICADA AQUI ---
+    # Garante que o DataFrame tenha as colunas esperadas, mesmo se estiver vazio
+    colunas_esperadas = CONFIG_TABS["sla"]
+    for col in colunas_esperadas:
+        if col not in df_sla.columns:
+            df_sla[col] = pd.Series(dtype='object') # Adiciona a coluna se ela não existir
+    # --- FIM DA CORREÇÃO ---
+
     if not lista_projetos:
         st.warning("Cadastre primeiro os 'Nomes de Projetos' na aba 'Gerenciar Listas de Opções'.")
-        return
-
+        # Mesmo com o aviso, mostramos o editor vazio para permitir a inserção do primeiro item
+    
     col_config = {
         "Nome do Projeto": st.column_config.SelectboxColumn("Projeto", options=lista_projetos, required=True),    
         "Demanda": st.column_config.TextColumn("Demanda/Tipo (Opcional)"),    
-        "Prazo (dias)": st.column_config.NumberColumn("Prazo (dias)", min_value=1, required=True)
+        "Prazo (dias)": st.column_config.NumberColumn("Prazo (dias)", min_value=1, required=True, step=1)
     }
     
     df_editado = st.data_editor(df_sla, column_config=col_config, hide_index=True, num_rows="dynamic", key="data_editor_sla", use_container_width=True)
     
     if st.button("💾 Salvar Tabela de SLA", key="btn_salvar_sla"):
-        df_editado.dropna(subset=["Nome do Projeto", "Prazo (dias)"], inplace=True)
+        df_editado.dropna(subset=["Nome do Projeto", "Prazo (dias)"], how='all', inplace=True)
         if utils.salvar_config_db(df_editado, "sla"):
             st.success("Tabela de SLA salva com sucesso!")
             st.rerun()
@@ -71,11 +77,17 @@ def tela_gerenciar_listas():
         with tab:
             df_lista = utils.carregar_config_db(tab_name)
             
+            # Garante que o DataFrame tenha as colunas esperadas
+            colunas_esperadas_lista = CONFIG_TABS[tab_name]
+            for col in colunas_esperadas_lista:
+                if col not in df_lista.columns:
+                    df_lista[col] = pd.Series(dtype='object')
+
+            col_config = {}
             if tab_name == "perguntas":
                 st.caption("Defina as perguntas do formulário 'Novo Projeto'.")
                 col_config = {"Pergunta": st.column_config.TextColumn("Pergunta", required=True), "Tipo (texto, numero, data)": st.column_config.SelectboxColumn("Tipo", options=["texto", "numero", "data"], required=True)}
             elif tab_name == "etapas_evolucao":
-                # --- CORREÇÃO AQUI ---
                 lista_projetos_config = carregar_lista_segura("projetos_nomes")
                 st.caption("Defina as etapas da barra de progresso para cada tipo de projeto.")
                 col_config = {
@@ -90,7 +102,7 @@ def tela_gerenciar_listas():
             
             if st.button(f"💾 Salvar {tab_title}", key=f"btn_salvar_{tab_name}"):
                 coluna_principal = CONFIG_TABS[tab_name][0]
-                df_editado.dropna(subset=[coluna_principal], inplace=True)
+                df_editado.dropna(subset=[coluna_principal], how='all', inplace=True)
                 
                 if tab_name == "perguntas" and df_editado["Pergunta"].duplicated().any():
                     st.error("Perguntas não podem ter nomes duplicados.")
