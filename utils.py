@@ -119,27 +119,39 @@ def excluir_projeto_db(project_id):
 # =========================================================================
 # FUNÇÕES DO BANCO (CONFIGURAÇÕES E USUÁRIOS)
 # =========================================================================
+# =========================================================================
+# FUNÇÕES DO BANCO (CONFIGURAÇÕES E USUÁRIOS)
+# =========================================================================
 @st.cache_data(ttl=600)
 def carregar_config_db(tab_name):
-    if not conn: return pd.DataFrame()
-    try:
-        query = "SELECT dados_json FROM configuracoes WHERE aba_nome = %s"
-        df = pd.read_sql_query(query, conn, params=(tab_name.lower(),))
-        if not df.empty and df['dados_json'][0]:
-            return pd.DataFrame(df['dados_json'][0])
-        return pd.DataFrame()
-    except Exception as e:
-        st.error(f"Erro ao carregar config '{tab_name}': {e}")
-        return pd.DataFrame()
+    # ... (código existente) ...
 
 @st.cache_data(ttl=600)
 def carregar_usuarios_db():
-    if not conn: return pd.DataFrame()
+    # ... (código existente) ...
+
+def salvar_config_db(df, tab_name):
+    """Salva um DataFrame de configuração no banco (INSERT ou UPDATE)."""
+    if not conn: return False
     try:
-        return pd.read_sql_query("SELECT * FROM usuarios", conn)
+        # Garante que o nome da aba esteja em minúsculas
+        tab_name = tab_name.lower()
+        dados_json = df.to_json(orient='records')
+        
+        sql = """
+        INSERT INTO configuracoes (aba_nome, dados_json)
+        VALUES (%s, %s)
+        ON CONFLICT (aba_nome) DO UPDATE SET
+            dados_json = EXCLUDED.dados_json;
+        """
+        with conn.cursor() as cur:
+            cur.execute(sql, (tab_name, dados_json))
+        
+        st.cache_data.clear() # Limpa o cache para recarregar os dados
+        return True
     except Exception as e:
-        st.error(f"Erro ao carregar usuários: {e}")
-        return pd.DataFrame()
+        st.error(f"Erro ao salvar configuração '{tab_name}': {e}")
+        return False
         
 # =========================================================================
 # FUNÇÕES UTILITÁRIAS (As que estavam faltando!)
@@ -181,13 +193,39 @@ def get_status_color(status):
     else: return "#64B5F6" # Azul
 
 def calcular_sla(projeto_row, df_sla):
-    # As chaves aqui são os nomes das colunas DEPOIS do rename na função carregar_projetos_db
     data_agendamento = pd.to_datetime(projeto_row.get("Agendamento"), errors='coerce')
     data_finalizacao = pd.to_datetime(projeto_row.get("Data de Finalização"), errors='coerce')
-    
+    projeto_nome = projeto_row.get("Projeto", "")
+    demanda = projeto_row.get("Demanda", "")
     if pd.isna(data_agendamento):
         return "SLA: N/D (sem agendamento)", "gray"
-    
-    # ... (o resto da sua lógica de SLA continua aqui) ...
-    # Esta parte parece depender de um df_sla que vem do config, então deve funcionar.
-    return "SLA: Lógica a implementar", "gray" # Placeholder se a lógica for complexa
+    if df_sla.empty:
+        return "SLA: N/A (Regras não carregadas)", "gray"
+    rule = df_sla[(df_sla["Nome do Projeto"] == projeto_nome) & (df_sla["Demanda"] == demanda)]
+    if rule.empty:
+        rule = df_sla[(df_sla["Nome do Projeto"] == projeto_nome) & (df_sla["Demanda"].astype(str).isin(['', 'nan']))]
+    if rule.empty:
+        return "SLA: N/A", "gray"
+    try:
+        prazo_dias = int(rule.iloc[0]["Prazo (dias)"])
+    except (ValueError, TypeError):
+        return "SLA: Inválido", "red"
+    start_date = data_agendamento.date()
+    if pd.notna(data_finalizacao):
+        end_date = data_finalizacao.date()
+        dias_corridos = (end_date - start_date).days
+        if dias_corridos <= prazo_dias:
+            return f"Finalizado no Prazo ({dias_corridos}d)", "#66BB6A"
+        else:
+            atraso = dias_corridos - prazo_dias
+            return f"Finalizado com Atraso ({atraso}d)", "#EF5350"
+    else:
+        end_date = date.today()
+        dias_corridos = (end_date - start_date).days
+        dias_restantes = prazo_dias - dias_corridos
+        if dias_restantes < 0:
+            return f"Atrasado em {-dias_restantes}d", "#EF5350"
+        elif dias_restantes == 0:
+            return "SLA Vence Hoje!", "#FFA726"
+        else:
+            return f"SLA: {dias_restantes}d restantes", "#66BB6F"
