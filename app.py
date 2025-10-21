@@ -153,6 +153,8 @@ def tela_projetos():
     total_items = len(df_filtrado)
     total_pages = (total_items // items_per_page) + (1 if total_items % items_per_page > 0 else 0)
     
+    if total_pages == 0: total_pages = 1 # Garante que não seja zero
+    
     # Garante que a página atual não seja inválida após uma filtragem
     if st.session_state.page_number >= total_pages:
         st.session_state.page_number = 0
@@ -264,16 +266,14 @@ def tela_projetos():
                 log_agendamento_existente = row.get("Log Agendamento", "") if pd.notna(row.get("Log Agendamento")) else ""
                 st.text_area("Histórico de Agendamento", value=log_agendamento_existente, height=100, disabled=True, key=f"log_{project_id}")
 
-                # --- CORREÇÃO: BOTÕES DENTRO DO FORMULÁRIO E EM COLUNAS ---
-                col_save, col_delete = st.columns([4, 1])
+                # --- AJUSTE DE LAYOUT: Botões menores e alinhados à direita ---
+                _, col_save, col_delete = st.columns([3, 1.5, 1]) 
                 with col_save:
-                    btn_salvar_card = st.form_submit_button("💾 Salvar Alterações", use_container_width=True)
+                    btn_salvar_card = st.form_submit_button("💾 Salvar", use_container_width=True)
                 with col_delete:
-                    # Este botão também submete o formulário, mas podemos diferenciar a ação
                     btn_excluir_card = st.form_submit_button("🗑️ Excluir", use_container_width=True, type="primary")
 
                 if btn_excluir_card:
-                    # Ação de excluir é tratada primeiro
                     if utils.excluir_projeto_db(project_id):
                         st.rerun()
                 
@@ -329,17 +329,17 @@ def tela_projetos():
                         st.rerun()
 
     st.markdown("---")
-    # --- OTIMIZAÇÃO: CONTROLES DE PAGINAÇÃO ---
+    # --- AJUSTE DE LAYOUT: Paginação mais clean ---
     if total_pages > 1:
-        col_nav1, col_nav2, col_nav3 = st.columns([3, 2, 3])
-        with col_nav1:
-            if st.button("⬅️ Página Anterior", use_container_width=True, disabled=(st.session_state.page_number == 0)):
+        col_prev, col_page_info, col_next = st.columns([2, 1, 2])
+        with col_prev:
+            if st.button("⬅️ Anterior", use_container_width=True, disabled=(st.session_state.page_number == 0)):
                 st.session_state.page_number -= 1
                 st.rerun()
-        with col_nav2:
-            st.write(f"Página **{st.session_state.page_number + 1}** de **{total_pages}**")
-        with col_nav3:
-            if st.button("Próxima Página ➡️", use_container_width=True, disabled=(st.session_state.page_number >= total_pages - 1)):
+        with col_page_info:
+            st.markdown(f"<div style='text-align: center; margin-top: 5px;'>Pág<br><b>{st.session_state.page_number + 1}/{total_pages}</b></div>", unsafe_allow_html=True)
+        with col_next:
+            if st.button("Próxima ➡️", use_container_width=True, disabled=(st.session_state.page_number >= total_pages - 1)):
                 st.session_state.page_number += 1
                 st.rerun()
 
