@@ -1,6 +1,7 @@
 import streamlit as st
 import utils # Importa nosso arquivo de utilidades
 import html
+import pandas as pd
 
 # Dependência opcional
 try:
@@ -15,6 +16,11 @@ def tela_calendario():
     st.markdown("<div class='section-title-center'>AGENDA</div>", unsafe_allow_html=True)
     df = utils.carregar_projetos_db()
     
+    # Garante que o DataFrame não está vazio antes de prosseguir
+    if df.empty or 'Analista' not in df.columns:
+        st.info("Nenhum projeto encontrado para exibir na agenda.")
+        return
+
     lista_analistas = ["Todos"] + df['Analista'].dropna().unique().tolist()
     analista_selecionado = st.selectbox("Filtrar por Analista:", lista_analistas)
 
@@ -25,17 +31,26 @@ def tela_calendario():
     
     st.divider()
     
+    # --- CORREÇÃO APLICADA AQUI ---
+    # 1. Converte a coluna 'Agendamento' para um formato de data seguro.
+    #    Valores que não são datas (nulos, em branco) se tornarão 'NaT' (Not a Time).
+    df_filtrado['Agendamento'] = pd.to_datetime(df_filtrado['Agendamento'], errors='coerce')
+
+    # 2. Agora, removemos com segurança todas as linhas onde o agendamento é nulo (NaT).
     df_calendario = df_filtrado.dropna(subset=['Agendamento'])
 
     if df_calendario.empty:
         st.info("Nenhum projeto com data de agendamento para exibir (com o filtro atual).")
         return
+        
     if calendar is None:
-        st.warning("Componente de calendário não instalado.")
+        st.error("ERRO: O componente de calendário não está instalado. Adicione 'streamlit-calendar' ao seu requirements.txt")
+        st.code("pip install streamlit-calendar")
         return
 
     eventos = []
     for _, row in df_calendario.iterrows():
+        # A verificação 'dropna' acima garante que 'Agendamento' é uma data válida aqui.
         eventos.append({
             "title": f"{row.get('Agência', 'N/A')} - {row.get('Projeto', 'N/A')}",
             "color": utils.get_status_color(row.get('Status')),
@@ -56,12 +71,10 @@ def tela_calendario():
     
     state = calendar(events=eventos, options=opcoes_calendario, key="calendario")
     
-    # --- CORREÇÃO DO BUG APLICADA AQUI ---
-    # 1. Se um evento for clicado, guardamos ele na "memória" (session_state)
+    # Lógica para exibir detalhes do evento clicado
     if state and state.get("eventClick"):
         st.session_state.evento_clicado = state["eventClick"]["event"]
 
-    # 2. Mostramos na tela o evento que está guardado na memória
     if "evento_clicado" in st.session_state and st.session_state.evento_clicado:
         evento = st.session_state.evento_clicado
         
