@@ -60,7 +60,8 @@ def tela_cadastro_usuario():
             if not df.empty and email.lower() in df["email"].astype(str).str.lower().values:
                 st.error("Email já cadastrado!")
             else:
-                st.error("Funcionalidade de salvar usuários precisa ser implementada no utils.py")
+                # A função salvar_usuario_db precisa ser implementada ou revisada em utils.py
+                st.error("Funcionalidade de salvar usuários precisa ser implementada.")
 
 
     if st.button("Voltar para Login"):
@@ -143,7 +144,25 @@ def tela_projetos():
         df_filtrado = df_filtrado[mask_busca]
 
     st.markdown("---")
-    st.info(f"Projetos encontrados: {len(df_filtrado)}")
+    
+    # --- OTIMIZAÇÃO: LÓGICA DE PAGINAÇÃO ---
+    items_per_page = 10
+    if 'page_number' not in st.session_state:
+        st.session_state.page_number = 0
+    
+    total_items = len(df_filtrado)
+    total_pages = (total_items // items_per_page) + (1 if total_items % items_per_page > 0 else 0)
+    
+    # Garante que a página atual não seja inválida após uma filtragem
+    if st.session_state.page_number >= total_pages:
+        st.session_state.page_number = 0
+
+    start_idx = st.session_state.page_number * items_per_page
+    end_idx = start_idx + items_per_page
+    
+    df_paginado = df_filtrado.iloc[start_idx:end_idx]
+
+    st.info(f"Mostrando {len(df_paginado)} de {total_items} projetos encontrados.")
     
     agencias_cfg = utils.carregar_config_db("agencias")
     tecnicos_cfg = utils.carregar_config_db("tecnicos")
@@ -153,7 +172,7 @@ def tela_projetos():
     tecnico_options = ["N/A"] + (tecnicos_cfg.iloc[:, 0].tolist() if not tecnicos_cfg.empty else [])
     status_options = status_options_df.iloc[:, 0].tolist() if not status_options_df.empty else []
 
-    for _, row in df_filtrado.iterrows():
+    for _, row in df_paginado.iterrows():
         project_id = row['ID']
         
         status_raw = row.get('Status', 'N/A')
@@ -245,13 +264,18 @@ def tela_projetos():
                 log_agendamento_existente = row.get("Log Agendamento", "") if pd.notna(row.get("Log Agendamento")) else ""
                 st.text_area("Histórico de Agendamento", value=log_agendamento_existente, height=100, disabled=True, key=f"log_{project_id}")
 
+                # --- CORREÇÃO: BOTÕES DENTRO DO FORMULÁRIO E EM COLUNAS ---
                 col_save, col_delete = st.columns([4, 1])
                 with col_save:
                     btn_salvar_card = st.form_submit_button("💾 Salvar Alterações", use_container_width=True)
                 with col_delete:
-                    if st.form_submit_button("🗑️ Excluir", use_container_width=True, type="primary"):
-                        if utils.excluir_projeto_db(project_id):
-                            st.rerun()
+                    # Este botão também submete o formulário, mas podemos diferenciar a ação
+                    btn_excluir_card = st.form_submit_button("🗑️ Excluir", use_container_width=True, type="primary")
+
+                if btn_excluir_card:
+                    # Ação de excluir é tratada primeiro
+                    if utils.excluir_projeto_db(project_id):
+                        st.rerun()
                 
                 if btn_salvar_card:
                     status_final = novo_status_selecionado
@@ -304,6 +328,21 @@ def tela_projetos():
                         st.success(f"Projeto '{novo_projeto}' (ID: {project_id}) atualizado.")
                         st.rerun()
 
+    st.markdown("---")
+    # --- OTIMIZAÇÃO: CONTROLES DE PAGINAÇÃO ---
+    if total_pages > 1:
+        col_nav1, col_nav2, col_nav3 = st.columns([3, 2, 3])
+        with col_nav1:
+            if st.button("⬅️ Página Anterior", use_container_width=True, disabled=(st.session_state.page_number == 0)):
+                st.session_state.page_number -= 1
+                st.rerun()
+        with col_nav2:
+            st.write(f"Página **{st.session_state.page_number + 1}** de **{total_pages}**")
+        with col_nav3:
+            if st.button("Próxima Página ➡️", use_container_width=True, disabled=(st.session_state.page_number >= total_pages - 1)):
+                st.session_state.page_number += 1
+                st.rerun()
+
 # ----------------- CONTROLE PRINCIPAL -----------------
 def main():
     if "logado" not in st.session_state: st.session_state.logado = False
@@ -336,4 +375,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
