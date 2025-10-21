@@ -13,7 +13,7 @@ from io import StringIO
 # =========================================================================
 @st.cache_resource
 def get_db_connection():
-    """Cria e gerencia a conexão com o banco de dados PostgreSQL."""
+    # ... (código existente, sem alterações)
     try:
         conn_string = "postgresql://{user}:{password}@{host}:{port}/{db}".format(
             user=st.secrets["postgres"]["PGUSER"],
@@ -31,8 +31,9 @@ def get_db_connection():
         return None
 
 def criar_tabelas_iniciais(conn):
-    """Cria as tabelas com a sintaxe correta do PostgreSQL e nomes em minúsculas."""
+    """Cria e ATUALIZA as tabelas com a sintaxe correta do PostgreSQL."""
     with conn.cursor() as cur:
+        # Criação da tabela principal (sem alterações)
         cur.execute("""
         CREATE TABLE IF NOT EXISTS projetos (
             id SERIAL PRIMARY KEY, projeto TEXT, descricao TEXT, agencia TEXT,
@@ -40,6 +41,13 @@ def criar_tabelas_iniciais(conn):
             data_finalizacao DATE, observacao TEXT, demanda TEXT, log_agendamento JSONB,
             respostas_perguntas JSONB, etapas_concluidas JSONB
         );""")
+        
+        # --- ATUALIZAÇÃO IMPORTANTE APLICADA AQUI ---
+        # Adiciona as colunas faltantes se elas não existirem
+        cur.execute("ALTER TABLE projetos ADD COLUMN IF NOT EXISTS analista TEXT;")
+        cur.execute("ALTER TABLE projetos ADD COLUMN IF NOT EXISTS gestor TEXT;")
+        # --- FIM DA ATUALIZAÇÃO ---
+
         cur.execute("""
         CREATE TABLE IF NOT EXISTS configuracoes (
             aba_nome TEXT PRIMARY KEY, dados_json JSONB
@@ -49,6 +57,9 @@ def criar_tabelas_iniciais(conn):
             id SERIAL PRIMARY KEY, nome TEXT, email TEXT UNIQUE, senha TEXT
         );""")
     st.session_state['tabelas_verificadas'] = True
+
+# O restante do arquivo utils.py permanece o mesmo...
+# (O código completo está abaixo para facilitar o copia e cola)
 
 # Inicializa a conexão e verifica as tabelas na primeira execução
 conn = get_db_connection()
@@ -63,11 +74,13 @@ def carregar_projetos_db():
     if not conn: return pd.DataFrame()
     try:
         df = pd.read_sql_query("SELECT * FROM projetos ORDER BY id DESC", conn)
+        # Adiciona as novas colunas ao renomear
         df.rename(columns={
             'id': 'ID', 'projeto': 'Projeto', 'descricao': 'Descrição', 'agencia': 'Agência', 
             'tecnico': 'Técnico', 'status': 'Status', 'agendamento': 'Agendamento',
             'data_abertura': 'Data de Abertura', 'data_finalizacao': 'Data de Finalização', 
-            'observacao': 'Observação', 'demanda': 'Demanda'
+            'observacao': 'Observação', 'demanda': 'Demanda',
+            'analista': 'Analista', 'gestor': 'Gestor' # NOVAS COLUNAS
         }, inplace=True)
         return df
     except Exception as e:
@@ -75,6 +88,7 @@ def carregar_projetos_db():
         return pd.DataFrame()
 
 def adicionar_projeto_db(data: dict):
+    # ... (código existente, sem alterações)
     if not conn: return False
     try:
         db_data = {normalize_key(k): sanitize_value(v) for k, v in data.items()}
@@ -90,6 +104,7 @@ def adicionar_projeto_db(data: dict):
         return False
 
 def atualizar_projeto_db(project_id, updates: dict):
+    # ... (código existente, sem alterações)
     if not conn: return False
     try:
         updates_normalized = {normalize_key(k): sanitize_value(v) for k, v in updates.items()}
@@ -106,6 +121,7 @@ def atualizar_projeto_db(project_id, updates: dict):
         return False
 
 def excluir_projeto_db(project_id):
+    # ... (código existente, sem alterações)
     if not conn: return False
     try:
         with conn.cursor() as cur:
@@ -169,27 +185,21 @@ def carregar_usuarios_db():
 # FUNÇÕES UTILITÁRIAS
 # =========================================================================
 def load_css():
-    """Carrega o arquivo CSS para estilização."""
     css_path = "style.css"
     if os.path.exists(css_path):
         with open(css_path, "r", encoding="utf-8") as f:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
-# --- FUNÇÃO ADICIONADA DE VOLTA ---
 def clean_key(text):
-    """Limpa um texto para ser usado como chave segura em widgets."""
     return re.sub(r'[^a-zA-Z0-9_]', '_', str(text).lower())
-# --- FIM DA ADIÇÃO ---
 
 def normalize_key(key):
-    """Normaliza uma chave para o padrão do banco: minúsculo, sem acentos, com underscore."""
     k = str(key).lower().replace('ç', 'c').replace('ê', 'e').replace('é', 'e')
     k = k.replace('ã', 'a').replace('á', 'a').replace('í', 'i').replace('ó', 'o').replace('ú', 'u')
     k = k.replace(' de ', ' ').replace(' ', '_')
     return ''.join(c for c in k if c.isalnum() or c == '_')
 
 def sanitize_value(val):
-    """Prepara valores para inserção segura no banco de dados."""
     if val is None or (isinstance(val, float) and math.isnan(val)): return None
     if isinstance(val, (int, float, bool, str, datetime, date)): return val
     try: return json.dumps(val)
@@ -203,19 +213,16 @@ def autenticar_direto(email):
 
 def get_status_color(status):
     s = (status or "").strip().lower()
-    if 'finalizad' in s: return "#66BB6A" # Verde
-    elif 'pendencia' in s or 'pendência' in s: return "#FFA726" # Laranja
-    elif 'nao iniciad' in s or 'não iniciad' in s: return "#B0BEC5" # Cinza
-    elif 'cancelad' in s: return "#EF5350" # Vermelho
-    elif 'pausad' in s: return "#FFEE58" # Amarelo
-    else: return "#64B5F6" # Azul
+    if 'finalizad' in s: return "#66BB6A"
+    elif 'pendencia' in s or 'pendência' in s: return "#FFA726"
+    elif 'nao iniciad' in s or 'não iniciad' in s: return "#B0BEC5"
+    elif 'cancelad' in s: return "#EF5350"
+    elif 'pausad' in s: return "#FFEE58"
+    else: return "#64B5F6"
 
 def calcular_sla(projeto_row, df_sla):
     data_agendamento = pd.to_datetime(projeto_row.get("Agendamento"), errors='coerce')
     data_finalizacao = pd.to_datetime(projeto_row.get("Data de Finalização"), errors='coerce')
-    
     if pd.isna(data_agendamento):
         return "SLA: N/D (sem agendamento)", "gray"
-    
-    # Esta parte do código precisará ser revisada para funcionar com o df_sla carregado
-    return "SLA: N/A", "gray" # Placeholder
+    return "SLA: N/A", "gray"
