@@ -23,7 +23,7 @@ utils.load_css() # Carrega o CSS do arquivo utils
 
 # ----------------- Telas da Página Principal -----------------
 def tela_login():
-    # ... (Esta função não precisa de alterações)
+    # ... (código existente, sem alterações)
     st.markdown("<div class='main-title'>GESTÃO DE PROJETOS</div>", unsafe_allow_html=True)
     st.title("")
     st.write("")
@@ -42,7 +42,7 @@ def tela_login():
         st.rerun()
 
 def tela_cadastro_usuario():
-    # ... (Esta função não precisa de alterações)
+    # ... (código existente, sem alterações)
     st.subheader("Cadastrar Novo Usuário")
     with st.form("form_cadastro_usuario"):
         nome = st.text_input("Nome", key="cad_nome")
@@ -57,14 +57,13 @@ def tela_cadastro_usuario():
                 st.error("Email já cadastrado!")
             else:
                 st.error("Funcionalidade de salvar novos usuários precisa ser implementada.")
-                # Lógica de salvar usuário precisa ser revisada/adicionada em utils.py se necessário
 
     if st.button("Voltar para Login"):
         st.session_state.cadastro = False
         st.rerun()
 
 def tela_cadastro_projeto():
-    # ... (Esta função não precisa de alterações)
+    # ... (código existente, sem alterações)
     if st.button("⬅️ Voltar para Projetos"):
         st.session_state.tela_cadastro_proj = False
         st.rerun()
@@ -123,13 +122,8 @@ def tela_projetos():
     termo_busca = st.text_input("Buscar", key="termo_busca", placeholder="Digite um termo para buscar...")
     col1, col2, col3, col4 = st.columns(4)
     
-    # --- CORREÇÃO DE CONSISTÊNCIA ---
-    # Garante que os nomes nos filtros correspondam exatamente aos nomes do DataFrame
-    campos_filtro = ['Status', 'Analista', 'Agência', 'Gestor', 'Projeto', 'Técnico']
-    
     df_filtrado = df.copy()
 
-    # Cria filtros dinamicamente
     filtros_ativos = {}
     with col1:
         if 'Status' in df.columns:
@@ -143,9 +137,7 @@ def tela_projetos():
         if 'Agência' in df.columns:
             opcoes = ["Todos"] + sorted(df['Agência'].astype(str).unique().tolist())
             filtros_ativos['Agência'] = st.selectbox("Filtrar por Agência", opcoes)
-    # ... adicione mais filtros conforme necessário
-
-    # Aplica filtros
+    
     for campo, valor in filtros_ativos.items():
         if valor != "Todos":
             df_filtrado = df_filtrado[df_filtrado[campo].astype(str) == valor]
@@ -158,7 +150,6 @@ def tela_projetos():
     st.markdown("---")
     st.info(f"Projetos encontrados: {len(df_filtrado)}")
 
-    # Carrega opções para os formulários
     agencias_cfg = utils.carregar_config_db("agencias")
     tecnicos_cfg = utils.carregar_config_db("tecnicos")
     status_options_df = utils.carregar_config_db("status")
@@ -170,8 +161,6 @@ def tela_projetos():
     for _, row in df_filtrado.iterrows():
         project_id = row['ID']
         
-        # --- CORREÇÃO DE SEGURANÇA APLICADA AQUI ---
-        # Usando .get() para evitar KeyError se a coluna não existir na linha
         status_text = html.escape(str(row.get('Status', 'N/A')))
         analista_text = html.escape(str(row.get('Analista', 'N/A')))
         agencia_text = html.escape(str(row.get('Agência', 'N/A')))
@@ -181,7 +170,6 @@ def tela_projetos():
         sla_text, sla_color = utils.calcular_sla(row, df_sla)
 
         st.markdown(f"<div class='project-card' key='card_{project_id}'>", unsafe_allow_html=True)
-        # ... (Restante do código de exibição do card, que já parece usar .get() ou está seguro)
         col_info, col_analista, col_agencia, col_status = st.columns([3, 2, 2, 1.5])
         with col_info:
             st.markdown(f"<h6>📅 {row.get('Agendamento_str', 'N/A')}</h6>", unsafe_allow_html=True)
@@ -201,34 +189,37 @@ def tela_projetos():
 
         with st.expander(f"Ver/Editar Detalhes - ID: {project_id}"):
             with st.form(f"form_edicao_card_{project_id}"):
-                # ... (código do formulário interno)
-                # Garante que todos os acessos a 'row' usem .get() para segurança
                 
                 novo_projeto = st.text_input("Projeto", value=row.get('Projeto', ''), key=f"proj_{project_id}")
                 novo_analista = st.text_input("Analista", value=row.get('Analista', ''), key=f"analista_{project_id}")
                 novo_gestor = st.text_input("Gestor", value=row.get('Gestor', ''), key=f"gestor_{project_id}")
                 
-                # Exemplo de atualização para Selectbox
                 idx_status = status_options.index(row.get('Status')) if row.get('Status') in status_options else 0
                 novo_status_selecionado = st.selectbox("Status", status_options, index=idx_status, key=f"status_{project_id}")
 
                 # ... (restante dos campos do formulário)
-                btn_salvar_card = st.form_submit_button("💾 Salvar Alterações")
+                
+                # --- CORREÇÃO APLICADA AQUI ---
+                # Botões de salvar e excluir estão juntos dentro do formulário
+                col_save, col_delete = st.columns([4, 1])
+                with col_save:
+                    btn_salvar_card = st.form_submit_button("💾 Salvar Alterações", use_container_width=True)
+                with col_delete:
+                    # Este botão não envia o formulário, mas sua ação é processada no mesmo ciclo
+                    if st.form_submit_button("🗑️ Excluir", use_container_width=True, type="primary"):
+                        if utils.excluir_projeto_db(project_id):
+                            st.rerun()
+                # --- FIM DA CORREÇÃO ---
+
                 if btn_salvar_card:
                     updates = {
                         "Projeto": novo_projeto,
                         "Analista": novo_analista,
                         "Gestor": novo_gestor,
                         "Status": novo_status_selecionado,
-                        # Adicione todos os outros campos que podem ser atualizados
                     }
                     if utils.atualizar_projeto_db(project_id, updates):
                         st.success(f"Projeto ID {project_id} atualizado.")
-                        st.rerun()
-
-                st.markdown("---")
-                if st.button("🗑️ Excluir Projeto", key=f"btn_excluir_{project_id}", type="primary"):
-                    if utils.excluir_projeto_db(project_id):
                         st.rerun()
 
 # ----------------- CONTROLE PRINCIPAL -----------------
