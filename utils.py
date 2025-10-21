@@ -5,7 +5,7 @@ import re
 import html
 import psycopg2
 from psycopg2 import sql
-import io # Necessário para a exportação para Excel
+import io
 
 # --- Conexão com o Banco de Dados (PostgreSQL) ---
 @st.cache_resource
@@ -13,8 +13,6 @@ def get_db_connection():
     """Cria e gerencia a conexão com o banco de dados PostgreSQL."""
     try:
         secrets = st.secrets["postgres"]
-        # --- CORREÇÃO APLICADA AQUI ---
-        # Mapeia manualmente as chaves do secrets.toml para os argumentos corretos
         conn = psycopg2.connect(
             host=secrets["PGHOST"],
             port=secrets["PGPORT"],
@@ -26,7 +24,6 @@ def get_db_connection():
         return conn
     except KeyError as e:
         st.error(f"Erro Crítico: A credencial '{e}' não foi encontrada na seção [postgres] dos 'Secrets'.")
-        st.info("Verifique se as chaves 'PGHOST', 'PGPORT', 'PGUSER', 'PGPASSWORD', 'PGDATABASE' estão corretas.")
         return None
     except Exception as e:
         st.error(f"Erro ao conectar ao banco de dados: {e}")
@@ -36,11 +33,10 @@ conn = get_db_connection()
 
 # --- Função de Criação de Tabelas ---
 def criar_tabelas_iniciais():
-    """Cria as tabelas se não existirem, adicionando as novas colunas 'analista' e 'gestor'."""
+    """Cria as tabelas se não existirem, adicionando as colunas 'analista' e 'gestor'."""
     if not conn: return
     try:
         with conn.cursor() as cur:
-            # Tabela de Projetos
             cur.execute("""
             CREATE TABLE IF NOT EXISTS projetos (
                 id SERIAL PRIMARY KEY,
@@ -56,34 +52,28 @@ def criar_tabelas_iniciais():
                 demanda TEXT,
                 log_agendamento TEXT,
                 respostas_perguntas JSONB,
-                etapas_concluidas TEXT,
-                analista TEXT,
-                gestor TEXT
+                etapas_concluidas TEXT
             );
             """)
-            # Adiciona colunas se não existirem (para compatibilidade com versões antigas)
             for col in ['analista', 'gestor']:
-                cur.execute(sql.SQL("""
+                cur.execute(f"""
                 DO $$
                 BEGIN
                     BEGIN
-                        ALTER TABLE projetos ADD COLUMN {} TEXT;
+                        ALTER TABLE projetos ADD COLUMN {col} TEXT;
                     EXCEPTION
                         WHEN duplicate_column THEN
                             -- A coluna já existe, não faz nada.
                     END;
                 END;
                 $$
-                """).format(sql.Identifier(col)))
-
-            # Tabela de Configurações
+                """)
             cur.execute("""
             CREATE TABLE IF NOT EXISTS configuracoes (
                 aba_nome TEXT PRIMARY KEY,
                 dados_json JSONB
             );
             """)
-            # Tabela de Usuários
             cur.execute("""
             CREATE TABLE IF NOT EXISTS usuarios (
                 id SERIAL PRIMARY KEY,
@@ -95,7 +85,28 @@ def criar_tabelas_iniciais():
     except Exception as e:
         st.error(f"Erro ao criar/verificar tabelas: {e}")
 
-# --- Funções do Banco de Dados (Projetos) ---
+# --- Funções do Banco (Projetos) ---
+def _normalize_and_sanitize(data_dict: dict):
+    """Normaliza chaves e sanitiza valores para inserção no DB."""
+    normalized = {}
+    for key, value in data_dict.items():
+        # Normaliza a chave para o padrão do banco (minúsculas, sem acentos, etc.)
+        k = str(key).lower()
+        k = k.replace('ç', 'c').replace('ê', 'e').replace('é', 'e').replace('ã', 'a')
+        k = k.replace('á', 'a').replace('í', 'i').replace('ó', 'o').replace('ú', 'u')
+        k = k.replace(' de ', ' ').replace(' ', '_')
+        
+        # Sanitiza o valor
+        if value is None or (isinstance(value, float) and pd.isna(value)):
+            sanitized_value = None
+        elif isinstance(value, (datetime, date)):
+            sanitized_value = value.strftime('%Y-%m-%d')
+        else:
+            sanitized_value = str(value)
+        
+        normalized[k] = sanitized_value
+    return normalized
+
 @st.cache_data(ttl=60)
 def carregar_projetos_db():
     """Carrega todos os projetos do banco de dados e renomeia as colunas para exibição."""
@@ -119,7 +130,6 @@ def carregar_projetos_db():
 
 @st.cache_data(ttl=60)
 def carregar_projetos_sem_agendamento_db():
-    """Carrega apenas projetos sem data de agendamento (backlog)."""
     if not conn: return pd.DataFrame()
     try:
         query = "SELECT * FROM projetos WHERE agendamento IS NULL ORDER BY id DESC"
@@ -140,18 +150,52 @@ def carregar_projetos_sem_agendamento_db():
 
 def adicionar_projeto_db(data: dict):
     if not conn: return False
-    # ... (código completo)
-    return True # Placeholder
+    try:
+        db_data = _normalize_and_sanitize(data)
+        cols = db_data.keys()
+        vals = list(db_data.values())
+        
+        query = sql.SQL("INSERT INTO projetos ({}) VALUES ({})").format(
+            sql.SQL(', ').join(map(sql.Identifier, cols)),
+            sql.SQL(', ').join(sql.Placeholder() * len(cols))
+        )
+        with conn.cursor() as cur:
+            cur.execute(query, vals)
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        st.toast(f"Erro ao adicionar projeto: {e}", icon="🔥")
+        return False
 
 def atualizar_projeto_db(project_id, updates: dict):
     if not conn: return False
-    # ... (código completo)
-    return True # Placeholder
+    try:
+        db_data = _normalize_and_sanitize(updates)
+        set_clause = sql.SQL(', ').join(
+            sql.SQL("{} = {}").format(sql.Identifier(k), sql.Placeholder()) for k in db_data.keys()
+        )
+        query = sql.SQL("UPDATE projetos SET {} WHERE id = {}").format(set_clause, sql.Placeholder())
+        
+        vals = list(db_data.values()) + [project_id]
+
+        with conn.cursor() as cur:
+            cur.execute(query, vals)
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        st.toast(f"Erro ao atualizar projeto: {e}", icon="🔥")
+        return False
 
 def excluir_projeto_db(project_id):
     if not conn: return False
-    # ... (código completo)
-    return True # Placeholder
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM projetos WHERE id = %s", (project_id,))
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        st.toast(f"Erro ao excluir projeto: {e}", icon="🔥")
+        return False
 
 # --- Funções do Banco (Configurações e Usuários) ---
 @st.cache_data(ttl=600)
@@ -161,15 +205,29 @@ def carregar_config_db(tab_name):
         query = "SELECT dados_json FROM configuracoes WHERE aba_nome = %s"
         df_json = pd.read_sql_query(query, conn, params=(tab_name.lower(),))
         if not df_json.empty and df_json['dados_json'][0]:
-            # Usa read_json para interpretar a string JSON
-            return pd.read_json(df_json['dados_json'][0], orient='records')
+            return pd.DataFrame(df_json['dados_json'][0])
         return pd.DataFrame()
     except Exception:
         return pd.DataFrame()
 
 def salvar_config_db(df, tab_name):
-    # ... (código completo)
-    return True # Placeholder
+    if not conn: return False
+    try:
+        dados_json = df.to_json(orient='records')
+        tab_name_lower = tab_name.lower()
+        sql_query = """
+        INSERT INTO configuracoes (aba_nome, dados_json)
+        VALUES (%s, %s)
+        ON CONFLICT (aba_nome) DO UPDATE SET
+            dados_json = EXCLUDED.dados_json;
+        """
+        with conn.cursor() as cur:
+            cur.execute(sql_query, (tab_name_lower, dados_json))
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        st.error(f"Erro ao salvar configuração '{tab_name}': {e}")
+        return False
 
 @st.cache_data(ttl=600)
 def carregar_usuarios_db():
@@ -180,32 +238,82 @@ def carregar_usuarios_db():
         st.error(f"Erro ao carregar usuários: {e}")
         return pd.DataFrame()
 
-# --- NOVA FUNÇÃO: Exportar para Excel ---
+def salvar_usuario_db(df):
+    # Esta função precisa de uma implementação mais robusta,
+    # mas manteremos a lógica original por enquanto.
+    if not conn: return False
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM usuarios")
+            if not df.empty:
+                # Adapta para inserção com psycopg2
+                for _, row in df.iterrows():
+                    cur.execute("INSERT INTO usuarios (nome, email, senha) VALUES (%s, %s, %s)",
+                                (row['Nome'], row['Email'], row.get('Senha')))
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        st.error(f"Erro ao salvar usuários: {e}")
+        return False
+
+# --- Funções de Importação/Exportação ---
+def generate_excel_template_bytes():
+    template_columns = ["Projeto", "Descrição", "Agência", "Técnico", "Demanda", "Observação", "Analista", "Gestor"]
+    df_template = pd.DataFrame(columns=template_columns)
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df_template.to_excel(writer, index=False, sheet_name='Projetos')
+    return output.getvalue()
+
+def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
+    if not conn: return False, 0
+    column_map = {'Projeto': 'projeto', 'Descrição': 'descricao', 'Agência': 'agencia', 'Técnico': 'tecnico', 'Demanda': 'demanda', 'Observação': 'observacao', 'Analista': 'analista', 'Gestor': 'gestor'}
+    if 'Projeto' not in df.columns:
+        st.error("Erro: A planilha enviada não contém a coluna obrigatória 'Projeto'.")
+        return False, 0
+
+    df_to_insert = df.rename(columns=column_map)
+    df_to_insert['status'] = 'NÃO INICIADA'
+    df_to_insert['data_abertura'] = date.today()
+    df_to_insert['analista'] = df_to_insert['analista'].fillna(usuario_logado) if 'analista' in df_to_insert else usuario_logado
+
+    cols_to_insert = ['projeto', 'descricao', 'agencia', 'tecnico', 'status', 'data_abertura', 'observacao', 'demanda', 'analista', 'gestor']
+    df_final = df_to_insert[[col for col in cols_to_insert if col in df_to_insert.columns]]
+    
+    values = [tuple(x) for x in df_final.to_numpy()]
+    cols_sql = ", ".join(df_final.columns)
+    placeholders = ", ".join(["%s"] * len(df_final.columns))
+    query = f"INSERT INTO projetos ({cols_sql}) VALUES ({placeholders})"
+    
+    try:
+        with conn.cursor() as cur:
+            cur.executemany(query, values)
+        st.cache_data.clear()
+        return True, len(values)
+    except Exception as e:
+        st.error(f"Erro ao inserir dados em lote: {e}")
+        return False, 0
+
 def dataframe_to_excel_bytes(df):
-    """Converte um DataFrame para bytes de um arquivo Excel em memória."""
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df_to_export = df.copy()
-        # Remove colunas que não fazem sentido no excel, se houver
         if 'Agendamento_str' in df_to_export.columns:
             df_to_export.drop(columns=['Agendamento_str'], inplace=True)
         df_to_export.to_excel(writer, index=False, sheet_name='Projetos')
-    processed_data = output.getvalue()
-    return processed_data
+    return output.getvalue()
 
 # --- Funções Utilitárias ---
 def load_css():
-    st.markdown("""
-    <style>
-        .main-title { font-size: 3em; font-weight: bold; text-align: center; color: #1E88E5; }
-        .section-title-center { font-size: 2em; font-weight: bold; text-align: center; margin-bottom: 20px; }
-        .project-card { border: 1px solid #e0e0e0; border-radius: 10px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    </style>
-    """, unsafe_allow_html=True)
+    st.markdown("""<style> .main-title { font-size: 3em; font-weight: bold; text-align: center; color: #1E88E5; } .section-title-center { font-size: 2em; font-weight: bold; text-align: center; margin-bottom: 20px; } .project-card { border: 1px solid #e0e0e0; border-radius: 10px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); } </style>""", unsafe_allow_html=True)
 
 def autenticar_direto(email):
-    # Esta função pode ser melhorada para buscar no banco de dados de usuários
-    return email 
+    df_users = carregar_usuarios_db()
+    if not df_users.empty:
+        user = df_users[df_users["email"].astype(str).str.lower() == str(email).lower()]
+        if not user.empty:
+            return user.iloc[0]["nome"]
+    return None
 
 def clean_key(text):
     return re.sub(r'[^a-zA-Z0-9_]', '_', str(text).lower())
@@ -220,38 +328,38 @@ def get_status_color(status):
     else: return "#64B5F6" # Em Andamento
 
 def calcular_sla(projeto_row, df_sla):
-    # ... (código completo)
-    return "SLA: N/A", "gray" # Placeholder
-
-def calcular_sla(projeto_row, df_sla):
-    # ... (código completo)
-    return "SLA: N/A", "gray" # Placeholder
-
-def calcular_sla(projeto_row, df_sla):
     data_agendamento = pd.to_datetime(projeto_row.get("Agendamento"), errors='coerce')
     data_finalizacao = pd.to_datetime(projeto_row.get("Data de Finalização"), errors='coerce')
     
-    if pd.isna(data_agendamento):
-        return "SLA: N/D (sem agendamento)", "gray"
-    
-    # Lógica de cálculo do SLA (simplificada)
-    prazo_dias = 30 # Prazo padrão
-    if not df_sla.empty:
-        # Aqui você implementaria a lógica para buscar o prazo correto no df_sla
-        pass
+    if pd.isna(data_agendamento): return "SLA: N/D", "gray"
+    if df_sla.empty: return "SLA: N/A", "gray"
 
+    projeto_nome = projeto_row.get("Projeto", "")
+    demanda = projeto_row.get("Demanda", "")
+    
+    rule = df_sla[(df_sla["Nome do Projeto"] == projeto_nome) & (df_sla["Demanda"] == demanda)]
+    if rule.empty:
+        rule = df_sla[(df_sla["Nome do Projeto"] == projeto_nome) & (df_sla["Demanda"].astype(str).isin(['', 'nan']))]
+    if rule.empty: return "SLA: N/A", "gray"
+
+    try:
+        prazo_dias = int(rule.iloc[0]["Prazo (dias)"])
+    except (ValueError, TypeError):
+        return "SLA: Inválido", "red"
+
+    start_date = data_agendamento.date()
     if pd.notna(data_finalizacao):
-        dias_corridos = (data_finalizacao - data_agendamento).days
+        dias_corridos = (data_finalizacao.date() - start_date).days
         if dias_corridos <= prazo_dias:
             return f"Finalizado no Prazo ({dias_corridos}d)", "#66BB6A"
         else:
             return f"Finalizado com Atraso ({dias_corridos - prazo_dias}d)", "#EF5350"
     else:
-        dias_corridos = (datetime.now() - data_agendamento).days
+        dias_corridos = (date.today() - start_date).days
         dias_restantes = prazo_dias - dias_corridos
         if dias_restantes < 0:
             return f"Atrasado em {-dias_restantes}d", "#EF5350"
+        elif dias_restantes == 0:
+            return "SLA Vence Hoje!", "#FFA726"
         else:
-            return f"SLA: {dias_restantes}d restantes", "#66BB6A"
-
-
+            return f"SLA: {dias_restantes}d restantes", "#66BB6F"
