@@ -17,32 +17,26 @@ def carregar_lista_segura(nome_aba):
     """Função de ajuda para carregar uma lista de uma coluna, de forma segura."""
     df = utils.carregar_config_db(nome_aba)
     if not df.empty and len(df.columns) > 0:
-        return df[df.columns[0]].dropna().tolist()
+        return df.iloc[:, 0].dropna().tolist()
     return []
 
 def tela_sla():
     st.markdown("### Gerenciar Prazos de SLA")
     
-    # Passo 1: Carrega os dados
+    # Passo 1: Carrega e prepara os dados
     df_sla = utils.carregar_config_db("sla")
     
-    # --- PASSO DE DEPURAÇÃO ---
-    st.write("Dados brutos carregados do banco para 'SLA':")
-    st.dataframe(df_sla) # Mostra a tabela crua na tela
-    # --- FIM DO PASSO DE DEPURAÇÃO ---
-
-    # Passo 2: Prepara o DataFrame para o editor
     colunas_esperadas = CONFIG_TABS["sla"]
     for col in colunas_esperadas:
         if col not in df_sla.columns:
-            df_sla[col] = None # Adiciona colunas ausentes
+            df_sla[col] = None
 
     # Força os tipos corretos para evitar erros
     df_sla['Nome do Projeto'] = df_sla['Nome do Projeto'].astype(str).replace('None', '')
     df_sla['Demanda'] = df_sla['Demanda'].astype(str).replace('None', '')
     df_sla['Prazo (dias)'] = pd.to_numeric(df_sla['Prazo (dias)'], errors='coerce')
 
-    # Passo 3: Configura e exibe o editor
+    # Passo 2: Configura e exibe o editor
     lista_projetos = carregar_lista_segura("projetos_nomes")
     if not lista_projetos:
         st.warning("Cadastre primeiro os 'Nomes de Projetos' na aba 'Gerenciar Listas de Opções'.")
@@ -79,11 +73,6 @@ def tela_gerenciar_listas():
         with tab:
             df_lista = utils.carregar_config_db(tab_name)
             
-            # --- PASSO DE DEPURAÇÃO ---
-            st.write(f"Dados brutos carregados para '{tab_title}':")
-            st.dataframe(df_lista)
-            # --- FIM DO PASSO DE DEPURAÇÃO ---
-
             colunas_esperadas = CONFIG_TABS[tab_name]
             for col in colunas_esperadas:
                 if col not in df_lista.columns:
@@ -137,4 +126,3 @@ if st.sidebar.button("Logout", use_container_width=True, key="logout_config"):
     st.rerun()
 
 tela_configuracoes()
-
