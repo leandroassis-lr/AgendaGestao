@@ -14,20 +14,24 @@ CONFIG_TABS = {
 }
 
 def carregar_e_preparar_df(tab_name):
-    """Carrega um DataFrame e garante que ele tenha as colunas esperadas com os dtypes corretos."""
+    """Carrega um DataFrame, garante colunas e FORÇA os dtypes corretos."""
     df = utils.carregar_config_db(tab_name)
     expected_cols = CONFIG_TABS.get(tab_name, [])
     
+    # Etapa 1: Garantir que todas as colunas esperadas existam
     for col in expected_cols:
         if col not in df.columns:
-            # --- CORREÇÃO APLICADA AQUI ---
-            # Define o dtype correto para a nova coluna para evitar erros de tipo
             if col == "Prazo (dias)":
-                # Coluna numérica precisa de um tipo numérico (float para aceitar valores nulos/NaN)
                 df[col] = pd.Series(dtype='float64') 
             else:
-                # Colunas de texto usam 'object'
                 df[col] = pd.Series(dtype='object')
+
+    # --- CORREÇÃO DEFINITIVA APLICADA AQUI ---
+    # Etapa 2: Forçar a conversão de tipo para colunas numéricas após o carregamento
+    if "Prazo (dias)" in df.columns:
+        # Converte a coluna para número. Se encontrar um texto, transforma em Nulo (NaN).
+        df["Prazo (dias)"] = pd.to_numeric(df["Prazo (dias)"], errors='coerce')
+
     return df
 
 def carregar_lista_segura(nome_aba):
@@ -140,3 +144,4 @@ if st.sidebar.button("Logout", use_container_width=True, key="logout_config"):
     st.rerun()
 
 tela_configuracoes()
+
