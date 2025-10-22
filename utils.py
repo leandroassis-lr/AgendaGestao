@@ -330,13 +330,19 @@ def calcular_sla(projeto_row, df_sla):
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
     
-    projeto_nome = projeto_row.get("Projeto", "")
-    demanda = projeto_row.get("Demanda", "")
-    rule = df_sla[(df_sla["Nome do Projeto"] == projeto_nome) & (df_sla["Demanda"] == demanda)]
-    if rule.empty:
-        rule = df_sla[(df_sla["Nome do Projeto"] == projeto_nome) & (df_sla["Demanda"].astype(str).isin(['', 'nan', 'None']))]
-    if rule.empty: return "SLA: N/A", "gray"
-    
+    projeto_nome = str(projeto_row.get("Projeto", "")).upper() 
+    demanda = projeto_row.get("Demanda", "")
+    if pd.isna(data_agendamento):
+        return "SLA: N/D (sem agendamento)", "gray"
+    if df_sla.empty:
+        return "SLA: N/A (Regras não carregadas)", "gray"
+# CORREÇÃO: Converte a coluna de regras para maiúsculas antes de comparar
+    rule = df_sla[(df_sla["Nome do Projeto"].astype(str).str.upper() == projeto_nome) & (df_sla["Demanda"] == demanda)]
+    if rule.empty:
+        # CORREÇÃO: Aplica a mesma lógica de maiúsculas ao fallback
+        rule = df_sla[(df_sla["Nome do Projeto"].astype(str).str.upper() == projeto_nome) & (df_sla["Demanda"].astype(str).isin(['', 'nan', 'None']))]
+    if rule.empty:
+   
     try:
         prazo_dias = int(rule.iloc[0]["Prazo (dias)"])
     except (ValueError, TypeError):
@@ -353,4 +359,5 @@ def calcular_sla(projeto_row, df_sla):
         if dias_restantes < 0: return f"Atrasado em {-dias_restantes}d", "#EF5350"
         elif dias_restantes == 0: return "SLA Vence Hoje!", "#FFA726"
         else: return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
 
