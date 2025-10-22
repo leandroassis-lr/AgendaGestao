@@ -172,7 +172,7 @@ def tela_projetos():
         )
     st.divider()
     
-    items_per_page = 30
+    items_per_page = 10
     if 'page_number' not in st.session_state:
         st.session_state.page_number = 0
     
@@ -392,4 +392,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
