@@ -117,16 +117,18 @@ def tela_projetos():
     
     df = utils.carregar_projetos_db()
     
-    # --- INÍCIO DO DEBUG ---
-    st.warning("VISUALIZANDO DADOS CRUS DO BANCO (DEBUG)")
-    # Vamos verificar se o DataFrame não está vazio antes de tentar acessá-lo
-    if not df.empty: 
-        st.dataframe(df[['ID', 'Agendamento', 'Projeto']])
-    else:
-        st.info("O DataFrame está vazio, nada para debugar.")
-    # --- FIM DO DEBUG ---
+    # REMOVA O DEBUG ANTIGO DAQUI
     
     df_sla = utils.carregar_config_db("sla") 
+    
+    # --- NOVO DEBUG DO SLA ---
+    st.info("VISUALIZANDO REGRAS DE SLA CARREGADAS (DEBUG)")
+    if not df_sla.empty:
+        st.dataframe(df_sla)
+    else:
+        st.error("DEBUG: NENHUMA REGRA DE SLA FOI CARREGADA. (A configuração 'sla' está vazia)")
+    # --- FIM DO NOVO DEBUG ---
+
     df_etapas_config = utils.carregar_config_db("etapas_evolucao") 
     
     if df.empty:
@@ -390,6 +392,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
