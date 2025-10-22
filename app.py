@@ -116,16 +116,22 @@ def tela_projetos():
     st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True)
     
     df = utils.carregar_projetos_db()
-        
-    df_sla = utils.carregar_config_db("sla") 
     
+    # --- LIMPEZA: Remova qualquer código de DEBUG (st.warning, st.info) que estava aqui ---
+    
+    df_sla = utils.carregar_config_db("sla") 
     df_etapas_config = utils.carregar_config_db("etapas_evolucao") 
     
     if df.empty:
         st.info("Nenhum projeto cadastrado ainda.")
         return
 
-   df['Agendamento_str'] = df['Agendamento'].dt.strftime("%d/%m/%y").fillna('N/A')
+    # --- CORREÇÃO DA DATA N/A ---
+    # Primeiro, converte para datetime (caso não esteja) e força erros para NaT
+    df['Agendamento'] = pd.to_datetime(df['Agendamento'], errors='coerce')
+    # Agora, formata datas válidas e preenche as inválidas/nulas (NaT) com 'N/A'
+    df['Agendamento_str'] = df['Agendamento'].dt.strftime("%d/%m/%y").fillna('N/A')
+    # --- FIM DA CORREÇÃO ---
 
     st.markdown("#### 🔍 Filtros e Busca")
     termo_busca = st.text_input("Buscar", key="termo_busca", placeholder="Digite um termo para buscar...")
@@ -150,7 +156,6 @@ def tela_projetos():
         mask_busca = df_filtrado.apply(lambda row: row.astype(str).str.lower().str.contains(termo, na=False).any(), axis=1)
         df_filtrado = df_filtrado[mask_busca]
 
-    # --- NOVO: Botão de Exportação ---
     st.divider()
     col_info_export, col_export_btn = st.columns([4, 1.2])
     total_items = len(df_filtrado)
@@ -167,8 +172,7 @@ def tela_projetos():
         )
     st.divider()
     
-    # --- LÓGICA DE PAGINAÇÃO ---
-    items_per_page = 30
+    items_per_page = 10
     if 'page_number' not in st.session_state:
         st.session_state.page_number = 0
     
@@ -206,7 +210,8 @@ def tela_projetos():
         st.markdown("<div class='project-card'>", unsafe_allow_html=True)
         col_info_card, col_analista_card, col_agencia_card, col_status_card = st.columns([3, 2, 2, 1.5])
         with col_info_card:
-            st.markdown(f"<h6>📅 {row.get('Agendamento_str')}</h6>", unsafe_allow_html=True)
+            # AQUI USAMOS A COLUNA 'Agendamento_str' CORRIGIDA
+            st.markdown(f"<h6>📅 {row.get('Agendamento_str')}</h6>", unsafe_allow_html=True) 
             st.markdown(f"<h5 style='margin:2px 0'>{projeto_text.upper()}</h5>", unsafe_allow_html=True)
             
         with col_analista_card:
@@ -256,7 +261,8 @@ def tela_projetos():
                     abertura_default = _to_date_safe(row.get('Data de Abertura'))
                     nova_data_abertura = st.date_input("Data Abertura", value=abertura_default, key=f"abertura_{project_id}", format="DD/MM/YYYY")
                 with c3:
-                    agendamento_default = _to_date_safe(row.get('Agendamento'))
+                    # AQUI USAMOS A COLUNA 'Agendamento' JÁ CONVERTIDA
+                    agendamento_default = _to_date_safe(row.get('Agendamento')) 
                     novo_agendamento = st.date_input("Agendamento", value=agendamento_default, key=f"agend_{project_id}", format="DD/MM/YYYY")
                 with c4:
                     finalizacao_default = _to_date_safe(row.get('Data de Finalização'))
@@ -349,7 +355,6 @@ def tela_projetos():
             if st.button("Próxima ➡️", use_container_width=True, disabled=(st.session_state.page_number >= total_pages - 1)):
                 st.session_state.page_number += 1
                 st.rerun()
-
 # ----------------- CONTROLE PRINCIPAL -----------------
 def main():
     if "logado" not in st.session_state: st.session_state.logado = False
@@ -364,6 +369,11 @@ def main():
         return
 
     st.sidebar.title(f"Bem-vindo(a), {st.session_state.get('usuario', 'Visitante')}! 📋")
+    
+    # --- CORREÇÃO: DATA DE HOJE NA SIDEBAR ---
+    st.sidebar.info(f"Hoje é: {datetime.now().strftime('%d/%m/%Y')}")
+    # --- FIM DA CORREÇÃO ---
+    
     st.sidebar.divider()
     st.sidebar.title("Ações")
     if st.sidebar.button("➕ Novo Projeto", use_container_width=True):
@@ -382,10 +392,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
