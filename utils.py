@@ -93,7 +93,12 @@ def carregar_projetos_db():
             'projeto': 'Projeto', 'status': 'Status', 'agendamento': 'Agendamento',
             'demanda': 'Demanda', 'analista': 'Analista', 'gestor': 'Gestor'
         }
-        return df.rename(columns=rename_map)
+       df = df.rename(columns=rename_map)
+        if 'Agendamento' in df.columns:
+            df['Agendamento_str'] = pd.to_datetime(df['Agendamento'], errors='coerce').dt.strftime('%d/%m/%Y')
+            df['Agendamento_str'] = df['Agendamento_str'].fillna("N/A")
+
+        return df
     except Exception as e:
         st.error(f"Erro ao carregar projetos: {e}")
         return pd.DataFrame()
@@ -111,7 +116,12 @@ def carregar_projetos_sem_agendamento_db():
             'projeto': 'Projeto', 'status': 'Status', 'agendamento': 'Agendamento',
             'demanda': 'Demanda', 'analista': 'Analista', 'gestor': 'Gestor'
         }
-        return df.rename(columns=rename_map)
+        df = df.rename(columns=rename_map)
+        if 'Agendamento' in df.columns:
+            df['Agendamento_str'] = pd.to_datetime(df['Agendamento'], errors='coerce').dt.strftime('%d/%m/%Y')
+            df['Agendamento_str'] = df['Agendamento_str'].fillna("N/A")
+
+        return df
     except Exception as e:
         st.error(f"Erro ao carregar projetos do backlog: {e}")
         return pd.DataFrame()
@@ -359,4 +369,5 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
 
