@@ -342,11 +342,7 @@ def calcular_sla(projeto_row, df_sla):
         # CORREÇÃO: Aplica a mesma lógica de maiúsculas ao fallback
         rule = df_sla[(df_sla["Nome do Projeto"].astype(str).str.upper() == projeto_nome) & (df_sla["Demanda"].astype(str).isin(['', 'nan', 'None']))]
     if rule.empty:
-   
-    try:
-        prazo_dias = int(rule.iloc[0]["Prazo (dias)"])
-    except (ValueError, TypeError):
-        return "SLA: Inválido", "red"
+           return "SLA: Inválido", "red"
 
     start_date = data_agendamento.date()
     if pd.notna(data_finalizacao):
@@ -359,5 +355,6 @@ def calcular_sla(projeto_row, df_sla):
         if dias_restantes < 0: return f"Atrasado em {-dias_restantes}d", "#EF5350"
         elif dias_restantes == 0: return "SLA Vence Hoje!", "#FFA726"
         else: return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
 
 
