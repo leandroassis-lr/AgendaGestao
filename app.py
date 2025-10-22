@@ -369,11 +369,7 @@ def main():
         return
 
     st.sidebar.title(f"Bem-vindo(a), {st.session_state.get('usuario', 'Visitante')}! 📋")
-    
-    # --- CORREÇÃO: DATA DE HOJE NA SIDEBAR ---
-    st.sidebar.info(f"Hoje é: {datetime.now().strftime('%d/%m/%Y')}")
-    # --- FIM DA CORREÇÃO ---
-    
+     
     st.sidebar.divider()
     st.sidebar.title("Ações")
     if st.sidebar.button("➕ Novo Projeto", use_container_width=True):
@@ -392,5 +388,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
