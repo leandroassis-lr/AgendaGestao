@@ -114,14 +114,10 @@ def tela_cadastro_projeto():
 
 def tela_projetos():
     st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True)
-    
-    df = utils.carregar_projetos_db()
-    
-    # --- INÍCIO DO DEBUG ---
-    st.warning("VISUALIZANDO DADOS CRUS DO BANCO (DEBUG)")
+        df = utils.carregar_projetos_db()
+        st.warning("VISUALIZANDO DADOS CRUS DO BANCO (DEBUG)")
     st.dataframe(df[['ID', 'Agendamento', 'Projeto']])
-    # --- FIM DO DEBUG ---
-    
+       
     df_sla = utils.carregar_config_db("sla") 
     df_etapas_config = utils.carregar_config_db("etapas_evolucao") 
     
@@ -386,4 +382,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
