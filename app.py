@@ -116,26 +116,16 @@ def tela_projetos():
     st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True)
     
     df = utils.carregar_projetos_db()
-    
-    # REMOVA O DEBUG ANTIGO DAQUI
-    
+        
     df_sla = utils.carregar_config_db("sla") 
     
-    # --- NOVO DEBUG DO SLA ---
-    st.info("VISUALIZANDO REGRAS DE SLA CARREGADAS (DEBUG)")
-    if not df_sla.empty:
-        st.dataframe(df_sla)
-    else:
-        st.error("DEBUG: NENHUMA REGRA DE SLA FOI CARREGADA. (A configuração 'sla' está vazia)")
-    # --- FIM DO NOVO DEBUG ---
-
     df_etapas_config = utils.carregar_config_db("etapas_evolucao") 
     
     if df.empty:
         st.info("Nenhum projeto cadastrado ainda.")
         return
 
-    df['Agendamento_str'] = pd.to_datetime(df['Agendamento'], errors='coerce').dt.strftime("%d/%m/%y").fillna('N/A')
+   df['Agendamento_str'] = df['Agendamento'].dt.strftime("%d/%m/%y").fillna('N/A')
 
     st.markdown("#### 🔍 Filtros e Busca")
     termo_busca = st.text_input("Buscar", key="termo_busca", placeholder="Digite um termo para buscar...")
@@ -178,7 +168,7 @@ def tela_projetos():
     st.divider()
     
     # --- LÓGICA DE PAGINAÇÃO ---
-    items_per_page = 10
+    items_per_page = 30
     if 'page_number' not in st.session_state:
         st.session_state.page_number = 0
     
@@ -392,6 +382,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
