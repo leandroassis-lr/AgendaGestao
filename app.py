@@ -113,19 +113,28 @@ def tela_cadastro_projeto():
             st.rerun()
 
 def tela_projetos():
-    st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True) 
-    df = utils.carregar_projetos_db()
-        st.warning("VISUALIZANDO DADOS CRUS DO BANCO (DEBUG)")
-    st.dataframe(df[['ID', 'Agendamento', 'Projeto']])
-       
+    st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True) 
+    df = utils.carregar_projetos_db()
+    
+    # --- INÍCIO DO DEBUG ---
+    st.warning("VISUALIZANDO DADOS CRUS DO BANCO (DEBUG)")
+    # Vamos verificar se o DataFrame não está vazio antes de tentar acessá-lo
+    if not df.empty: 
+        st.dataframe(df[['ID', 'Agendamento', 'Projeto']])
+    else:
+        st.info("O DataFrame está vazio, nada para debugar.")
+    # --- FIM DO DEBUG ---
+    
     df_sla = utils.carregar_config_db("sla") 
     df_etapas_config = utils.carregar_config_db("etapas_evolucao") 
-    
-    if df.empty:
-        st.info("Nenhum projeto cadastrado ainda.")
-        return
+    
+    if df.empty:
+        st.info("Nenhum projeto cadastrado ainda.")
+        return
 
-    df['Agendamento_str'] = pd.to_datetime(df['Agendamento'], errors='coerce').dt.strftime("%d/%m/%y").fillna('N/A')
+    df['Agendamento_str'] = pd.to_datetime(df['Agendamento'], errors='coerce').dt.strftime("%d/%m/%y").fillna('N/A')
+    
+    # ... (o resto do seu código continua)
 
     st.markdown("#### 🔍 Filtros e Busca")
     termo_busca = st.text_input("Buscar", key="termo_busca", placeholder="Digite um termo para buscar...")
@@ -382,6 +391,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
