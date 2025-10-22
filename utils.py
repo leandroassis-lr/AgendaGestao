@@ -291,26 +291,56 @@ def get_status_color(status):
     elif 'cancelad' in s: return "#EF5350"
     elif 'pausad' in s: return "#FFEE58"
     else: return "#64B5F6" # Em Andamento
+# (Substitua sua função calcular_sla inteira por esta)
 
 def calcular_sla(projeto_row, df_sla):
     data_agendamento = pd.to_datetime(projeto_row.get("Agendamento"), errors='coerce')
     data_finalizacao = pd.to_datetime(projeto_row.get("Data de Finalização"), errors='coerce')
-    projeto_nome = projeto_row.get("Projeto", "")
+    
+    # CORREÇÃO 1: Converte o nome do projeto para maiúsculas para comparar
+    projeto_nome = str(projeto_row.get("Projeto", "")).upper()
     demanda = projeto_row.get("Demanda", "")
+    
     if pd.isna(data_agendamento):
         return "SLA: N/D (sem agendamento)", "gray"
+        
     if df_sla.empty:
         return "SLA: N/A (Regras não carregadas)", "gray"
-    rule = df_sla[(df_sla["Nome do Projeto"] == projeto_nome) & (df_sla["Demanda"] == demanda)]
+
+    # CORREÇÃO 2: Converte a coluna de regras para maiúsculas antes de comparar
+    # Criamos uma cópia para não alterar o df_sla original em cache
+    df_sla_upper = df_sla.copy()
+    df_sla_upper["Nome do Projeto"] = df_sla_upper["Nome do Projeto"].astype(str).str.upper()
+
+    rule = df_sla_upper[(df_sla_upper["Nome do Projeto"] == projeto_nome) & (df_sla_upper["Demanda"] == demanda)]
+    
     if rule.empty:
-        rule = df_sla[(df_sla["Nome do Projeto"] == projeto_nome) & (df_sla["Demanda"].astype(str).isin(['', 'nan']))]
+        # Aplica a mesma lógica de maiúsculas ao fallback (quando Demanda está vazia)
+        rule = df_sla_upper[(df_sla_upper["Nome do Projeto"] == projeto_nome) & (df_sla_upper["Demanda"].astype(str).isin(['', 'nan', 'None']))]
+        
     if rule.empty:
-        return "SLA: N/A", "gray"
+        return "SLA: N/A (Regra não encontrada)", "gray"
+        
     try:
-        prazo_dias = int(rule.iloc[0]["Prazo (dias)"])
-    except (ValueError, TypeError):
+        # CORREÇÃO 3: Lida com a coluna "Prazo (dias)" quebrada
+        prazo_raw = rule.iloc[0]["Prazo (dias)"]
+        
+        # Se o valor for nulo (None, nan), procura a última coluna do dataframe
+        # (Baseado no seu debug 'image_18b923.png', onde os números estavam na última coluna)
+        if pd.isna(prazo_raw):
+            prazo_raw = rule.iloc[0, -1] 
+            
+            # Se ainda assim for nulo, desiste
+            if pd.isna(prazo_raw):
+                return "SLA: Prazo N/D", "gray"
+                
+        prazo_dias = int(prazo_raw)
+        
+    except (ValueError, TypeError, IndexError):
         return "SLA: Inválido", "red"
+        
     start_date = data_agendamento.date()
+    
     if pd.notna(data_finalizacao):
         end_date = data_finalizacao.date()
         dias_corridos = (end_date - start_date).days
@@ -329,32 +359,4 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
-    
-    projeto_nome = str(projeto_row.get("Projeto", "")).upper() 
-    demanda = projeto_row.get("Demanda", "")
-    if pd.isna(data_agendamento):
-        return "SLA: N/D (sem agendamento)", "gray"
-    if df_sla.empty:
-        return "SLA: N/A (Regras não carregadas)", "gray"
-# CORREÇÃO: Converte a coluna de regras para maiúsculas antes de comparar
-    rule = df_sla[(df_sla["Nome do Projeto"].astype(str).str.upper() == projeto_nome) & (df_sla["Demanda"] == demanda)]
-    if rule.empty:
-        # CORREÇÃO: Aplica a mesma lógica de maiúsculas ao fallback
-        rule = df_sla[(df_sla["Nome do Projeto"].astype(str).str.upper() == projeto_nome) & (df_sla["Demanda"].astype(str).isin(['', 'nan', 'None']))]
-    if rule.empty:
-           return "SLA: Inválido", "red"
-
-    start_date = data_agendamento.date()
-    if pd.notna(data_finalizacao):
-        dias_corridos = (data_finalizacao.date() - start_date).days
-        if dias_corridos <= prazo_dias: return f"Finalizado no Prazo ({dias_corridos}d)", "#66BB6A"
-        else: return f"Finalizado com Atraso ({dias_corridos - prazo_dias}d)", "#EF5350"
-    else:
-        dias_corridos = (date.today() - start_date).days
-        dias_restantes = prazo_dias - dias_corridos
-        if dias_restantes < 0: return f"Atrasado em {-dias_restantes}d", "#EF5350"
-        elif dias_restantes == 0: return "SLA Vence Hoje!", "#FFA726"
-        else: return f"SLA: {dias_restantes}d restantes", "#66BB6F"
-
-
 
