@@ -113,8 +113,8 @@ def tela_cadastro_projeto():
             st.rerun()
 
 def tela_projetos():
-    st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True)
-        df = utils.carregar_projetos_db()
+    st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True) 
+    df = utils.carregar_projetos_db()
         st.warning("VISUALIZANDO DADOS CRUS DO BANCO (DEBUG)")
     st.dataframe(df[['ID', 'Agendamento', 'Projeto']])
        
@@ -382,5 +382,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
