@@ -295,8 +295,40 @@ def get_status_color(status):
 def calcular_sla(projeto_row, df_sla):
     data_agendamento = pd.to_datetime(projeto_row.get("Agendamento"), errors='coerce')
     data_finalizacao = pd.to_datetime(projeto_row.get("Data de Finalização"), errors='coerce')
-    if pd.isna(data_agendamento): return "SLA: N/D", "gray"
-    if df_sla.empty or 'Nome do Projeto' not in df_sla.columns: return "SLA: N/A", "gray"
+    projeto_nome = projeto_row.get("Projeto", "")
+    demanda = projeto_row.get("Demanda", "")
+    if pd.isna(data_agendamento):
+        return "SLA: N/D (sem agendamento)", "gray"
+    if df_sla.empty:
+        return "SLA: N/A (Regras não carregadas)", "gray"
+    rule = df_sla[(df_sla["Nome do Projeto"] == projeto_nome) & (df_sla["Demanda"] == demanda)]
+    if rule.empty:
+        rule = df_sla[(df_sla["Nome do Projeto"] == projeto_nome) & (df_sla["Demanda"].astype(str).isin(['', 'nan']))]
+    if rule.empty:
+        return "SLA: N/A", "gray"
+    try:
+        prazo_dias = int(rule.iloc[0]["Prazo (dias)"])
+    except (ValueError, TypeError):
+        return "SLA: Inválido", "red"
+    start_date = data_agendamento.date()
+    if pd.notna(data_finalizacao):
+        end_date = data_finalizacao.date()
+        dias_corridos = (end_date - start_date).days
+        if dias_corridos <= prazo_dias:
+            return f"Finalizado no Prazo ({dias_corridos}d)", "#66BB6A"
+        else:
+            atraso = dias_corridos - prazo_dias
+            return f"Finalizado com Atraso ({atraso}d)", "#EF5350"
+    else:
+        end_date = date.today()
+        dias_corridos = (end_date - start_date).days
+        dias_restantes = prazo_dias - dias_corridos
+        if dias_restantes < 0:
+            return f"Atrasado em {-dias_restantes}d", "#EF5350"
+        elif dias_restantes == 0:
+            return "SLA Vence Hoje!", "#FFA726"
+        else:
+            return f"SLA: {dias_restantes}d restantes", "#66BB6F"
     
     projeto_nome = projeto_row.get("Projeto", "")
     demanda = projeto_row.get("Demanda", "")
@@ -321,3 +353,4 @@ def calcular_sla(projeto_row, df_sla):
         if dias_restantes < 0: return f"Atrasado em {-dias_restantes}d", "#EF5350"
         elif dias_restantes == 0: return "SLA Vence Hoje!", "#FFA726"
         else: return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
