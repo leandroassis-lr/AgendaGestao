@@ -50,7 +50,7 @@ def tela_login():
     col1, col2 = st.columns([1, 1]) 
 
     # --- 3. Coluna da Esquerda (Login) ---
-          
+       with col1:   
         if logo_pequeno:
             # width=300 deixa ele pequeno
             st.image(logo_pequeno, width=300) 
@@ -437,6 +437,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
