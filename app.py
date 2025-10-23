@@ -440,7 +440,7 @@ def main():
         tela_cadastro_projeto()
     else:
         tela_projetos() # <- Mostra sua lista de cards
-        
-    if __name__ == "__main__":
-    main()
 
+
+if __name__ == "__main__":
+    main()
