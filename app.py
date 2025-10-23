@@ -32,13 +32,13 @@ utils.load_css() # Carrega o CSS do arquivo utils
 def tela_login():
     
     # --- 1. Carregar Imagens ---
- 
+    # (Certifique-se que as imagens estão na mesma pasta do app.py)
     try:
         logo_image = Image.open("Foto 2.jpg") # O seu logo/imagem
     except Exception as e:
         st.error(f"Não foi possível carregar 'Foto 2.jpg'. Verifique se o arquivo está na pasta.")
         logo_image = None
-
+    
     # --- 2. Layout da Página ---
     col1, col2 = st.columns([1, 1]) 
 
@@ -49,7 +49,7 @@ def tela_login():
         
         # Título (como no exemplo 'btime', mas sem o logo pequeno)
         st.title("Seja bem vindo a plataforma de gestão de projetos")
-        st.subheader("Acesse sua conta")
+        st.subheader("Acesse sua conta para continuar")
         st.write("") # Espaçamento
 
         with st.form("form_login"):
@@ -76,14 +76,13 @@ def tela_login():
         st.markdown('<div class="login-right-container">', unsafe_allow_html=True)
         
         if logo_image:
-            # CORREÇÃO DO AVISO ANTERIOR:
             st.image(logo_image, use_container_width=True) 
         
         # Seu texto de boas-vindas
-        st.markdown("<h2> </h2>", unsafe_allow_html=True)
+        st.markdown("<h2></h2>", unsafe_allow_html=True)
         
         st.markdown('</div>', unsafe_allow_html=True) # Fim do container
-
+        
 def tela_cadastro_usuario():
     st.subheader("Cadastrar Novo Usuário")
     with st.form("form_cadastro_usuario"):
@@ -152,12 +151,14 @@ def tela_cadastro_projeto():
             st.session_state["tela_cadastro_proj"] = False
             st.rerun()
 
+# (Substitua sua função tela_projetos INTEIRA por esta)
+
 def tela_projetos():
     st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True)
     
     df = utils.carregar_projetos_db()
     
-    # --- LIMPEZA: Remova qualquer código de DEBUG (st.warning, st.info) que estava aqui ---
+    # Limpamos qualquer código de debug que estava aqui
     
     df_sla = utils.carregar_config_db("sla") 
     df_etapas_config = utils.carregar_config_db("etapas_evolucao") 
@@ -167,9 +168,7 @@ def tela_projetos():
         return
 
     # --- CORREÇÃO DA DATA N/A ---
-    # Primeiro, converte para datetime (caso não esteja) e força erros para NaT
     df['Agendamento'] = pd.to_datetime(df['Agendamento'], errors='coerce')
-    # Agora, formata datas válidas e preenche as inválidas/nulas (NaT) com 'N/A'
     df['Agendamento_str'] = df['Agendamento'].dt.strftime("%d/%m/%y").fillna('N/A')
     # --- FIM DA CORREÇÃO ---
 
@@ -250,7 +249,6 @@ def tela_projetos():
         st.markdown("<div class='project-card'>", unsafe_allow_html=True)
         col_info_card, col_analista_card, col_agencia_card, col_status_card = st.columns([3, 2, 2, 1.5])
         with col_info_card:
-            # AQUI USAMOS A COLUNA 'Agendamento_str' CORRIGIDA
             st.markdown(f"<h6>📅 {row.get('Agendamento_str')}</h6>", unsafe_allow_html=True) 
             st.markdown(f"<h5 style='margin:2px 0'>{projeto_text.upper()}</h5>", unsafe_allow_html=True)
             
@@ -301,7 +299,6 @@ def tela_projetos():
                     abertura_default = _to_date_safe(row.get('Data de Abertura'))
                     nova_data_abertura = st.date_input("Data Abertura", value=abertura_default, key=f"abertura_{project_id}", format="DD/MM/YYYY")
                 with c3:
-                    # AQUI USAMOS A COLUNA 'Agendamento' JÁ CONVERTIDA
                     agendamento_default = _to_date_safe(row.get('Agendamento')) 
                     novo_agendamento = st.date_input("Agendamento", value=agendamento_default, key=f"agend_{project_id}", format="DD/MM/YYYY")
                 with c4:
@@ -395,7 +392,10 @@ def tela_projetos():
             if st.button("Próxima ➡️", use_container_width=True, disabled=(st.session_state.page_number >= total_pages - 1)):
                 st.session_state.page_number += 1
                 st.rerun()
+                
 # ----------------- CONTROLE PRINCIPAL -----------------
+# (Substitua sua função main INTEIRA por esta)
+
 def main():
     if "logado" not in st.session_state: st.session_state.logado = False
     if "cadastro" not in st.session_state: st.session_state.cadastro = False
@@ -405,11 +405,16 @@ def main():
         if st.session_state.get("cadastro", False):
             tela_cadastro_usuario()
         else:
-            tela_login()
+            tela_login() # <- Chama a nova tela de login
         return
 
+    # --- Código que roda APENAS SE LOGADO ---
+    
     st.sidebar.title(f"Bem-vindo(a), {st.session_state.get('usuario', 'Visitante')}! 📋")
-     
+    
+    # Adiciona a data de hoje na sidebar
+    st.sidebar.info(f"Hoje é: {datetime.now().strftime('%d/%m/%Y')}")
+    
     st.sidebar.divider()
     st.sidebar.title("Ações")
     if st.sidebar.button("➕ Novo Projeto", use_container_width=True):
@@ -424,10 +429,11 @@ def main():
     if st.session_state.get("tela_cadastro_proj"):
         tela_cadastro_projeto()
     else:
-        tela_projetos()
+        tela_projetos() # <- Chama a tela de projetos (os cards)
 
 if __name__ == "__main__":
     main()
+
 
 
 
