@@ -49,8 +49,9 @@ def tela_login():
     # --- 2. Layout da Página ---
     col1, col2 = st.columns([1, 1]) 
 
-    # --- 3. Coluna da Esquerda (Login) ---
-       with col1:   
+   # --- 3. Coluna da Esquerda (Login) ---
+    with col1:
+        
         if logo_pequeno:
             # width=300 deixa ele pequeno
             st.image(logo_pequeno, width=300) 
@@ -79,7 +80,6 @@ def tela_login():
 # --- 4. Coluna da Direita (Branding) ---
     with col2:
                 
-        # --- IMAGEM PRINCIPAL (HEXÁGONOS) ---
         if imagem_principal:
             st.image(imagem_principal, use_container_width=True) 
                
@@ -437,6 +437,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
