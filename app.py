@@ -28,20 +28,16 @@ st.set_page_config(page_title="Projetos - GESTÃO", page_icon="📋", layout="wi
 utils.load_css() # Carrega o CSS do arquivo utils
 
 # ----------------- Telas da Página Principal -----------------
-# (Substitua sua função tela_login INTEIRA por esta)
 
 def tela_login():
     
     # --- 1. Carregar Imagens ---
-    # (Certifique-se que as imagens estão na mesma pasta do app.py)
+ 
     try:
         logo_image = Image.open("Foto 2.jpg") # O seu logo/imagem
     except Exception as e:
         st.error(f"Não foi possível carregar 'Foto 2.jpg'. Verifique se o arquivo está na pasta.")
         logo_image = None
-    
-    # Nota: Eu usei a Foto 2 (seu logo) como imagem principal.
-    # A Foto 3 (hexágonos) é redundante, então não a utilizei.
 
     # --- 2. Layout da Página ---
     col1, col2 = st.columns([1, 1]) 
@@ -432,6 +428,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
