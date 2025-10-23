@@ -58,7 +58,7 @@ def tela_login():
             # width=300 deixa ele pequeno
             st.image(logo_pequeno, width=300) 
         
-        st.title("Boas-vindas!")
+        st.title("SEJA BEM VINDO!")
         st.subheader("Acesse sua conta")
         st.write("") 
 
@@ -77,6 +77,16 @@ def tela_login():
             st.session_state.cadastro = True
             st.rerun()
             
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# --- 4. Coluna da Direita (Branding) ---
+    with col2:
+        st.markdown('<div class="login-right-container">', unsafe_allow_html=True)
+        
+        # --- IMAGEM PRINCIPAL (HEXÁGONOS) ---
+        if imagem_principal:
+            st.image(imagem_principal, use_container_width=True) 
+               
         st.markdown('</div>', unsafe_allow_html=True)
         
 def tela_cadastro_usuario():
@@ -431,4 +441,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
