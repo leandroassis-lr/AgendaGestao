@@ -81,8 +81,7 @@ def tela_login():
 
 # --- 4. Coluna da Direita (Branding) ---
     with col2:
-        st.markdown('<div class="login-right-container">', unsafe_allow_html=True)
-        
+                
         # --- IMAGEM PRINCIPAL (HEXÁGONOS) ---
         if imagem_principal:
             st.image(imagem_principal, use_container_width=True) 
@@ -441,5 +440,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
