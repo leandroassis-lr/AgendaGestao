@@ -322,7 +322,7 @@ def dataframe_to_excel_bytes(df):
 # --- Funções Utilitárias ---
 
 def load_css():
-    st.markdown("""<style>
+    st.markdown("""<style>
     .main-title { font-size: 3em; font-weight: bold; text-align: center; color: #1E88E5; } 
     .section-title-center { font-size: 2em; font-weight: bold; text-align: center; margin-bottom: 20px; } 
     .project-card { border: 1px solid #e0e0e0; border-radius: 10px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
@@ -456,4 +456,5 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
 
