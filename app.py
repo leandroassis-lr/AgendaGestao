@@ -55,8 +55,8 @@ def tela_login():
         
         # --- LOGO PEQUENO (como na btime) ---
         if logo_pequeno:
-            # width=100 deixa ele pequeno
-            st.image(logo_pequeno, width=100) 
+            # width=300 deixa ele pequeno
+            st.image(logo_pequeno, width=300) 
         
         st.title("Boas-vindas!")
         st.subheader("Acesse sua conta")
@@ -78,19 +78,6 @@ def tela_login():
             st.rerun()
             
         st.markdown('</div>', unsafe_allow_html=True)
-
-    # --- 4. Coluna da Direita (Branding) ---
-    with col2:
-        st.markdown('<div class="login-right-container">', unsafe_allow_html=True)
-        
-        # --- IMAGEM PRINCIPAL (HEXÁGONOS) ---
-        if imagem_principal:
-            st.image(imagem_principal, use_container_width=True) 
-        
-        # Seu texto de boas-vindas
-        st.markdown("<h2>Seja bem vindo a plataforma de gestão de projetos</h2>", unsafe_allow_html=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True)    
         
 def tela_cadastro_usuario():
     st.subheader("Cadastrar Novo Usuário")
@@ -444,3 +431,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
