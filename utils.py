@@ -320,16 +320,52 @@ def dataframe_to_excel_bytes(df):
 
 
 # --- Funções Utilitárias ---
-def load_css():
-    st.markdown("""
-        <style>
-        .main-title { font-size: 3em; font-weight: bold; text-align: center; color: #1E88E5; }
-        .section-title-center { font-size: 2em; font-weight: bold; text-align: center; margin-bottom: 20px; }
-        .project-card { border: 1px solid #e0e0e0; border-radius: 10px; padding: 15px;
-                        margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        </style>
-    """, unsafe_allow_html=True)
 
+def load_css():
+    st.markdown("""<style>
+    .main-title { font-size: 3em; font-weight: bold; text-align: center; color: #1E88E5; } 
+    .section-title-center { font-size: 2em; font-weight: bold; text-align: center; margin-bottom: 20px; } 
+    .project-card { border: 1px solid #e0e0e0; border-radius: 10px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+
+    /* --- NOVOS ESTILOS PARA O LOGIN --- */
+    
+    /* Coluna da Direita (Verde Escuro) */
+    .login-right-container {
+        background-color: #004D40; /* Seu verde escuro */
+        border-radius: 15px;
+        padding: 3rem 2rem;
+        color: white;
+        text-align: center;
+        min-height: 600px; /* Garante uma altura mínima */
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    .login-right-container img {
+        max-width: 100%;
+        border-radius: 10px;
+        margin-bottom: 1.5rem;
+    }
+
+    .login-right-container h2 {
+        font-weight: 600;
+        color: white;
+        font-size: 1.75em;
+    }
+    
+    /* Coluna da Esquerda (Formulário) */
+    .login-left-container {
+        padding: 3rem 2rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        min-height: 600px; /* Alinha com a altura da direita */
+    }
+
+    /* --- FIM DOS NOVOS ESTILOS --- */
+    </style>""", unsafe_allow_html=True)
 
 def autenticar_direto(email):
     df_users = carregar_usuarios_db()
@@ -420,3 +456,4 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
