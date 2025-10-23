@@ -31,16 +31,12 @@ utils.load_css() # Carrega o CSS do arquivo utils
 def tela_login():
     
     # --- 1. Carregar Imagens ---
-    # (Certifique-se que as imagens estão na mesma pasta do app.py)
-    try:
+     try:
         logo_image = Image.open("Foto 2.jpg") # O seu logo/imagem
     except Exception as e:
         st.error(f"Não foi possível carregar 'Foto 2.jpg'. Verifique se o arquivo está na pasta.")
         logo_image = None
     
-    # Nota: Eu usei a Foto 2 (seu logo) como imagem principal.
-    # A Foto 3 (hexágonos) é redundante, então não a utilizei.
-
     # --- 2. Layout da Página ---
     col1, col2 = st.columns([1, 1]) 
 
@@ -50,8 +46,8 @@ def tela_login():
         st.markdown('<div class="login-left-container">', unsafe_allow_html=True)
         
         # Título (como no exemplo 'btime', mas sem o logo pequeno)
-        st.title("Boas-vindas!")
-        st.subheader("Acesse sua conta para continuar")
+        st.title("Seja bem vindo a plataforma de gestão de projetos")
+        st.subheader("Acesse sua conta")
         st.write("") # Espaçamento
 
         with st.form("form_login"):
@@ -78,11 +74,8 @@ def tela_login():
         st.markdown('<div class="login-right-container">', unsafe_allow_html=True)
         
         if logo_image:
-            st.image(logo_image, use_column_width=True)
-        
-        # Seu texto de boas-vindas
-        st.markdown("<h2>Seja bem vindo a plataforma de gestão de projetos</h2>", unsafe_allow_html=True)
-        
+            st.image(logo_image, use_container_width=True)
+              
         st.markdown('</div>', unsafe_allow_html=True) # Fim do container
 
 def tela_cadastro_usuario():
@@ -429,6 +422,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
