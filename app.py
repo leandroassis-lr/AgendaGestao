@@ -32,31 +32,40 @@ utils.load_css() # Carrega o CSS do arquivo utils
 def tela_login():
     
     # --- 1. Carregar Imagens ---
-    # (Certifique-se que as imagens estão na mesma pasta do app.py)
     try:
-        logo_image = Image.open("Foto 2.jpg") # O seu logo/imagem
+        # Logo pequeno da coluna da esquerda
+        logo_pequeno = Image.open("Foto 2.jpg") 
     except Exception as e:
-        st.error(f"Não foi possível carregar 'Foto 2.jpg'. Verifique se o arquivo está na pasta.")
-        logo_image = None
-    
+        st.error(f"Não foi possível carregar 'Foto 2.jpg'.")
+        logo_pequeno = None
+        
+    try:
+        # Imagem grande da coluna da direita
+        imagem_principal = Image.open("Foto 3.jpg")
+    except Exception as e:
+        st.error(f"Não foi possível carregar 'Foto 3.jpg'.")
+        imagem_principal = None
+
     # --- 2. Layout da Página ---
     col1, col2 = st.columns([1, 1]) 
 
     # --- 3. Coluna da Esquerda (Login) ---
     with col1:
-        # Usamos o CSS para centralizar verticalmente
         st.markdown('<div class="login-left-container">', unsafe_allow_html=True)
         
-        # Título (como no exemplo 'btime', mas sem o logo pequeno)
-        st.title("Seja bem vindo a plataforma de gestão de projetos")
-        st.subheader("Acesse sua conta para continuar")
-        st.write("") # Espaçamento
+        # --- LOGO PEQUENO (como na btime) ---
+        if logo_pequeno:
+            # width=100 deixa ele pequeno
+            st.image(logo_pequeno, width=100) 
+        
+        st.title("Boas-vindas!")
+        st.subheader("Acesse sua conta")
+        st.write("") 
 
         with st.form("form_login"):
             email = st.text_input("Email (Opcional)", key="login_email")
             st.text_input("Senha (Desativada)", type="password", disabled=True)
             
-            # Botão de login destacado
             if st.form_submit_button("Conectar-se", use_container_width=True, type="primary"):
                 nome_usuario = "Visitante"
                 if email: nome_usuario = utils.autenticar_direto(email) or email
@@ -68,20 +77,20 @@ def tela_login():
             st.session_state.cadastro = True
             st.rerun()
             
-        st.markdown('</div>', unsafe_allow_html=True) # Fim do container
+        st.markdown('</div>', unsafe_allow_html=True)
 
     # --- 4. Coluna da Direita (Branding) ---
     with col2:
-        # Usamos o CSS para o fundo verde escuro
         st.markdown('<div class="login-right-container">', unsafe_allow_html=True)
         
-        if logo_image:
-            st.image(logo_image, use_container_width=True) 
+        # --- IMAGEM PRINCIPAL (HEXÁGONOS) ---
+        if imagem_principal:
+            st.image(imagem_principal, use_container_width=True) 
         
         # Seu texto de boas-vindas
-        st.markdown("<h2></h2>", unsafe_allow_html=True)
+        st.markdown("<h2>Seja bem vindo a plataforma de gestão de projetos</h2>", unsafe_allow_html=True)
         
-        st.markdown('</div>', unsafe_allow_html=True) # Fim do container
+        st.markdown('</div>', unsafe_allow_html=True)    
         
 def tela_cadastro_usuario():
     st.subheader("Cadastrar Novo Usuário")
@@ -394,25 +403,25 @@ def tela_projetos():
                 st.rerun()
                 
 # ----------------- CONTROLE PRINCIPAL -----------------
-# (Substitua sua função main INTEIRA por esta)
 
 def main():
     if "logado" not in st.session_state: st.session_state.logado = False
     if "cadastro" not in st.session_state: st.session_state.cadastro = False
     if "tela_cadastro_proj" not in st.session_state: st.session_state.tela_cadastro_proj = False
 
+    # --- LÓGICA PRINCIPAL ---
+    # SE NÃO ESTIVER LOGADO...
     if not st.session_state.get("logado", False):
         if st.session_state.get("cadastro", False):
             tela_cadastro_usuario()
         else:
-            tela_login() # <- Chama a nova tela de login
-        return
+            tela_login() # <- Mostra a nova tela de login (e NADA MAIS)
+        return # <- Para a execução aqui
 
-    # --- Código que roda APENAS SE LOGADO ---
+    # --- O CÓDIGO ABAIXO SÓ RODA SE ESTIVER LOGADO ---
     
     st.sidebar.title(f"Bem-vindo(a), {st.session_state.get('usuario', 'Visitante')}! 📋")
     
-    # Adiciona a data de hoje na sidebar
     st.sidebar.info(f"Hoje é: {datetime.now().strftime('%d/%m/%Y')}")
     
     st.sidebar.divider()
@@ -426,18 +435,8 @@ def main():
         st.session_state.clear()
         st.rerun()
     
+    # Controla a tela principal (se logado)
     if st.session_state.get("tela_cadastro_proj"):
         tela_cadastro_projeto()
     else:
-        tela_projetos() # <- Chama a tela de projetos (os cards)
-
-if __name__ == "__main__":
-    main()
-
-
-
-
-
-
-
-
+        tela_projetos() # <- Mostra sua lista de cards
