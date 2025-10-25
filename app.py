@@ -28,12 +28,12 @@ def _to_date_safe(val):
 
 # ----------------- Configuração da Página e CSS -----------------
 st.set_page_config(page_title="Projetos - GESTÃO", page_icon="📋", layout="wide")
+utils.load_css() # Carrega o CSS do arquivo utils
 
-utils.load_css() 
 
 # ----------------- Função: Tela de Login -----------------
 def tela_login():
-   
+    # --- CSS exclusivo da tela de login ---
     st.markdown("""
     <style>
     [data-testid="stSidebar"] {
@@ -128,6 +128,7 @@ def tela_login():
             st.image(imagem_principal, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
+
 # ----------------- Função: Tela de Cadastro -----------------
 def tela_cadastro_usuario():
     st.subheader("Cadastrar Novo Usuário")
@@ -171,6 +172,35 @@ def tela_boas_vindas():
     ]
     msg = random.choice(mensagens)
 
+    st.markdown("""
+    <style>
+    [data-testid="stSidebar"], [data-testid="stToolbar"] {
+        display: none;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    .welcome-container img {
+        width: 200px;
+        filter: brightness(1.3);
+        margin-bottom: 20px;
+    }
+
+    .welcome-container h1 {
+        font-size: 2.2rem;
+        margin-bottom: 10px;
+    }
+
+    .welcome-container p {
+        font-size: 1.2rem;
+        opacity: 0.9;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     st.markdown(f"""
     <div class="welcome-container">
         <img src="Foto 2.jpg" alt="Logo Allarmi">
@@ -184,6 +214,7 @@ def tela_boas_vindas():
     st.session_state.tela_principal = True
     st.rerun()
 
+
 # ----------------- Controle de Navegação -----------------
 if "logado" not in st.session_state:
     st.session_state.logado = False
@@ -194,6 +225,14 @@ if "boas_vindas" not in st.session_state:
 if "tela_principal" not in st.session_state:
     st.session_state.tela_principal = False
 
+if not st.session_state.logado:
+    tela_login()
+elif st.session_state.cadastro:
+    tela_cadastro_usuario()
+elif st.session_state.boas_vindas:
+    tela_boas_vindas()
+elif st.session_state.tela_principal:
+    st.success("")
 else:
     st.session_state.boas_vindas = True
     st.rerun()
@@ -521,6 +560,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
