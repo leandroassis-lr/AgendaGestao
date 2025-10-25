@@ -86,6 +86,21 @@ def tela_login():
         color: #1b5e20 !important;
     }
 
+    /* --- CORREÇÃO DO LOGO "APAGADO" E FUNDO BRANCO --- */
+    /* Este CSS é aplicado SOMENTE à imagem dentro de login-logo-container */
+    .login-logo-container img {
+        max-width: 50% !important; /* Reduz para 50% da largura do container */
+        display: block;
+        margin: auto; /* Centraliza a imagem */
+        border-radius: 50%; /* Faz a imagem ter forma circular */
+        /* Garante que o conteúdo fora do círculo seja cortado */
+        -webkit-mask-image: -webkit-radial-gradient(white, black); 
+        mask-image: radial-gradient(white, black);
+        /* Ajuste fino para o fundo escuro da imagem, se ainda houver */
+        filter: brightness(1.2) contrast(1.1); 
+        /* Adiciona um pequeno sombreamento para destacar */
+        box-shadow: 0 0 15px rgba(0,0,0,0.3);
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -124,11 +139,12 @@ def tela_login():
 
     # --- Coluna direita (Imagem) ---
     with col2:
-        
         st.markdown('<div class="login-logo-container">', unsafe_allow_html=True)
         if imagem_principal:
-            st.image(imagem_principal, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True) 
+            # st.image(imagem_principal, use_container_width=True) - Usar use_container_width e max-width no CSS
+            # Removendo use_container_width aqui e deixando o controle de tamanho APENAS no CSS
+            st.image(imagem_principal) 
+        st.markdown('</div>', unsafe_allow_html=True) # Fechamento correto da div
 
 
 # ----------------- Função: Tela de Cadastro -----------------
@@ -174,26 +190,28 @@ def tela_boas_vindas():
     ]
     msg = random.choice(mensagens)
 
+    # --- IMAGEM PRINCIPAL (CARREGADA AQUI TAMBÉM PARA A TELA DE BOAS-VINDAS) ---
+    try:
+        imagem_principal = Image.open("Foto 2.jpg")
+    except Exception as e:
+        st.error("Não foi possível carregar 'Foto 2.jpg' para a tela de boas-vindas.")
+        imagem_principal = None
+
     st.markdown("""
     <style>
     /* Esconde a sidebar e a barra de ferramentas SÓ nesta tela */
     [data-testid="stSidebar"], [data-testid="stToolbar"] {
         display: none;
     }
-
-    /* --- CORREÇÃO DA COR DE FUNDO --- */
-    /* Removemos o seletor [data-testid="stAppViewContainer"] daqui.
-     Isso faz a tela de boas-vindas usar o fundo padrão (branco).
-    */
     
-    .welcome-screen-container { /* Renomeei para evitar conflito */
+    .welcome-screen-container { 
         display: flex;
+        flex-direction: column; /* Para empilhar imagem e texto */
         align-items: center;
         justify-content: center;
         height: 100vh;
         text-align: center;
         animation: fadeIn 1s ease-in-out;
-        /* Garante que o texto fique escuro no fundo branco */
         color: #333; 
     }
 
@@ -202,37 +220,36 @@ def tela_boas_vindas():
         to { opacity: 1; }
     }
 
-    .welcome-screen-container img {
-        width: 200px;
-        /* A 'Foto 2.jpg' original tem fundo escuro. 
-         Não precisamos de filtros quando ela está no fundo branco.
-        */
-        margin-bottom: 20px;
-    }
+    /* Removido o CSS para .welcome-screen-container img, 
+       pois st.image cuida disso agora. 
+       Se precisar estilizar a imagem de st.image, precisará de CSS mais avançado 
+       ou usar o parâmetro 'width' diretamente no st.image.
+    */
 
-    /* Garante que o texto seja escuro (o padrão). */
     .welcome-screen-container h1 {
         font-size: 2.2rem;
         margin-bottom: 10px;
-        color: #333; /* Garante a cor escura */
+        color: #333; 
     }
 
     .welcome-screen-container p {
         font-size: 1.2rem;
         opacity: 0.9;
-        color: #333; /* Garante a cor escura */
+        color: #333; 
     }
     </style>
     """, unsafe_allow_html=True)
 
+    st.markdown("""<div class="welcome-screen-container">""", unsafe_allow_html=True)
+    
+    if imagem_principal:
+        # Usamos st.image aqui para garantir que a imagem seja carregada corretamente
+        st.image(imagem_principal, width=200) # Ajuste o width conforme necessário
+    
     st.markdown(f"""
-    <div class="welcome-screen-container">
-        <div>
-            <img src="Foto 2.jpg" alt="Foto 2.jpg">
             <h1>Seja bem-vindo, {st.session_state.usuario} 👋</h1>
             <p>{msg}</p>
         </div>
-    </div>
     """, unsafe_allow_html=True)
 
     time.sleep(5)
@@ -293,10 +310,8 @@ def tela_projetos():
         st.info("Nenhum projeto cadastrado ainda.")
         return
 
-    # --- CORREÇÃO DA DATA N/A (FEITA ANTERIORMENTE) ---
     df['Agendamento'] = pd.to_datetime(df['Agendamento'], errors='coerce')
     df['Agendamento_str'] = df['Agendamento'].dt.strftime("%d/%m/%y").fillna('N/A')
-    # --- FIM DA CORREÇÃO ---
 
     st.markdown("#### 🔍 Filtros e Busca")
     termo_busca = st.text_input("Buscar", key="termo_busca", placeholder="Digite um termo para buscar...")
@@ -574,5 +589,4 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
-
 
