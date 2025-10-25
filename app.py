@@ -41,27 +41,26 @@ def tela_login():
         display: none;
     }
 
-    /* Fundo dividido */
+    /* Fundo dividido para a tela de login */
     [data-testid="stAppViewContainer"] {
         background: linear-gradient(90deg, #e8f5e9 0%, #e8f5e9 50%, #1b5e20 50%, #1b5e20 100%);
     }
 
-    /* Ajusta container principal para ocupar altura */
+    /* Garante que o container principal ocupe toda a altura */
     section.main > div {
-        display: flex; /* Mantem o alinhamento central da section */
-        align-items: center;
+        display: flex; 
+        align-items: stretch; /* Garante que as colunas ocupem a altura total */
         justify-content: center;
         height: 100vh;
-        /* max-width: none; /* Garante que ocupe a largura toda */
-        /* padding: 0; */
+        /* Remover max-width e padding aqui se for globalmente aplicado */
     }
 
-    /* Colunas ocupando toda altura disponível */
+    /* --- CORREÇÃO: Centraliza verticalmente o conteúdo de CADA COLUNA --- */
     div[data-testid="stHorizontalBlock"] > div[data-testid^="stVerticalBlock"] {
-        height: 100vh; /* Força as colunas a terem altura total */
         display: flex;
-        flex-direction: column;
-        justify-content: center; /* Centraliza verticalmente o conteúdo DENTRO da coluna */
+        flex-direction: column; /* Empilha os itens na coluna */
+        justify-content: center; /* Centraliza o conteúdo verticalmente */
+        height: 100vh; /* Ocupa a altura total da viewport */
     }
 
     /* Estilo do formulário */
@@ -93,8 +92,7 @@ def tela_login():
     }
 
     /* Títulos na coluna do formulário (esquerda) */
-    /* Selecionando de forma mais específica para evitar conflitos */
-    div[data-testid="stHorizontalBlock"] > div:nth-child(1) h1, /* Primeira coluna (índice 1) */
+    div[data-testid="stHorizontalBlock"] > div:nth-child(1) h1, 
     div[data-testid="stHorizontalBlock"] > div:nth-child(1) h2,
     div[data-testid="stHorizontalBlock"] > div:nth-child(1) h3,
     div[data-testid="stHorizontalBlock"] > div:nth-child(1) .stSubheader {
@@ -102,22 +100,21 @@ def tela_login():
         text-align: center; /* Centraliza os textos */
     }
 
-    /* Container da imagem na coluna direita (para centralização) */
+    /* Container da imagem na coluna direita (para aplicar o CSS da imagem) */
     .login-logo-container {
         display: flex;
         align-items: center;
         justify-content: center;
-        height: 100%; /* Ocupa a altura da coluna */
+        height: 100%; /* Ocupa a altura da coluna para ajudar na centralização */
     }
 
     .login-logo-container img {
-        max-width: 70% !important; 
-        border-radius: 70%; 
+        max-width: 50% !important; 
+        border-radius: 50%; 
         -webkit-mask-image: -webkit-radial-gradient(white, black); 
         mask-image: radial-gradient(white, black);
         filter: brightness(1.2) contrast(1.1); 
         box-shadow: 0 0 15px rgba(0,0,0,0.3);
-        margin: auto; /* Centraliza o formulário horizontalmente na coluna */
     }
     </style>
     """, unsafe_allow_html=True)
@@ -130,11 +127,10 @@ def tela_login():
         imagem_principal = None
 
     # --- Layout (duas colunas) ---
-    col1, col2 = st.columns([1, 1], gap="small") # gap="small" para pouco espaço entre colunas
+    col1, col2 = st.columns([1, 1], gap="small") 
 
     # --- Coluna esquerda (Login) ---
     with col1:
-        # Conteúdo já centralizado verticalmente pelo CSS da coluna
         st.subheader("Seja bem vindo à plataforma de gestão de projetos Allarmi")     
         st.subheader("Acesse sua conta")
         st.write("") 
@@ -157,8 +153,6 @@ def tela_login():
 
     # --- Coluna direita (Imagem) ---
     with col2:
-        # Conteúdo já centralizado verticalmente pelo CSS da coluna
-        # Adiciona a div container para aplicar o CSS específico da imagem
         st.markdown('<div class="login-logo-container">', unsafe_allow_html=True)
         if imagem_principal:
             st.image(imagem_principal) 
@@ -167,7 +161,6 @@ def tela_login():
 
 # ----------------- Função: Tela de Cadastro -----------------
 def tela_cadastro_usuario():
-    # ... (código existente, sem alterações) ...
     st.subheader("Cadastrar Novo Usuário")
     with st.form("form_cadastro_usuario"):
         nome = st.text_input("Nome", key="cad_nome")
@@ -208,7 +201,6 @@ def tela_boas_vindas():
     ]
     msg = random.choice(mensagens)
 
-    # --- CORREÇÃO: CSS PARA FUNDO VERDE CLARO E SEM IMAGEM ---
     st.markdown("""
     <style>
     /* Esconde a sidebar e a barra de ferramentas SÓ nesta tela */
@@ -216,20 +208,33 @@ def tela_boas_vindas():
         display: none;
     }
 
-    /* Aplica o fundo verde claro à tela inteira */
-    [data-testid="stAppViewContainer"] > section.main {
-        background-color: #e8f5e9; /* Mesmo verde claro do login */
+    /* --- CORREÇÃO: Aplica o fundo verde claro à página INTEIRA --- */
+    body { /* Seleciona o body que é a raiz */
+        background-color: #e8f5e9 !important; /* Cor de fundo verde claro */
+    }
+    [data-testid="stAppViewContainer"] {
+        background-color: #e8f5e9 !important; /* Para garantir cobertura total */
+    }
+    section.main {
+        background-color: #e8f5e9 !important; /* Para garantir cobertura total */
+    }
+    [data-testid="stVerticalBlock"] > div { /* Para cobrir possíveis blocos internos */
+        background-color: #e8f5e9 !important;
+    }
+    [data-testid="stHorizontalBlock"] > div { /* Para cobrir possíveis blocos internos */
+        background-color: #e8f5e9 !important;
     }
     
+
     .welcome-screen-container { 
         display: flex;
         flex-direction: column; 
         align-items: center;
         justify-content: center;
-        height: 100vh;
+        height: 100vh; /* Ocupa a altura total da viewport */
         text-align: center;
         animation: fadeIn 1s ease-in-out;
-        color: #1b5e20; /* Texto verde escuro para combinar */
+        color: #1b5e20; /* Texto verde escuro para contraste */
     }
 
     @keyframes fadeIn {
@@ -238,35 +243,35 @@ def tela_boas_vindas():
     }
 
     .welcome-screen-container h1 {
-        font-size: 2.5rem; /* Aumenta um pouco o título */
+        font-size: 2.5rem; 
         margin-bottom: 10px;
-        color: #1b5e20; /* Garante a cor verde escura */
+        color: #1b5e20; 
     }
 
     .welcome-screen-container p {
-        font-size: 1.3rem; /* Aumenta a mensagem */
+        font-size: 1.3rem; 
         opacity: 0.9;
-        color: #1b5e20; /* Garante a cor verde escura */
+        color: #1b5e20; 
     }
     </style>
     """, unsafe_allow_html=True)
 
+    # Conteúdo da tela de boas-vindas
     st.markdown('<div class="welcome-screen-container">', unsafe_allow_html=True)
     
     st.markdown(f"""
             <h1>Seja bem-vindo, {st.session_state.usuario} 👋</h1>
             <p>{msg}</p>
         </div> 
-    """, unsafe_allow_html=True) # Fecha a div
+    """, unsafe_allow_html=True)
 
-    time.sleep(5)
+    time.sleep(5) 
     st.session_state.boas_vindas = False
     st.session_state.tela_principal = True
     st.rerun()
 
 # --- Funções tela_cadastro_projeto e tela_projetos (sem alterações) ---
 def tela_cadastro_projeto():
-    # ... (código existente, sem alterações) ...
     if st.button("⬅️ Voltar para Projetos"):
         st.session_state.tela_cadastro_proj = False
         st.rerun()
@@ -306,7 +311,6 @@ def tela_cadastro_projeto():
             st.rerun()
 
 def tela_projetos():
-    # ... (código existente, sem alterações) ...
     st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True)
     
     df = utils.carregar_projetos_db()
@@ -551,7 +555,7 @@ def main():
     if "cadastro" not in st.session_state:
         st.session_state.cadastro = False
     if "boas_vindas" not in st.session_state:
-        st.session_state.boas_vindas = False # Começa como falso
+        st.session_state.boas_vindas = False 
     if "tela_principal" not in st.session_state:
         st.session_state.tela_principal = False
     if "tela_cadastro_proj" not in st.session_state: 
@@ -562,14 +566,12 @@ def main():
         if st.session_state.cadastro:
             tela_cadastro_usuario()
         else:
-            tela_login() # Mostra a tela de login
+            tela_login()
             
     elif st.session_state.boas_vindas:
-        tela_boas_vindas() # Mostra as boas-vindas (depois do login)
+        tela_boas_vindas()
         
     elif st.session_state.tela_principal:
-        # --- O CÓDIGO ABAIXO SÓ RODA SE ESTIVER LOGADO E JÁ PASSOU DAS BOAS-VINDAS ---
-        
         st.sidebar.title(f"Bem-vindo(a), {st.session_state.get('usuario', 'Visitante')}! 📋")
         st.sidebar.info(f"Hoje é: {datetime.now().strftime('%d/%m/%Y')}")
         st.sidebar.divider()
@@ -583,19 +585,16 @@ def main():
             st.session_state.clear()
             st.rerun()
         
-        # Controla a tela principal (se logado)
         if st.session_state.get("tela_cadastro_proj"):
             tela_cadastro_projeto()
         else:
-            tela_projetos() # Mostra sua lista de cards
+            tela_projetos()
             
     else:
-        # Este é o estado inicial logo após o login
         st.session_state.boas_vindas = True
         st.rerun()
 
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
-
 
