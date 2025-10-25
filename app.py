@@ -208,33 +208,35 @@ def tela_boas_vindas():
         display: none;
     }
 
-    /* --- CORREÇÃO: Aplica o fundo verde claro à página INTEIRA --- */
-    body { /* Seleciona o body que é a raiz */
-        background-color: #e8f5e9 !important; /* Cor de fundo verde claro */
+    /* Aplica o fundo verde claro à página INTEIRA */
+    body { 
+        background-color: #e8f5e9 !important; 
     }
     [data-testid="stAppViewContainer"] {
-        background-color: #e8f5e9 !important; /* Para garantir cobertura total */
+        background-color: #e8f5e9 !important; 
     }
     section.main {
-        background-color: #e8f5e9 !important; /* Para garantir cobertura total */
+        background-color: #e8f5e9 !important; 
     }
-    [data-testid="stVerticalBlock"] > div { /* Para cobrir possíveis blocos internos */
+    [data-testid="stVerticalBlock"] > div { 
         background-color: #e8f5e9 !important;
     }
-    [data-testid="stHorizontalBlock"] > div { /* Para cobrir possíveis blocos internos */
+    [data-testid="stHorizontalBlock"] > div { 
         background-color: #e8f5e9 !important;
     }
     
-
     .welcome-screen-container { 
         display: flex;
         flex-direction: column; 
         align-items: center;
-        justify-content: center;
-        height: 100vh; /* Ocupa a altura total da viewport */
+        /* --- CORREÇÃO: Posição --- */
+        justify-content: flex-start; /* Alinha no topo */
+        padding-top: 15vh; /* Adiciona espaço acima (15% da altura da tela) */
+        /* --- FIM CORREÇÃO --- */
+        height: 100vh; 
         text-align: center;
         animation: fadeIn 1s ease-in-out;
-        color: #1b5e20; /* Texto verde escuro para contraste */
+        color: #1b5e20; 
     }
 
     @keyframes fadeIn {
@@ -243,13 +245,17 @@ def tela_boas_vindas():
     }
 
     .welcome-screen-container h1 {
-        font-size: 2.5rem; 
-        margin-bottom: 10px;
+        /* --- CORREÇÃO: Tamanho --- */
+        font-size: 3.75rem; /* Aumentado em 50% (era 2.5rem) */
+        /* --- FIM CORREÇÃO --- */
+        margin-bottom: 15px; /* Aumenta um pouco o espaço abaixo */
         color: #1b5e20; 
     }
 
     .welcome-screen-container p {
-        font-size: 1.3rem; 
+        /* --- CORREÇÃO: Tamanho --- */
+        font-size: 1.95rem; /* Aumentado em 50% (era 1.3rem) */
+        /* --- FIM CORREÇÃO --- */
         opacity: 0.9;
         color: #1b5e20; 
     }
