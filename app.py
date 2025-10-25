@@ -36,6 +36,7 @@ def tela_login():
     # --- CSS exclusivo da tela de login ---
     st.markdown("""
     <style>
+    /* Remove a sidebar SÓ na tela de login */
     [data-testid="stSidebar"] {
         display: none;
     }
@@ -81,8 +82,15 @@ def tela_login():
         color: #1b5e20 !important;
     }
 
-    img {
-        mix-blend-mode: multiply;
+    /* --- CORREÇÃO DO LOGO "APAGADO" --- */
+    /* Aplicamos o estilo apenas à imagem dentro da classe 'login-logo-container' */
+    .login-logo-container img {
+        /* 'screen' faz o oposto de 'multiply'. 
+         Ele remove o fundo escuro da imagem e deixa as partes claras (o logo) visíveis.
+         Isso remove as "bordas brancas" (que na verdade eram o quadrado da imagem JPG) 
+         e dá "destaque" ao logo.
+        */
+        mix-blend-mode: screen; 
         max-width: 70% !important;
         display: block;
         margin: auto;
@@ -102,7 +110,7 @@ def tela_login():
 
     # --- Coluna esquerda (Login) ---
     with col1:
-        st.subheader("Seja bem vindo à plataforma de gestão de projetos Allarmi")       
+        st.subheader("Seja bem vindo à plataforma de gestão de projetos Allarmi")     
         st.subheader("Acesse sua conta")
         st.write("") 
 
@@ -124,9 +132,13 @@ def tela_login():
 
     # --- Coluna direita (Imagem) ---
     with col2:
+        # --- CORREÇÃO DA DUPLICAÇÃO E DO LOGO ---
+        # 1. Adicionamos a classe 'login-logo-container' para o CSS funcionar
+        # 2. Corrigimos o HTML (o '</div>' estava solto antes)
+        st.markdown('<div class="login-logo-container">', unsafe_allow_html=True)
         if imagem_principal:
             st.image(imagem_principal, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True) # Fechamento correto da div
 
 
 # ----------------- Função: Tela de Cadastro -----------------
@@ -174,8 +186,24 @@ def tela_boas_vindas():
 
     st.markdown("""
     <style>
+    /* Esconde a sidebar e a barra de ferramentas SÓ nesta tela */
     [data-testid="stSidebar"], [data-testid="stToolbar"] {
         display: none;
+    }
+
+    /* --- CORREÇÃO DA COR DE FUNDO --- */
+    /* Removemos o '[data-testid="stAppViewContainer"]' daqui.
+     Isso faz a tela de boas-vindas usar o fundo padrão (branco) 
+     do Streamlit, em vez do fundo verde do login.
+    */
+    
+    .welcome-screen-container { /* Renomeei para evitar conflito */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        text-align: center;
+        animation: fadeIn 1s ease-in-out;
     }
 
     @keyframes fadeIn {
@@ -183,18 +211,24 @@ def tela_boas_vindas():
         to { opacity: 1; }
     }
 
-    .welcome-container img {
+    .welcome-screen-container img {
         width: 200px;
-        filter: brightness(1.3);
+        /* A 'Foto 2.jpg' original tem fundo escuro. 
+         Não precisamos de filtros quando ela está no fundo branco.
+        */
         margin-bottom: 20px;
     }
 
-    .welcome-container h1 {
+    /* Como o fundo agora é branco, precisamos garantir 
+     que o texto seja escuro (o padrão). 
+     Removemos 'color: white;'
+    */
+    .welcome-screen-container h1 {
         font-size: 2.2rem;
         margin-bottom: 10px;
     }
 
-    .welcome-container p {
+    .welcome-screen-container p {
         font-size: 1.2rem;
         opacity: 0.9;
     }
@@ -202,14 +236,16 @@ def tela_boas_vindas():
     """, unsafe_allow_html=True)
 
     st.markdown(f"""
-    <div class="welcome-container">
-        <img src="Foto 2.jpg" alt="Logo Allarmi">
-        <h1>Seja bem-vindo, {st.session_state.usuario} 👋</h1>
-        <p>{msg}</p>
+    <div class="welcome-screen-container">
+        <div>
+            <img src="Foto 2.jpg" alt="Logo Allarmi">
+            <h1>Seja bem-vindo, {st.session_state.usuario} 👋</h1>
+            <p>{msg}</p>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
-    time.sleep(5)
+    time.sleep(2.5)
     st.session_state.boas_vindas = False
     st.session_state.tela_principal = True
     st.rerun()
@@ -232,7 +268,6 @@ elif st.session_state.cadastro:
 elif st.session_state.boas_vindas:
     tela_boas_vindas()
 elif st.session_state.tela_principal:
-    st.success("")
 else:
     st.session_state.boas_vindas = True
     st.rerun()
@@ -560,6 +595,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
