@@ -1,9 +1,11 @@
 import streamlit as st
 import pandas as pd
 from datetime import date, datetime
+import random
+import time
+from PIL import Image
 import re
 import html
-from PIL import Image
 
 # Importa TODAS as nossas funções do arquivo utils.py
 import utils 
@@ -23,28 +25,25 @@ def _to_date_safe(val):
     except Exception:
         return None
 
+
 # ----------------- Configuração da Página e CSS -----------------
 st.set_page_config(page_title="Projetos - GESTÃO", page_icon="📋", layout="wide")
 utils.load_css() # Carrega o CSS do arquivo utils
 
-# ----------------- Telas da Página Principal -----------------
 
+# ----------------- Função: Tela de Login -----------------
 def tela_login():
-    
     # --- CSS exclusivo da tela de login ---
     st.markdown("""
     <style>
-    /* Esconde o menu lateral */
     [data-testid="stSidebar"] {
         display: none;
     }
 
-    /* Fundo dividido em tons de verde */
     [data-testid="stAppViewContainer"] {
         background: linear-gradient(90deg, #e8f5e9 0%, #e8f5e9 50%, #1b5e20 50%, #1b5e20 100%);
     }
 
-    /* Centraliza o conteúdo */
     section.main > div {
         display: flex;
         align-items: center;
@@ -52,7 +51,6 @@ def tela_login():
         height: 100vh;
     }
 
-    /* Caixa da área de login */
     div[data-testid="stForm"] {
         background-color: rgba(255, 255, 255, 0.95);
         padding: 2.5rem;
@@ -61,9 +59,8 @@ def tela_login():
         width: 380px;
     }
 
-    /* Botão verde */
     .stButton > button {
-        background-color: #43a047 !important;  /* verde médio */
+        background-color: #43a047 !important;
         color: white !important;
         border: none;
         border-radius: 8px;
@@ -72,24 +69,21 @@ def tela_login():
     }
 
     .stButton > button:hover {
-        background-color: #2e7d32 !important; /* verde escuro */
+        background-color: #2e7d32 !important;
     }
 
-    /* Campos de texto */
     .stTextInput > div > div > input {
         border-radius: 8px;
         border: 1px solid #ccc;
     }
 
-    /* Subtítulos */
     h3, h2, h1, .stSubheader {
         color: #1b5e20 !important;
     }
 
-    /* Imagem da direita */
     img {
-        mix-blend-mode: multiply; /* Remove fundo branco */
-        max-width: 70% !important; /* Reduz tamanho */
+        mix-blend-mode: multiply;
+        max-width: 70% !important;
         display: block;
         margin: auto;
     }
@@ -118,7 +112,8 @@ def tela_login():
             
             if st.form_submit_button("Conectar-se", use_container_width=True):
                 nome_usuario = "Visitante"
-                if email: nome_usuario = utils.autenticar_direto(email) or email
+                if email:
+                    nome_usuario = utils.autenticar_direto(email) or email
                 st.session_state.update(usuario=nome_usuario, logado=True)
                 st.rerun()
         
@@ -132,7 +127,9 @@ def tela_login():
         if imagem_principal:
             st.image(imagem_principal, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
-        
+
+
+# ----------------- Função: Tela de Cadastro -----------------
 def tela_cadastro_usuario():
     st.subheader("Cadastrar Novo Usuário")
     with st.form("form_cadastro_usuario"):
@@ -161,6 +158,95 @@ def tela_cadastro_usuario():
     if st.button("Voltar para Login"):
         st.session_state.cadastro = False
         st.rerun()
+
+
+# ----------------- Função: Tela de Boas-Vindas -----------------
+def tela_boas_vindas():
+    mensagens = [
+        "Que seu dia seja produtivo e cheio de conquistas!",
+        "Acredite no seu potencial e siga firme rumo aos resultados!",
+        "Grandes projetos nascem de pequenas ações consistentes!",
+        "Transforme desafios em oportunidades hoje!",
+        "Você é capaz de grandes resultados — confie no processo!",
+        "Siga com foco, energia e propósito neste novo dia!"
+    ]
+    msg = random.choice(mensagens)
+
+    st.markdown("""
+    <style>
+    [data-testid="stSidebar"], [data-testid="stToolbar"] {
+        display: none;
+    }
+
+    [data-testid="stAppViewContainer"] {
+        background-color: #1b5e20;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        text-align: center;
+        animation: fadeIn 1s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    .welcome-container img {
+        width: 200px;
+        filter: brightness(1.3);
+        margin-bottom: 20px;
+    }
+
+    .welcome-container h1 {
+        font-size: 2.2rem;
+        margin-bottom: 10px;
+    }
+
+    .welcome-container p {
+        font-size: 1.2rem;
+        opacity: 0.9;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown(f"""
+    <div class="welcome-container">
+        <img src="Foto 2.jpg" alt="Logo Allarmi">
+        <h1>Seja bem-vindo, {st.session_state.usuario} 👋</h1>
+        <p>{msg}</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    time.sleep(2.5)
+    st.session_state.boas_vindas = False
+    st.session_state.tela_principal = True
+    st.rerun()
+
+
+# ----------------- Controle de Navegação -----------------
+if "logado" not in st.session_state:
+    st.session_state.logado = False
+if "cadastro" not in st.session_state:
+    st.session_state.cadastro = False
+if "boas_vindas" not in st.session_state:
+    st.session_state.boas_vindas = False
+if "tela_principal" not in st.session_state:
+    st.session_state.tela_principal = False
+
+if not st.session_state.logado:
+    tela_login()
+elif st.session_state.cadastro:
+    tela_cadastro_usuario()
+elif st.session_state.boas_vindas:
+    tela_boas_vindas()
+elif st.session_state.tela_principal:
+    st.success("✅ Sistema principal carregado! (aqui entra sua tela principal)")
+else:
+    st.session_state.boas_vindas = True
+    st.rerun()
 
 def tela_cadastro_projeto():
     if st.button("⬅️ Voltar para Projetos"):
@@ -485,6 +571,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
