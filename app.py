@@ -43,7 +43,8 @@ def tela_login():
 
    # --- 3. Coluna da Esquerda (Login) ---
     with col1:
-               
+        
+        st.subheader("Seja bem vindo a plataforma de gestão de projetos Allarmi")       
         st.subheader("Acesse sua conta")
         st.write("") 
 
@@ -70,9 +71,6 @@ def tela_login():
         # --- IMAGEM PRINCIPAL (HEXÁGONOS) ---
         if imagem_principal:
             st.image(imagem_principal, use_container_width=True) 
-        
-        # Seu texto de boas-vindas
-        st.markdown("<h2>Seja bem vindo a plataforma de gestão de projetos Allarmi</h2>", unsafe_allow_html=True)
         
         st.markdown('</div>', unsafe_allow_html=True)
         
@@ -428,6 +426,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
