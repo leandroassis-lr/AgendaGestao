@@ -28,8 +28,8 @@ def _to_date_safe(val):
 
 # ----------------- Configuração da Página e CSS -----------------
 st.set_page_config(page_title="Projetos - GESTÃO", page_icon="📋", layout="wide")
-utils.load_css() # Carrega o CSS do arquivo utils
 
+utils.load_css() 
 
 # ----------------- Função: Tela de Login -----------------
 def tela_login():
@@ -178,37 +178,6 @@ def tela_boas_vindas():
         display: none;
     }
 
-    [data-testid="stAppViewContainer"] {
-        background-color: #1b5e20;
-        color: white;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        height: 100vh;
-        text-align: center;
-        animation: fadeIn 1s ease-in-out;
-    }
-
-    @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
-    }
-
-    .welcome-container img {
-        width: 200px;
-        filter: brightness(1.3);
-        margin-bottom: 20px;
-    }
-
-    .welcome-container h1 {
-        font-size: 2.2rem;
-        margin-bottom: 10px;
-    }
-
-    .welcome-container p {
-        font-size: 1.2rem;
-        opacity: 0.9;
-    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -220,7 +189,7 @@ def tela_boas_vindas():
     </div>
     """, unsafe_allow_html=True)
 
-    time.sleep(2.5)
+    time.sleep(5)
     st.session_state.boas_vindas = False
     st.session_state.tela_principal = True
     st.rerun()
@@ -571,6 +540,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
