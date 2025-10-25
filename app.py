@@ -250,7 +250,7 @@ def tela_boas_vindas():
     </div>
     """, unsafe_allow_html=True)
 
-    time.sleep(2.5)
+    time.sleep(5)
     st.session_state.boas_vindas = False
     st.session_state.tela_principal = True
     st.rerun()
@@ -589,3 +589,4 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
