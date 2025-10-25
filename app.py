@@ -86,19 +86,6 @@ def tela_login():
         color: #1b5e20 !important;
     }
 
-    /* --- CORREÇÃO DO LOGO "APAGADO" --- */
-    /* Aplicamos o estilo apenas à imagem dentro da classe 'login-logo-container' */
-    .login-logo-container img {
-        /* 'screen' faz o oposto de 'multiply'. 
-         Ele remove o fundo escuro da imagem e deixa as partes claras (o logo) visíveis.
-         Isso remove as "bordas brancas" (que na verdade eram o quadrado da imagem JPG) 
-         e dá "destaque" ao logo.
-        */
-        mix-blend-mode: screen; 
-        max-width: 70% !important;
-        display: block;
-        margin: auto;
-    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -137,13 +124,11 @@ def tela_login():
 
     # --- Coluna direita (Imagem) ---
     with col2:
-        # --- CORREÇÃO DA DUPLICAÇÃO E DO LOGO ---
-        # 1. Adicionamos a classe 'login-logo-container' para o CSS funcionar
-        # 2. Corrigimos o HTML (o '</div>' estava solto antes)
+        
         st.markdown('<div class="login-logo-container">', unsafe_allow_html=True)
         if imagem_principal:
             st.image(imagem_principal, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True) # Fechamento correto da div
+        st.markdown('</div>', unsafe_allow_html=True) 
 
 
 # ----------------- Função: Tela de Cadastro -----------------
@@ -243,7 +228,7 @@ def tela_boas_vindas():
     st.markdown(f"""
     <div class="welcome-screen-container">
         <div>
-            <img src="Foto 2.jpg" alt="Logo Allarmi">
+            <img src="Foto 2.jpg" alt="Foto 2.jpg">
             <h1>Seja bem-vindo, {st.session_state.usuario} 👋</h1>
             <p>{msg}</p>
         </div>
@@ -589,4 +574,5 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
