@@ -41,23 +41,37 @@ def tela_login():
         display: none;
     }
 
+    /* Fundo dividido */
     [data-testid="stAppViewContainer"] {
         background: linear-gradient(90deg, #e8f5e9 0%, #e8f5e9 50%, #1b5e20 50%, #1b5e20 100%);
     }
 
+    /* Ajusta container principal para ocupar altura */
     section.main > div {
-        display: flex;
+        display: flex; /* Mantem o alinhamento central da section */
         align-items: center;
         justify-content: center;
         height: 100vh;
+        /* max-width: none; /* Garante que ocupe a largura toda */
+        /* padding: 0; */
     }
 
+    /* Colunas ocupando toda altura disponível */
+    div[data-testid="stHorizontalBlock"] > div[data-testid^="stVerticalBlock"] {
+        height: 100vh; /* Força as colunas a terem altura total */
+        display: flex;
+        flex-direction: column;
+        justify-content: center; /* Centraliza verticalmente o conteúdo DENTRO da coluna */
+    }
+
+    /* Estilo do formulário */
     div[data-testid="stForm"] {
         background-color: rgba(255, 255, 255, 0.95);
         padding: 2.5rem;
         border-radius: 16px;
         box-shadow: 0 0 20px rgba(0,0,0,0.15);
         width: 380px;
+        margin: auto; /* Centraliza o formulário horizontalmente na coluna */
     }
 
     .stButton > button {
@@ -79,25 +93,25 @@ def tela_login():
     }
 
     /* Títulos na coluna do formulário (esquerda) */
-    div[data-testid="stVerticalBlock"] h1,
-    div[data-testid="stVerticalBlock"] h2,
-    div[data-testid="stVerticalBlock"] h3,
-    div[data-testid="stVerticalBlock"] .stSubheader {
+    /* Selecionando de forma mais específica para evitar conflitos */
+    div[data-testid="stHorizontalBlock"] > div:nth-child(1) h1, /* Primeira coluna (índice 1) */
+    div[data-testid="stHorizontalBlock"] > div:nth-child(1) h2,
+    div[data-testid="stHorizontalBlock"] > div:nth-child(1) h3,
+    div[data-testid="stHorizontalBlock"] > div:nth-child(1) .stSubheader {
         color: #1b5e20 !important;
+        text-align: center; /* Centraliza os textos */
     }
 
-    /* --- CORREÇÃO DO LOGO CENTRALIZADO --- */
-    /* Container que envolve a imagem na coluna direita */
+    /* Container da imagem na coluna direita (para centralização) */
     .login-logo-container {
-        display: flex; /* Habilita flexbox */
-        align-items: center; /* Centraliza verticalmente */
-        justify-content: center; /* Centraliza horizontalmente */
-        height: 100%; /* Ocupa toda a altura da coluna */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%; /* Ocupa a altura da coluna */
     }
 
     .login-logo-container img {
-        max-width: 50% !important; /* Mantém a redução de tamanho */
-        /* display: block; margin: auto; - Removido, flexbox cuida disso */
+        max-width: 50% !important; 
         border-radius: 50%; 
         -webkit-mask-image: -webkit-radial-gradient(white, black); 
         mask-image: radial-gradient(white, black);
@@ -115,10 +129,11 @@ def tela_login():
         imagem_principal = None
 
     # --- Layout (duas colunas) ---
-    col1, col2 = st.columns([1, 1]) 
+    col1, col2 = st.columns([1, 1], gap="small") # gap="small" para pouco espaço entre colunas
 
     # --- Coluna esquerda (Login) ---
     with col1:
+        # Conteúdo já centralizado verticalmente pelo CSS da coluna
         st.subheader("Seja bem vindo à plataforma de gestão de projetos Allarmi")     
         st.subheader("Acesse sua conta")
         st.write("") 
@@ -131,7 +146,6 @@ def tela_login():
                 nome_usuario = "Visitante"
                 if email:
                     nome_usuario = utils.autenticar_direto(email) or email
-                # Define que o login foi feito e que a tela de boas-vindas deve aparecer
                 st.session_state.update(usuario=nome_usuario, logado=True, boas_vindas=True, tela_principal=False)
                 st.rerun()
         
@@ -142,16 +156,17 @@ def tela_login():
 
     # --- Coluna direita (Imagem) ---
     with col2:
-        # Adiciona a div container para centralizar
+        # Conteúdo já centralizado verticalmente pelo CSS da coluna
+        # Adiciona a div container para aplicar o CSS específico da imagem
         st.markdown('<div class="login-logo-container">', unsafe_allow_html=True)
         if imagem_principal:
-            # st.image() renderiza a imagem dentro da div
             st.image(imagem_principal) 
-        st.markdown('</div>', unsafe_allow_html=True) # Fechamento correto da div
+        st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ----------------- Função: Tela de Cadastro -----------------
 def tela_cadastro_usuario():
+    # ... (código existente, sem alterações) ...
     st.subheader("Cadastrar Novo Usuário")
     with st.form("form_cadastro_usuario"):
         nome = st.text_input("Nome", key="cad_nome")
@@ -180,7 +195,6 @@ def tela_cadastro_usuario():
         st.session_state.cadastro = False
         st.rerun()
 
-
 # ----------------- Função: Tela de Boas-Vindas -----------------
 def tela_boas_vindas():
     mensagens = [
@@ -193,29 +207,28 @@ def tela_boas_vindas():
     ]
     msg = random.choice(mensagens)
 
-    # --- CORREÇÃO: IMAGEM CARREGADA COM PIL ---
-    try:
-        imagem_boas_vindas = Image.open("Foto 2.jpg")
-    except Exception as e:
-        st.error("Não foi possível carregar 'Foto 2.jpg' para a tela de boas-vindas.")
-        imagem_boas_vindas = None # Define como None se falhar
-
+    # --- CORREÇÃO: CSS PARA FUNDO VERDE CLARO E SEM IMAGEM ---
     st.markdown("""
     <style>
     /* Esconde a sidebar e a barra de ferramentas SÓ nesta tela */
     [data-testid="stSidebar"], [data-testid="stToolbar"] {
         display: none;
     }
+
+    /* Aplica o fundo verde claro à tela inteira */
+    [data-testid="stAppViewContainer"] > section.main {
+        background-color: #e8f5e9; /* Mesmo verde claro do login */
+    }
     
     .welcome-screen-container { 
         display: flex;
-        flex-direction: column; /* Para empilhar imagem e texto */
+        flex-direction: column; 
         align-items: center;
         justify-content: center;
         height: 100vh;
         text-align: center;
         animation: fadeIn 1s ease-in-out;
-        color: #333; 
+        color: #1b5e20; /* Texto verde escuro para combinar */
     }
 
     @keyframes fadeIn {
@@ -224,37 +237,33 @@ def tela_boas_vindas():
     }
 
     .welcome-screen-container h1 {
-        font-size: 2.2rem;
+        font-size: 2.5rem; /* Aumenta um pouco o título */
         margin-bottom: 10px;
-        margin-top: 20px; /* Adiciona espaço acima do H1 */
-        color: #333; 
+        color: #1b5e20; /* Garante a cor verde escura */
     }
 
     .welcome-screen-container p {
-        font-size: 1.2rem;
+        font-size: 1.3rem; /* Aumenta a mensagem */
         opacity: 0.9;
-        color: #333; 
+        color: #1b5e20; /* Garante a cor verde escura */
     }
     </style>
     """, unsafe_allow_html=True)
 
-    # --- CORREÇÃO: EXIBIÇÃO DA IMAGEM ---
+    # --- CORREÇÃO: REMOÇÃO DA IMAGEM ---
     # Coloca os elementos dentro do container principal da tela
-    with st.container():
-        st.markdown('<div class="welcome-screen-container">', unsafe_allow_html=True)
-        
-        # Usa st.image para exibir a imagem carregada
-        if imagem_boas_vindas:
-            st.image(imagem_boas_vindas, width=200) # Ajuste o width conforme necessário
-        
-        # O texto é colocado *depois* da imagem
-        st.markdown(f"""
-                <h1>Seja bem-vindo, {st.session_state.usuario} 👋</h1>
-                <p>{msg}</p>
-            </div> 
-        """, unsafe_allow_html=True) # Fecha a div aqui
+    st.markdown('<div class="welcome-screen-container">', unsafe_allow_html=True)
+    
+    # Removemos a imagem daqui
+    
+    # O texto agora é o único conteúdo
+    st.markdown(f"""
+            <h1>Seja bem-vindo, {st.session_state.usuario} 👋</h1>
+            <p>{msg}</p>
+        </div> 
+    """, unsafe_allow_html=True) # Fecha a div
 
-    time.sleep(5)
+    time.sleep(5) # Mantém o sleep
     st.session_state.boas_vindas = False
     st.session_state.tela_principal = True
     st.rerun()
