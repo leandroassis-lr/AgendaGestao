@@ -86,19 +86,22 @@ def tela_login():
         color: #1b5e20 !important;
     }
 
-    /* --- CORREÇÃO DO LOGO "APAGADO" E FUNDO BRANCO --- */
-    /* Este CSS é aplicado SOMENTE à imagem dentro de login-logo-container */
+    /* --- CORREÇÃO DO LOGO CENTRALIZADO --- */
+    /* Container que envolve a imagem na coluna direita */
+    .login-logo-container {
+        display: flex; /* Habilita flexbox */
+        align-items: center; /* Centraliza verticalmente */
+        justify-content: center; /* Centraliza horizontalmente */
+        height: 100%; /* Ocupa toda a altura da coluna */
+    }
+
     .login-logo-container img {
-        max-width: 50% !important; /* Reduz para 50% da largura do container */
-        display: block;
-        margin: auto; /* Centraliza a imagem */
-        border-radius: 50%; /* Faz a imagem ter forma circular */
-        /* Garante que o conteúdo fora do círculo seja cortado */
+        max-width: 50% !important; /* Mantém a redução de tamanho */
+        /* display: block; margin: auto; - Removido, flexbox cuida disso */
+        border-radius: 50%; 
         -webkit-mask-image: -webkit-radial-gradient(white, black); 
         mask-image: radial-gradient(white, black);
-        /* Ajuste fino para o fundo escuro da imagem, se ainda houver */
         filter: brightness(1.2) contrast(1.1); 
-        /* Adiciona um pequeno sombreamento para destacar */
         box-shadow: 0 0 15px rgba(0,0,0,0.3);
     }
     </style>
@@ -139,10 +142,10 @@ def tela_login():
 
     # --- Coluna direita (Imagem) ---
     with col2:
+        # Adiciona a div container para centralizar
         st.markdown('<div class="login-logo-container">', unsafe_allow_html=True)
         if imagem_principal:
-            # st.image(imagem_principal, use_container_width=True) - Usar use_container_width e max-width no CSS
-            # Removendo use_container_width aqui e deixando o controle de tamanho APENAS no CSS
+            # st.image() renderiza a imagem dentro da div
             st.image(imagem_principal) 
         st.markdown('</div>', unsafe_allow_html=True) # Fechamento correto da div
 
@@ -190,12 +193,12 @@ def tela_boas_vindas():
     ]
     msg = random.choice(mensagens)
 
-    # --- IMAGEM PRINCIPAL (CARREGADA AQUI TAMBÉM PARA A TELA DE BOAS-VINDAS) ---
+    # --- CORREÇÃO: IMAGEM CARREGADA COM PIL ---
     try:
-        imagem_principal = Image.open("Foto 2.jpg")
+        imagem_boas_vindas = Image.open("Foto 2.jpg")
     except Exception as e:
         st.error("Não foi possível carregar 'Foto 2.jpg' para a tela de boas-vindas.")
-        imagem_principal = None
+        imagem_boas_vindas = None # Define como None se falhar
 
     st.markdown("""
     <style>
@@ -220,15 +223,10 @@ def tela_boas_vindas():
         to { opacity: 1; }
     }
 
-    /* Removido o CSS para .welcome-screen-container img, 
-       pois st.image cuida disso agora. 
-       Se precisar estilizar a imagem de st.image, precisará de CSS mais avançado 
-       ou usar o parâmetro 'width' diretamente no st.image.
-    */
-
     .welcome-screen-container h1 {
         font-size: 2.2rem;
         margin-bottom: 10px;
+        margin-top: 20px; /* Adiciona espaço acima do H1 */
         color: #333; 
     }
 
@@ -240,25 +238,30 @@ def tela_boas_vindas():
     </style>
     """, unsafe_allow_html=True)
 
-    st.markdown("""<div class="welcome-screen-container">""", unsafe_allow_html=True)
-    
-    if imagem_principal:
-        # Usamos st.image aqui para garantir que a imagem seja carregada corretamente
-        st.image(imagem_principal, width=200) # Ajuste o width conforme necessário
-    
-    st.markdown(f"""
-            <h1>Seja bem-vindo, {st.session_state.usuario} 👋</h1>
-            <p>{msg}</p>
-        </div>
-    """, unsafe_allow_html=True)
+    # --- CORREÇÃO: EXIBIÇÃO DA IMAGEM ---
+    # Coloca os elementos dentro do container principal da tela
+    with st.container():
+        st.markdown('<div class="welcome-screen-container">', unsafe_allow_html=True)
+        
+        # Usa st.image para exibir a imagem carregada
+        if imagem_boas_vindas:
+            st.image(imagem_boas_vindas, width=200) # Ajuste o width conforme necessário
+        
+        # O texto é colocado *depois* da imagem
+        st.markdown(f"""
+                <h1>Seja bem-vindo, {st.session_state.usuario} 👋</h1>
+                <p>{msg}</p>
+            </div> 
+        """, unsafe_allow_html=True) # Fecha a div aqui
 
     time.sleep(5)
     st.session_state.boas_vindas = False
     st.session_state.tela_principal = True
     st.rerun()
 
-# ----------------- Função: Tela de Cadastro de Projeto -----------------
+# --- Funções tela_cadastro_projeto e tela_projetos (sem alterações) ---
 def tela_cadastro_projeto():
+    # ... (código existente, sem alterações) ...
     if st.button("⬅️ Voltar para Projetos"):
         st.session_state.tela_cadastro_proj = False
         st.rerun()
@@ -297,8 +300,8 @@ def tela_cadastro_projeto():
             st.session_state["tela_cadastro_proj"] = False
             st.rerun()
 
-# ----------------- Função: Tela Principal de Projetos -----------------
 def tela_projetos():
+    # ... (código existente, sem alterações) ...
     st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True)
     
     df = utils.carregar_projetos_db()
