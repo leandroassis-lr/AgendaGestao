@@ -50,7 +50,7 @@ def tela_login():
 
         with st.form("form_login"):
             email = st.text_input("Nome", key="login_email")
-            email = st.text_input("Email", key="login_email")
+            st.text_input("Senha (Desativada)", type="password", disabled=True)
             
             if st.form_submit_button("Conectar-se", use_container_width=True, type="primary"):
                 nome_usuario = "Visitante"
@@ -426,6 +426,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
