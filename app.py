@@ -109,8 +109,8 @@ def tela_login():
     }
 
     .login-logo-container img {
-        max-width: 50% !important; 
-        border-radius: 50%; 
+        max-width: 70% !important; 
+        border-radius: 70%; 
         -webkit-mask-image: -webkit-radial-gradient(white, black); 
         mask-image: radial-gradient(white, black);
         filter: brightness(1.2) contrast(1.1); 
@@ -231,7 +231,7 @@ def tela_boas_vindas():
         align-items: center;
         /* --- CORREÇÃO: Posição --- */
         justify-content: flex-start; /* Alinha no topo */
-        padding-top: 15vh; /* Adiciona espaço acima (15% da altura da tela) */
+        padding-top: 35vh; /* Adiciona espaço acima (15% da altura da tela) */
         /* --- FIM CORREÇÃO --- */
         height: 100vh; 
         text-align: center;
@@ -246,15 +246,15 @@ def tela_boas_vindas():
 
     .welcome-screen-container h1 {
         /* --- CORREÇÃO: Tamanho --- */
-        font-size: 5.75rem; /* Aumentado em 50% (era 2.5rem) */
+        font-size: 10.75rem; /* Aumentado em 50% (era 2.5rem) */
         /* --- FIM CORREÇÃO --- */
-        margin-bottom: 35px; /* Aumenta um pouco o espaço abaixo */
+        margin-bottom: 55px; /* Aumenta um pouco o espaço abaixo */
         color: #1b5e20; 
     }
 
     .welcome-screen-container p {
         /* --- CORREÇÃO: Tamanho --- */
-        font-size: 3.95rem; /* Aumentado em 50% (era 1.3rem) */
+        font-size: 8.95rem; /* Aumentado em 50% (era 1.3rem) */
         /* --- FIM CORREÇÃO --- */
         opacity: 0.9;
         color: #1b5e20; 
@@ -602,5 +602,6 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
 
