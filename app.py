@@ -31,17 +31,9 @@ utils.load_css() # Carrega o CSS do arquivo utils
 
 def tela_login():
     
-    # --- 1. Carregar Imagens ---
-    try:
-        # Logo pequeno da coluna da esquerda
-        logo_pequeno = Image.open("Foto 2.jpg") 
-    except Exception as e:
-        st.error(f"Não foi possível carregar 'Foto 2.jpg'.")
-        logo_pequeno = None
-        
     try:
         # Imagem grande da coluna da direita
-        imagem_principal = Image.open("Foto 3.jpg")
+        imagem_principal = Image.open("Foto 2.jpg")
     except Exception as e:
         st.error(f"Não foi possível carregar 'Foto 3.jpg'.")
         imagem_principal = None
@@ -53,8 +45,8 @@ def tela_login():
     with col1:
         
         if logo_pequeno:
-            # width=300 deixa ele pequeno
-            st.image(logo_pequeno, width=300) 
+            # width=200 deixa ele pequeno
+            st.image(logo_pequeno, width=200) 
         
         st.title("SEJA BEM VINDO!")
         st.subheader("Acesse sua conta")
@@ -437,6 +429,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
