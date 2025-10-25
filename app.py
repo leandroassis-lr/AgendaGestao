@@ -49,7 +49,7 @@ def tela_login():
         st.write("") 
 
         with st.form("form_login"):
-            email = st.text_input("Email (Opcional)", key="login_email")
+            email = st.text_input("Nome)", key="login_email")
             st.text_input("Senha (Desativada)", type="password", disabled=True)
             
             if st.form_submit_button("Conectar-se", use_container_width=True, type="primary"):
@@ -63,6 +63,18 @@ def tela_login():
             st.session_state.cadastro = True
             st.rerun()
             
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        with col2:
+        st.markdown('<div class="login-right-container">', unsafe_allow_html=True)
+        
+        # --- IMAGEM PRINCIPAL (HEXÁGONOS) ---
+        if imagem_principal:
+            st.image(imagem_principal, use_container_width=True) 
+        
+        # Seu texto de boas-vindas
+        st.markdown("<h2>Seja bem vindo a plataforma de gestão de projetos</h2>", unsafe_allow_html=True)
+        
         st.markdown('</div>', unsafe_allow_html=True)
 
         
@@ -418,6 +430,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
