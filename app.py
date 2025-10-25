@@ -27,89 +27,89 @@ def _to_date_safe(val):
 st.set_page_config(page_title="Projetos - GESTÃO", page_icon="📋", layout="wide")
 utils.load_css() # Carrega o CSS do arquivo utils
 
-# --- CSS personalizado para tela de login ---
-st.markdown("""
-<style>
-/* Remove o menu lateral */
-[data-testid="stSidebar"] {
-    display: none;
-}
-
-/* Fundo dividido com tons de verde */
-[data-testid="stAppViewContainer"] {
-    background: linear-gradient(90deg, #e8f5e9 0%, #e8f5e9 50%, #1b5e20 50%, #1b5e20 100%);
-}
-
-/* Centraliza o conteúdo verticalmente */
-section.main > div {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
-}
-
-/* Caixa da área de login */
-div[data-testid="stForm"] {
-    background-color: rgba(255, 255, 255, 0.95);
-    padding: 2.5rem;
-    border-radius: 16px;
-    box-shadow: 0 0 20px rgba(0,0,0,0.15);
-    width: 380px;
-}
-
-/* Botão de conectar-se */
-.stButton > button {
-    background-color: #43a047;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    padding: 0.6rem;
-    font-weight: bold;
-}
-
-.stButton > button:hover {
-    background-color: #2e7d32;
-}
-
-/* Campos de texto */
-.stTextInput > div > div > input {
-    border-radius: 8px;
-    border: 1px solid #ccc;
-}
-
-/* Subtítulos e textos */
-h3, h2, h1, .stSubheader {
-    color: #1b5e20 !important;
-}
-
-/* Ajuste da imagem da direita */
-img {
-    mix-blend-mode: multiply; /* remove o fundo branco */
-    max-width: 75% !important; /* deixa menor */
-    display: block;
-    margin: auto;
-}
-</style>
-""", unsafe_allow_html=True)
-
 # ----------------- Telas da Página Principal -----------------
 
 def tela_login():
-    
+    def tela_login():
+
+    # --- CSS exclusivo da tela de login ---
+    st.markdown("""
+    <style>
+    /* Esconde o menu lateral */
+    [data-testid="stSidebar"] {
+        display: none;
+    }
+
+    /* Fundo dividido em tons de verde */
+    [data-testid="stAppViewContainer"] {
+        background: linear-gradient(90deg, #e8f5e9 0%, #e8f5e9 50%, #1b5e20 50%, #1b5e20 100%);
+    }
+
+    /* Centraliza o conteúdo */
+    section.main > div {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+    }
+
+    /* Caixa da área de login */
+    div[data-testid="stForm"] {
+        background-color: rgba(255, 255, 255, 0.95);
+        padding: 2.5rem;
+        border-radius: 16px;
+        box-shadow: 0 0 20px rgba(0,0,0,0.15);
+        width: 380px;
+    }
+
+    /* Botão verde */
+    .stButton > button {
+        background-color: #43a047 !important;  /* verde médio */
+        color: white !important;
+        border: none;
+        border-radius: 8px;
+        padding: 0.6rem;
+        font-weight: bold;
+    }
+
+    .stButton > button:hover {
+        background-color: #2e7d32 !important; /* verde escuro */
+    }
+
+    /* Campos de texto */
+    .stTextInput > div > div > input {
+        border-radius: 8px;
+        border: 1px solid #ccc;
+    }
+
+    /* Subtítulos */
+    h3, h2, h1, .stSubheader {
+        color: #1b5e20 !important;
+    }
+
+    /* Imagem da direita */
+    img {
+        mix-blend-mode: multiply; /* Remove fundo branco */
+        max-width: 70% !important; /* Reduz tamanho */
+        display: block;
+        margin: auto;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # --- IMAGEM PRINCIPAL ---
     try:
-        # Imagem grande da coluna da direita
         imagem_principal = Image.open("Foto 2.jpg")
     except Exception as e:
-        st.error(f"Não foi possível carregar 'Foto 2.jpg'.")
+        st.error("Não foi possível carregar 'Foto 2.jpg'.")
         imagem_principal = None
 
-    # --- 2. Layout da Página ---
+    # --- Layout (duas colunas) ---
     col1, col2 = st.columns([1, 1]) 
 
-   # --- 3. Coluna da Esquerda (Login) ---
+    # --- Coluna esquerda (Login) ---
     with col1:
-        
-        st.subheader("Seja bem vindo a plataforma de gestão de projetos Allarmi")       
+        st.subheader("Seja bem vindo à plataforma de gestão de projetos Allarmi")       
         st.subheader("Acesse sua conta")
         st.write("") 
 
@@ -117,7 +117,7 @@ def tela_login():
             email = st.text_input("Nome", key="login_email")
             st.text_input("Senha (Desativada)", type="password", disabled=True)
             
-            if st.form_submit_button("Conectar-se", use_container_width=True, type="primary"):
+            if st.form_submit_button("Conectar-se", use_container_width=True):
                 nome_usuario = "Visitante"
                 if email: nome_usuario = utils.autenticar_direto(email) or email
                 st.session_state.update(usuario=nome_usuario, logado=True)
@@ -127,16 +127,11 @@ def tela_login():
         if st.button("Novo usuário", key="btn_novo_usuario", use_container_width=True):
             st.session_state.cadastro = True
             st.rerun()
-            
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-      # --- 4. Coluna da Direita (Branding) ---
+
+    # --- Coluna direita (Imagem) ---
     with col2:
-               
-        # --- IMAGEM PRINCIPAL (HEXÁGONOS) ---
         if imagem_principal:
-            st.image(imagem_principal, use_container_width=True) 
-        
+            st.image(imagem_principal, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
         
 def tela_cadastro_usuario():
@@ -491,6 +486,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
