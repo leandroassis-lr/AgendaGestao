@@ -44,7 +44,6 @@ def tela_login():
    # --- 3. Coluna da Esquerda (Login) ---
     with col1:
                
-        st.title("SEJA BEM VINDO!")
         st.subheader("Acesse sua conta")
         st.write("") 
 
@@ -67,10 +66,13 @@ def tela_login():
         
       # --- 4. Coluna da Direita (Branding) ---
     with col2:
-        st.markdown('<div class="login-right-container">', unsafe_allow_html=True)
                
+        # --- IMAGEM PRINCIPAL (HEXÁGONOS) ---
+        if imagem_principal:
+            st.image(imagem_principal, use_container_width=True) 
+        
         # Seu texto de boas-vindas
-        st.markdown("<h2>Seja bem vindo a plataforma de gestão de projetos</h2>", unsafe_allow_html=True)
+        st.markdown("<h2>Seja bem vindo a plataforma de gestão de projetos Allarmi</h2>", unsafe_allow_html=True)
         
         st.markdown('</div>', unsafe_allow_html=True)
         
@@ -426,6 +428,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
