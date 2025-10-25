@@ -78,7 +78,11 @@ def tela_login():
         border: 1px solid #ccc;
     }
 
-    h3, h2, h1, .stSubheader {
+    /* Títulos na coluna do formulário (esquerda) */
+    div[data-testid="stVerticalBlock"] h1,
+    div[data-testid="stVerticalBlock"] h2,
+    div[data-testid="stVerticalBlock"] h3,
+    div[data-testid="stVerticalBlock"] .stSubheader {
         color: #1b5e20 !important;
     }
 
@@ -122,7 +126,8 @@ def tela_login():
                 nome_usuario = "Visitante"
                 if email:
                     nome_usuario = utils.autenticar_direto(email) or email
-                st.session_state.update(usuario=nome_usuario, logado=True)
+                # Define que o login foi feito e que a tela de boas-vindas deve aparecer
+                st.session_state.update(usuario=nome_usuario, logado=True, boas_vindas=True, tela_principal=False)
                 st.rerun()
         
         st.divider()
@@ -192,9 +197,8 @@ def tela_boas_vindas():
     }
 
     /* --- CORREÇÃO DA COR DE FUNDO --- */
-    /* Removemos o '[data-testid="stAppViewContainer"]' daqui.
-     Isso faz a tela de boas-vindas usar o fundo padrão (branco) 
-     do Streamlit, em vez do fundo verde do login.
+    /* Removemos o seletor [data-testid="stAppViewContainer"] daqui.
+     Isso faz a tela de boas-vindas usar o fundo padrão (branco).
     */
     
     .welcome-screen-container { /* Renomeei para evitar conflito */
@@ -204,6 +208,8 @@ def tela_boas_vindas():
         height: 100vh;
         text-align: center;
         animation: fadeIn 1s ease-in-out;
+        /* Garante que o texto fique escuro no fundo branco */
+        color: #333; 
     }
 
     @keyframes fadeIn {
@@ -219,18 +225,17 @@ def tela_boas_vindas():
         margin-bottom: 20px;
     }
 
-    /* Como o fundo agora é branco, precisamos garantir 
-     que o texto seja escuro (o padrão). 
-     Removemos 'color: white;'
-    */
+    /* Garante que o texto seja escuro (o padrão). */
     .welcome-screen-container h1 {
         font-size: 2.2rem;
         margin-bottom: 10px;
+        color: #333; /* Garante a cor escura */
     }
 
     .welcome-screen-container p {
         font-size: 1.2rem;
         opacity: 0.9;
+        color: #333; /* Garante a cor escura */
     }
     </style>
     """, unsafe_allow_html=True)
@@ -250,28 +255,7 @@ def tela_boas_vindas():
     st.session_state.tela_principal = True
     st.rerun()
 
-
-# ----------------- Controle de Navegação -----------------
-if "logado" not in st.session_state:
-    st.session_state.logado = False
-if "cadastro" not in st.session_state:
-    st.session_state.cadastro = False
-if "boas_vindas" not in st.session_state:
-    st.session_state.boas_vindas = False
-if "tela_principal" not in st.session_state:
-    st.session_state.tela_principal = False
-
-if not st.session_state.logado:
-    tela_login()
-elif st.session_state.cadastro:
-    tela_cadastro_usuario()
-elif st.session_state.boas_vindas:
-    tela_boas_vindas()
-elif st.session_state.tela_principal:
-else:
-    st.session_state.boas_vindas = True
-    st.rerun()
-
+# ----------------- Função: Tela de Cadastro de Projeto -----------------
 def tela_cadastro_projeto():
     if st.button("⬅️ Voltar para Projetos"):
         st.session_state.tela_cadastro_proj = False
@@ -311,14 +295,11 @@ def tela_cadastro_projeto():
             st.session_state["tela_cadastro_proj"] = False
             st.rerun()
 
-# (Substitua sua função tela_projetos INTEIRA por esta)
-
+# ----------------- Função: Tela Principal de Projetos -----------------
 def tela_projetos():
     st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True)
     
     df = utils.carregar_projetos_db()
-    
-    # Limpamos qualquer código de debug que estava aqui
     
     df_sla = utils.carregar_config_db("sla") 
     df_etapas_config = utils.carregar_config_db("etapas_evolucao") 
@@ -327,7 +308,7 @@ def tela_projetos():
         st.info("Nenhum projeto cadastrado ainda.")
         return
 
-    # --- CORREÇÃO DA DATA N/A ---
+    # --- CORREÇÃO DA DATA N/A (FEITA ANTERIORMENTE) ---
     df['Agendamento'] = pd.to_datetime(df['Agendamento'], errors='coerce')
     df['Agendamento_str'] = df['Agendamento'].dt.strftime("%d/%m/%y").fillna('N/A')
     # --- FIM DA CORREÇÃO ---
@@ -552,55 +533,62 @@ def tela_projetos():
             if st.button("Próxima ➡️", use_container_width=True, disabled=(st.session_state.page_number >= total_pages - 1)):
                 st.session_state.page_number += 1
                 st.rerun()
-                
+        
 # ----------------- CONTROLE PRINCIPAL -----------------
 
 def main():
-    if "logado" not in st.session_state: st.session_state.logado = False
-    if "cadastro" not in st.session_state: st.session_state.cadastro = False
-    if "tela_cadastro_proj" not in st.session_state: st.session_state.tela_cadastro_proj = False
+    # Inicializa os estados da sessão
+    if "logado" not in st.session_state:
+        st.session_state.logado = False
+    if "cadastro" not in st.session_state:
+        st.session_state.cadastro = False
+    if "boas_vindas" not in st.session_state:
+        st.session_state.boas_vindas = False # Começa como falso
+    if "tela_principal" not in st.session_state:
+        st.session_state.tela_principal = False
+    if "tela_cadastro_proj" not in st.session_state: 
+        st.session_state.tela_cadastro_proj = False
 
-    # --- LÓGICA PRINCIPAL ---
-    # SE NÃO ESTIVER LOGADO...
-    if not st.session_state.get("logado", False):
-        if st.session_state.get("cadastro", False):
+    # --- LÓGICA PRINCIPAL DE ROTEAMENTO ---
+    if not st.session_state.logado:
+        if st.session_state.cadastro:
             tela_cadastro_usuario()
         else:
-            tela_login() # <- Mostra a nova tela de login (e NADA MAIS)
-        return # <- Para a execução aqui
-
-    # --- O CÓDIGO ABAIXO SÓ RODA SE ESTIVER LOGADO ---
-    
-    st.sidebar.title(f"Bem-vindo(a), {st.session_state.get('usuario', 'Visitante')}! 📋")
-    
-    st.sidebar.info(f"Hoje é: {datetime.now().strftime('%d/%m/%Y')}")
-    
-    st.sidebar.divider()
-    st.sidebar.title("Ações")
-    if st.sidebar.button("➕ Novo Projeto", use_container_width=True):
-        st.session_state.tela_cadastro_proj = True
-        st.rerun()
-    st.sidebar.divider()
-    st.sidebar.title("Sistema")
-    if st.sidebar.button("Logout", use_container_width=True):
-        st.session_state.clear()
-        st.rerun()
-    
-    # Controla a tela principal (se logado)
-    if st.session_state.get("tela_cadastro_proj"):
-        tela_cadastro_projeto()
+            tela_login() # Mostra a tela de login
+            
+    elif st.session_state.boas_vindas:
+        tela_boas_vindas() # Mostra as boas-vindas (depois do login)
+        
+    elif st.session_state.tela_principal:
+        # --- O CÓDIGO ABAIXO SÓ RODA SE ESTIVER LOGADO E JÁ PASSOU DAS BOAS-VINDAS ---
+        
+        st.sidebar.title(f"Bem-vindo(a), {st.session_state.get('usuario', 'Visitante')}! 📋")
+        st.sidebar.info(f"Hoje é: {datetime.now().strftime('%d/%m/%Y')}")
+        st.sidebar.divider()
+        st.sidebar.title("Ações")
+        if st.sidebar.button("➕ Novo Projeto", use_container_width=True):
+            st.session_state.tela_cadastro_proj = True
+            st.rerun()
+        st.sidebar.divider()
+        st.sidebar.title("Sistema")
+        if st.sidebar.button("Logout", use_container_width=True):
+            st.session_state.clear()
+            st.rerun()
+        
+        # Controla a tela principal (se logado)
+        if st.session_state.get("tela_cadastro_proj"):
+            tela_cadastro_projeto()
+        else:
+            tela_projetos() # Mostra sua lista de cards
+            
     else:
-        tela_projetos() # <- Mostra sua lista de cards
+        # Este é o estado inicial logo após o login
+        st.session_state.boas_vindas = True
+        st.rerun()
 
-
+# --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
 
 
 
