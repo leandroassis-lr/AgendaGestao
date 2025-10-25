@@ -30,8 +30,7 @@ utils.load_css() # Carrega o CSS do arquivo utils
 # ----------------- Telas da Página Principal -----------------
 
 def tela_login():
-    def tela_login():
-
+    
     # --- CSS exclusivo da tela de login ---
     st.markdown("""
     <style>
@@ -486,6 +485,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
