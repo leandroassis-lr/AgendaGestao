@@ -194,13 +194,6 @@ if "boas_vindas" not in st.session_state:
 if "tela_principal" not in st.session_state:
     st.session_state.tela_principal = False
 
-if not st.session_state.logado:
-    tela_login()
-elif st.session_state.cadastro:
-    tela_cadastro_usuario()
-elif st.session_state.boas_vindas:
-    tela_boas_vindas()
-elif st.session_state.tela_principal:
 else:
     st.session_state.boas_vindas = True
     st.rerun()
@@ -528,6 +521,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
