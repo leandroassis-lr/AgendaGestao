@@ -35,7 +35,7 @@ def tela_login():
         # Imagem grande da coluna da direita
         imagem_principal = Image.open("Foto 2.jpg")
     except Exception as e:
-        st.error(f"Não foi possível carregar 'Foto 3.jpg'.")
+        st.error(f"Não foi possível carregar 'Foto 2.jpg'.")
         imagem_principal = None
 
     # --- 2. Layout da Página ---
@@ -43,11 +43,7 @@ def tela_login():
 
    # --- 3. Coluna da Esquerda (Login) ---
     with col1:
-        
-        if logo_pequeno:
-            # width=200 deixa ele pequeno
-            st.image(logo_pequeno, width=200) 
-        
+               
         st.title("SEJA BEM VINDO!")
         st.subheader("Acesse sua conta")
         st.write("") 
@@ -69,13 +65,6 @@ def tela_login():
             
         st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 4. Coluna da Direita (Branding) ---
-    with col2:
-                
-        if imagem_principal:
-            st.image(imagem_principal, use_container_width=True) 
-               
-        st.markdown('</div>', unsafe_allow_html=True)
         
 def tela_cadastro_usuario():
     st.subheader("Cadastrar Novo Usuário")
@@ -429,6 +418,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
