@@ -30,17 +30,17 @@ utils.load_css() # Carrega o CSS do arquivo utils
 # --- CSS personalizado para tela de login ---
 st.markdown("""
 <style>
-/* Remove completamente o menu lateral */
+/* Remove o menu lateral */
 [data-testid="stSidebar"] {
     display: none;
 }
 
-/* Fundo dividido: metade clara e metade escura */
+/* Fundo dividido com tons de verde */
 [data-testid="stAppViewContainer"] {
-    background: linear-gradient(90deg, #f8f9fb 0%, #f8f9fb 50%, #1e1f36 50%, #1e1f36 100%);
+    background: linear-gradient(90deg, #e8f5e9 0%, #e8f5e9 50%, #1b5e20 50%, #1b5e20 100%);
 }
 
-/* Centralizar o conteúdo na tela */
+/* Centraliza o conteúdo verticalmente */
 section.main > div {
     display: flex;
     align-items: center;
@@ -50,7 +50,7 @@ section.main > div {
 
 /* Caixa da área de login */
 div[data-testid="stForm"] {
-    background-color: rgba(255, 255, 255, 0.92);
+    background-color: rgba(255, 255, 255, 0.95);
     padding: 2.5rem;
     border-radius: 16px;
     box-shadow: 0 0 20px rgba(0,0,0,0.15);
@@ -59,7 +59,7 @@ div[data-testid="stForm"] {
 
 /* Botão de conectar-se */
 .stButton > button {
-    background-color: #ff4b4b;
+    background-color: #43a047;
     color: white;
     border: none;
     border-radius: 8px;
@@ -68,7 +68,7 @@ div[data-testid="stForm"] {
 }
 
 .stButton > button:hover {
-    background-color: #e04040;
+    background-color: #2e7d32;
 }
 
 /* Campos de texto */
@@ -79,7 +79,15 @@ div[data-testid="stForm"] {
 
 /* Subtítulos e textos */
 h3, h2, h1, .stSubheader {
-    color: #1e1f36 !important;
+    color: #1b5e20 !important;
+}
+
+/* Ajuste da imagem da direita */
+img {
+    mix-blend-mode: multiply; /* remove o fundo branco */
+    max-width: 75% !important; /* deixa menor */
+    display: block;
+    margin: auto;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -483,6 +491,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
