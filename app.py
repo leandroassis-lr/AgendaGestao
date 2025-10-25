@@ -128,7 +128,6 @@ def tela_login():
             st.image(imagem_principal, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-
 # ----------------- Função: Tela de Cadastro -----------------
 def tela_cadastro_usuario():
     st.subheader("Cadastrar Novo Usuário")
@@ -172,15 +171,6 @@ def tela_boas_vindas():
     ]
     msg = random.choice(mensagens)
 
-    st.markdown("""
-    <style>
-    [data-testid="stSidebar"], [data-testid="stToolbar"] {
-        display: none;
-    }
-
-    </style>
-    """, unsafe_allow_html=True)
-
     st.markdown(f"""
     <div class="welcome-container">
         <img src="Foto 2.jpg" alt="Logo Allarmi">
@@ -193,7 +183,6 @@ def tela_boas_vindas():
     st.session_state.boas_vindas = False
     st.session_state.tela_principal = True
     st.rerun()
-
 
 # ----------------- Controle de Navegação -----------------
 if "logado" not in st.session_state:
@@ -211,8 +200,6 @@ elif st.session_state.cadastro:
     tela_cadastro_usuario()
 elif st.session_state.boas_vindas:
     tela_boas_vindas()
-elif st.session_state.tela_principal:
-    st.success("✅ Sistema principal carregado! (aqui entra sua tela principal)")
 else:
     st.session_state.boas_vindas = True
     st.rerun()
@@ -540,6 +527,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
