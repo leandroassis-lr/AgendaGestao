@@ -27,6 +27,63 @@ def _to_date_safe(val):
 st.set_page_config(page_title="Projetos - GESTÃO", page_icon="📋", layout="wide")
 utils.load_css() # Carrega o CSS do arquivo utils
 
+# --- CSS personalizado para tela de login ---
+st.markdown("""
+<style>
+/* Remove completamente o menu lateral */
+[data-testid="stSidebar"] {
+    display: none;
+}
+
+/* Fundo dividido: metade clara e metade escura */
+[data-testid="stAppViewContainer"] {
+    background: linear-gradient(90deg, #f8f9fb 0%, #f8f9fb 50%, #1e1f36 50%, #1e1f36 100%);
+}
+
+/* Centralizar o conteúdo na tela */
+section.main > div {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+}
+
+/* Caixa da área de login */
+div[data-testid="stForm"] {
+    background-color: rgba(255, 255, 255, 0.92);
+    padding: 2.5rem;
+    border-radius: 16px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.15);
+    width: 380px;
+}
+
+/* Botão de conectar-se */
+.stButton > button {
+    background-color: #ff4b4b;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 0.6rem;
+    font-weight: bold;
+}
+
+.stButton > button:hover {
+    background-color: #e04040;
+}
+
+/* Campos de texto */
+.stTextInput > div > div > input {
+    border-radius: 8px;
+    border: 1px solid #ccc;
+}
+
+/* Subtítulos e textos */
+h3, h2, h1, .stSubheader {
+    color: #1e1f36 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # ----------------- Telas da Página Principal -----------------
 
 def tela_login():
@@ -426,6 +483,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
