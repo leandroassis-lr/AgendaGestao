@@ -111,12 +111,13 @@ def tela_login():
     }
 
     .login-logo-container img {
-        max-width: 50% !important; 
-        border-radius: 50%; 
+        max-width: 70% !important; 
+        border-radius: 70%; 
         -webkit-mask-image: -webkit-radial-gradient(white, black); 
         mask-image: radial-gradient(white, black);
         filter: brightness(1.2) contrast(1.1); 
         box-shadow: 0 0 15px rgba(0,0,0,0.3);
+        margin: auto; /* Centraliza o formulário horizontalmente na coluna */
     }
     </style>
     """, unsafe_allow_html=True)
@@ -250,20 +251,15 @@ def tela_boas_vindas():
     </style>
     """, unsafe_allow_html=True)
 
-    # --- CORREÇÃO: REMOÇÃO DA IMAGEM ---
-    # Coloca os elementos dentro do container principal da tela
     st.markdown('<div class="welcome-screen-container">', unsafe_allow_html=True)
     
-    # Removemos a imagem daqui
-    
-    # O texto agora é o único conteúdo
     st.markdown(f"""
             <h1>Seja bem-vindo, {st.session_state.usuario} 👋</h1>
             <p>{msg}</p>
         </div> 
     """, unsafe_allow_html=True) # Fecha a div
 
-    time.sleep(5) # Mantém o sleep
+    time.sleep(5)
     st.session_state.boas_vindas = False
     st.session_state.tela_principal = True
     st.rerun()
@@ -601,4 +597,5 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
