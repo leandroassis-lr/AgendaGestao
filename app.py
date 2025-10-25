@@ -246,15 +246,15 @@ def tela_boas_vindas():
 
     .welcome-screen-container h1 {
         /* --- CORREÇÃO: Tamanho --- */
-        font-size: 3.75rem; /* Aumentado em 50% (era 2.5rem) */
+        font-size: 5.75rem; /* Aumentado em 50% (era 2.5rem) */
         /* --- FIM CORREÇÃO --- */
-        margin-bottom: 15px; /* Aumenta um pouco o espaço abaixo */
+        margin-bottom: 35px; /* Aumenta um pouco o espaço abaixo */
         color: #1b5e20; 
     }
 
     .welcome-screen-container p {
         /* --- CORREÇÃO: Tamanho --- */
-        font-size: 1.95rem; /* Aumentado em 50% (era 1.3rem) */
+        font-size: 3.95rem; /* Aumentado em 50% (era 1.3rem) */
         /* --- FIM CORREÇÃO --- */
         opacity: 0.9;
         color: #1b5e20; 
@@ -263,8 +263,7 @@ def tela_boas_vindas():
     """, unsafe_allow_html=True)
 
     # Conteúdo da tela de boas-vindas
-    st.markdown('<div class="welcome-screen-container">', unsafe_allow_html=True)
-    
+        
     st.markdown(f"""
             <h1>Seja bem-vindo, {st.session_state.usuario} 👋</h1>
             <p>{msg}</p>
@@ -603,4 +602,5 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
