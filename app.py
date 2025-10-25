@@ -33,7 +33,7 @@ utils.load_css()
 
 # ----------------- Função: Tela de Login -----------------
 def tela_login():
-    # --- CSS exclusivo da tela de login ---
+   
     st.markdown("""
     <style>
     [data-testid="stSidebar"] {
@@ -200,6 +200,7 @@ elif st.session_state.cadastro:
     tela_cadastro_usuario()
 elif st.session_state.boas_vindas:
     tela_boas_vindas()
+elif st.session_state.tela_principal:
 else:
     st.session_state.boas_vindas = True
     st.rerun()
@@ -527,6 +528,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
