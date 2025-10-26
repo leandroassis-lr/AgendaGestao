@@ -133,14 +133,16 @@ col1, col2 = st.columns([2, 1])
 with col1:
     nome = st.text_input("Nome de usuário")
     email = st.text_input("E-mail corporativo")
-
-    if st.button("Entrar"):
-        # --- Acesso temporário liberado para Leandro ---
-        if nome.strip().lower() == "leandro" and email.strip().lower() == "leandro.assis@allarmi.com.br":
-            st.session_state["autenticado"] = True
-            st.success("Acesso liberado! Bem-vindo, Leandro 👋")
-        else:
-            st.error("Acesso temporário liberado apenas para Leandro.")
+    
+if st.button("Entrar"):
+    # --- Acesso temporário liberado apenas para Leandro ---
+    if nome.strip().lower() == "leandro" and email.strip().lower() == "leandro.assis@allarmi.com.br":
+        st.session_state["autenticado"] = True
+        st.session_state["usuario"] = "Leandro"
+        st.session_state["email"] = "leandro.assis@allarmi.com.br"
+        st.rerun()  # 🔁 força atualização da página para entrar no sistema
+    else:
+        st.error("Acesso temporário liberado apenas para Leandro.")
 
 with col2:
     try:
@@ -565,6 +567,7 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
 
 
