@@ -126,7 +126,7 @@ def tela_login():
         imagem_principal = None
 
     # --- Layout (duas colunas) ---
-    col1, col2 = st.columns([2, 1], gap="small") 
+    col1, col2 = st.columns([1, 2], gap="small") 
 
     # --- Coluna esquerda (Login) ---
     with col1:
@@ -147,8 +147,8 @@ if st.button("Entrar"):
         st.error("Acesso temporário liberado apenas para Leandro.")
 
     # --- Coluna direita (Imagem) ---
-    with col2:
-       
+with col2:
+        st.markdown('<div class="login-logo-container">', unsafe_allow_html=True)
         if imagem_principal:
             st.image(imagem_principal)
         st.markdown('</div>', unsafe_allow_html=True)
@@ -570,6 +570,7 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
 
 
