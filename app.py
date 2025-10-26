@@ -138,23 +138,20 @@ def tela_login():
             nome = st.text_input("Nome", key="login_nome")
             email = st.text_input("E-mail", key="login_email")
 
-            if st.form_submit_button("Conectar-se", use_container_width=True):
-                if not nome or not email:
-                    st.error("Por favor, preencha *Nome* e *E-mail* para continuar.")
-                else:
-                    usuario_valido = utils.validar_usuario(nome, email)
-                    if usuario_valido:
-                        st.session_state.update(usuario=nome, logado=True, boas_vindas=True, tela_principal=False)
-                        st.rerun()
-                    else:
-                        st.error("Usuário não encontrado. Verifique o nome e e-mail cadastrados.")
+     if st.button("Entrar"):
+    # --- Modo temporário: libera acesso direto ao Leandro ---
+        if nome.strip().lower() == "leandro" and email.strip().lower() == "leandro.assis@allarmi.com.br":
+        st.session_state["autenticado"] = True
+        st.success("Acesso liberado! Bem-vindo, Leandro 👋")
+        else:
+        st.error("Acesso temporário liberado apenas para Leandro.")
 
     # --- Coluna direita (Imagem) ---
-    with col2:
-        st.markdown('<div class="login-logo-container">', unsafe_allow_html=True)
-        if imagem_principal:
-            st.image(imagem_principal)
-        st.markdown('</div>', unsafe_allow_html=True)
+   with col2:
+       
+    st.markdown("<div style='display:flex;justify-content:center;align-items:center;height:100%;'>", unsafe_allow_html=True)
+    st.image("Foto 2.jpg", use_column_width=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ----------------- Função: Tela de Cadastro de Usuário (chamada em Configurações) -----------------
@@ -573,6 +570,7 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
 
 
