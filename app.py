@@ -690,13 +690,11 @@ def main():
     elif st.session_state.tela_principal:
         
         # --- Sidebar (Atualizada) ---
-        st.sidebar.title(f"Bem-vindo(a), {st.session_state.get('usuario', 'Visitante')}! 📋")
-        st.sidebar.info(f"Hoje é: {datetime.now().strftime('%d/%m/%Y')}")
+        st.sidebar.title(f"Bem-vindo(a), {st.session_state.get('usuario', 'Visitante')}")
         st.sidebar.divider()
         
         st.sidebar.title("Ações")
         
-        # ⬇️ BOTÃO NOVO PROJETO (Atualizado para resetar a tela de config) ⬇️
         if st.sidebar.button("➕ Novo Projeto", use_container_width=True):
             st.session_state.tela_cadastro_proj = True
             st.session_state.tela_configuracoes = False # Reseta o outro
@@ -733,6 +731,3 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
-
-
-
