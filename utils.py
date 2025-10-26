@@ -340,7 +340,7 @@ def load_css():
 
     /* 1. PALETA DE CORES */
     :root {
-        --green-darkest: #90EE90; /* Para títulos principais E sidebar */
+        --green-darkest: #C1FFC1; /* Para títulos principais E sidebar */
         --green-dark: #2e7d32;    /* Para subtítulos */
         --green-main: #43a047;   /* Para botões e bordas */
         --green-light: #e8f5e9;  /* Para textos de destaque na sidebar */
@@ -596,6 +596,7 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
 
 
 
