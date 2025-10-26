@@ -99,7 +99,7 @@ def tela_login():
         text-align: center;
     }
 
-    /* Centraliza o logotipo na direita */
+        /* Centraliza o logotipo na direita */
     .login-logo-container {
         display: flex;
         justify-content: center;
@@ -110,16 +110,16 @@ def tela_login():
     }
 
     .login-logo-container img {
-        max-width: 50%;
+        max-width: 35%; /* 🔹 Reduzi de 50% para 35% (cerca de 30% menor) */
         height: auto;
         border-radius: 50%;
         -webkit-mask-image: -webkit-radial-gradient(white, black);
         mask-image: radial-gradient(white, black);
-        filter: brightness(1.2) contrast(1.1);
+        filter: brightness(1.1) contrast(1.1);
         box-shadow: 0 0 15px rgba(0,0,0,0.3);
+        display: block;
+        margin: auto; /* 🔹 Garante centralização horizontal */
     }
-    </style>
-    """, unsafe_allow_html=True)
 
     # --- IMAGEM PRINCIPAL ---
     try:
@@ -153,19 +153,20 @@ def tela_login():
                     st.rerun()
                 else:
                     st.error("Acesso negado, tente novamente")
-                    
+
     with col2:
-        try:
-            # Use a div 'login-logo-container' para que seu CSS seja aplicado
-            
-            if imagem_principal:
-                # Use 'use_container_width=True' para a imagem se ajustar ao CSS
-                st.image(imagem_principal, use_container_width=True) 
-            else:
-                 st.warning("Não foi possível carregar a imagem do logo.")
-            
-        except Exception as e:
-            st.warning(f"Não foi possível carregar a imagem do logo: {e}")
+    if imagem_principal:
+        st.markdown(
+            f"""
+            <div class="login-logo-container">
+                <img src="data:image/png;base64,{utils.image_to_base64(imagem_principal)}" alt="Logo Allarmi">
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    else:
+        st.warning("Não foi possível carregar a imagem do logo.")
+
 
 # ----------------- Função: Tela de Cadastro de Usuário -----------------#
 
@@ -731,3 +732,4 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
