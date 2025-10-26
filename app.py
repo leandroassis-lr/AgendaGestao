@@ -152,7 +152,7 @@ def tela_login():
                     st.session_state.update(usuario=nome_usuario, logado=True, boas_vindas=True, tela_principal=False)
                     st.rerun()
                 else:
-                    st.error("Acesso temporário liberado apenas para Leandro.")
+                    st.error("Acesso negado, tente novamente")
                     
     with col2:
         try:
@@ -583,6 +583,7 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
 
 
