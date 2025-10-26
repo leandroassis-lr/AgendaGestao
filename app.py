@@ -264,45 +264,91 @@ def tela_boas_vindas():
     msg = random.choice(mensagens)
 
     st.markdown("""
-    <style>
-    [data-testid="stSidebar"], [data-testid="stToolbar"] {
-        display: none;
-    }
+<style>
+/* Remove a sidebar SÓ na tela de login */
+[data-testid="stSidebar"] {
+    display: none;
+}
 
-    body, [data-testid="stAppViewContainer"], section.main, [data-testid="stVerticalBlock"], [data-testid="stHorizontalBlock"] > div {
-        background-color: #e8f5e9 !important;
-    }
+/* Fundo dividido para a tela de login */
+[data-testid="stAppViewContainer"] {
+    background: linear-gradient(90deg, #e8f5e9 0%, #e8f5e9 50%, #1b5e20 50%, #1b5e20 100%);
+}
 
-    .welcome-screen-container { 
-        display: flex;
-        flex-direction: column; 
-        align-items: center;
-        justify-content: flex-start;
-        padding-top: 35vh;
-        height: 100vh; 
-        text-align: center;
-        animation: fadeIn 1s ease-in-out;
-        color: #1b5e20; 
-    }
+section.main > div {
+    display: flex; 
+    align-items: stretch;
+    justify-content: center;
+    height: 100vh;
+}
 
-    @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
-    }
+div[data-testid="stHorizontalBlock"] > div[data-testid^="stVerticalBlock"] {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    height: 100vh;
+}
 
-    .welcome-screen-container h1 {
-        font-size: 3rem;
-        margin-bottom: 25px;
-        color: #1b5e20; 
-    }
+/* Estilo do formulário */
+div[data-testid="stForm"] {
+    background-color: rgba(255, 255, 255, 0.95);
+    padding: 2.5rem;
+    border-radius: 16px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.15);
+    width: 380px;
+    margin: auto;
+}
 
-    .welcome-screen-container p {
-        font-size: 1.4rem;
-        opacity: 0.9;
-        color: #1b5e20; 
-    }
-    </style>
-    """, unsafe_allow_html=True)
+.stButton > button {
+    background-color: #43a047 !important;
+    color: white !important;
+    border: none;
+    border-radius: 8px;
+    padding: 0.6rem;
+    font-weight: bold;
+}
+
+.stButton > button:hover {
+    background-color: #2e7d32 !important;
+}
+
+.stTextInput > div > div > input {
+    border-radius: 8px;
+    border: 1px solid #ccc;
+}
+
+/* Títulos */
+div[data-testid="stHorizontalBlock"] > div:nth-child(1) h1, 
+div[data-testid="stHorizontalBlock"] > div:nth-child(1) h2,
+div[data-testid="stHorizontalBlock"] > div:nth-child(1) h3,
+div[data-testid="stHorizontalBlock"] > div:nth-child(1) .stSubheader {
+    color: #1b5e20 !important;
+    text-align: center;
+}
+
+/* Centraliza e redimensiona o logotipo na direita */
+.login-logo-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh !important;
+    width: 100%;
+    text-align: center;
+}
+
+.login-logo-container img {
+    max-width: 35%; /* Reduzido 30% */
+    height: auto;
+    border-radius: 50%;
+    -webkit-mask-image: -webkit-radial-gradient(white, black);
+    mask-image: radial-gradient(white, black);
+    filter: brightness(1.1) contrast(1.1);
+    box-shadow: 0 0 15px rgba(0,0,0,0.3);
+    display: block;
+    margin: auto;
+}
+</style>
+""", unsafe_allow_html=True)
 
     st.markdown(f"""
         <div class="welcome-screen-container">
@@ -732,4 +778,5 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
