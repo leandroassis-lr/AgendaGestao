@@ -1,48 +1,54 @@
-/* ================================================= */
-/* === ARQUIVO CSS ATUALIZADO - GESTÃO ALLARMI === */
-/* ================================================= */
-
-/* 1. PALETA DE CORES (ATUALIZADA) */
+/* 1. PALETA DE CORES */
 :root {
-    /* Nova Paleta Verde (substituindo o Itau) */
-    --green-darkest: #1b5e20; /* Para títulos principais */
-    --green-dark: #2e7d32;    /* Para subtítulos */
-    --green-main: #43a047;   /* Para botões e bordas */
-    --green-light: #e8f5e9;  /* Para fundos (Sidebar) */
-    --red-danger: #d32f2f;   /* Para botões (Logout, Excluir) */
+    --green-darkest: #1b5e20;
+    --green-dark: #2e7d32;
+    --green-main: #43a047;
+    --green-light: #e8f5e9;
+    --red-danger: #d32f2f;
 
-    /* Padrões mantidos */
     --muted: #6b7280;
     --card-bg: #ffffff;
-    --page-bg: #f7fbff; /* Fundo principal (branco-azulado) */
+    --page-bg: #f7fbff;
 }
 
-/* 2. FUNDOS (Página e Sidebar) */
-
-/* Fundo da Página Principal (Mantido) */
+/* 2. FUNDOS E ESTRUTURA */
 [data-testid="stAppViewContainer"] {
     background-color: var(--page-bg);
+    font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
 }
 
-/* FUNDO DA SIDEBAR (NOVO) */
+/* Sidebar customizada */
 [data-testid="stSidebar"] {
-    background-color: var(--green-light) !important;
+    background: linear-gradient(180deg, var(--green-light), #f1fff3 65%);
+    color: var(--green-darkest);
+    border-top-right-radius: 22px;
+    border-bottom-right-radius: 22px;
+    font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+    min-width: 240px;
 }
 
-/* 3. TÍTULOS E TEXTOS (ATUALIZADOS) */
+[data-testid="stSidebar"] .stButton > button {
+    background: var(--green-main);
+    color: white;
+    border-radius: 12px;
+    border: none;
+    font-weight: 600;
+    transition: 0.2s;
+}
+[data-testid="stSidebar"] .stButton > button:hover {
+    background: var(--green-dark);
+}
 
-/* Título Principal (PROJETOS) */
+/* 3. TÍTULOS E TEXTOS */
 .section-title-center {
     font-size: 2.5rem;
     font-weight: 700;
-    color: var(--green-darkest); /* <- MUDADO */
+    color: var(--green-darkest);
     text-align: center;
     padding-bottom: 10px;
     margin-bottom: 25px;
-    border-bottom: 4px solid var(--green-light); /* <- NOVO */
+    border-bottom: 4px solid var(--green-light);
 }
-
-/* Subtítulos (Filtros e Busca, etc.) - NOVO */
 h4 {
     color: var(--green-dark);
     font-weight: 600;
@@ -51,83 +57,114 @@ h4 {
     padding-left: 10px;
     margin-top: 1rem;
 }
-
-/* Título h5 dentro dos cards (ex: ESPAÇO ITAÚ) */
 .project-card h5 {
     margin: 0;
-    font-size: 16px;
-    color: var(--green-darkest); /* <- MUDADO */
+    font-size: 1.1rem;
+    color: var(--green-darkest);
 }
 
-/* 4. BOTÕES (ATUALIZADOS) */
-
-/* Estilo principal (ex: Novo Projeto) - ATUALIZADO */
+/* 4. BOTÕES */
 .stButton > button {
     border: 2px solid var(--green-main);
     background-color: transparent;
     color: var(--green-main);
-    border-radius: 8px;
-    padding: 8px 15px;
+    border-radius: 20px;
+    padding: 8px 20px;
     font-weight: 600;
-    transition: all 0.3s ease;
+    transition: background 0.3s, color 0.3s;
 }
-
-/* Hover (passar o mouse) - NOVO */
 .stButton > button:hover {
     background-color: var(--green-main);
     color: white;
     border-color: var(--green-main);
 }
-
-/* Foco (ao clicar) - NOVO */
 .stButton > button:focus {
-    box-shadow: 0 0 0 3px rgba(67, 160, 71, 0.3);
+    box-shadow: 0 0 0 3px rgba(67, 160, 71, 0.15);
     border-color: var(--green-dark);
 }
-
-/* Estilo "Primary" (Logout, Excluir) - NOVO */
 .stButton > button[kind="primary"] {
     border: 2px solid var(--red-danger);
-    background-color: transparent;
     color: var(--red-danger);
 }
-
 .stButton > button[kind="primary"]:hover {
-    background-color: var(--red-danger);
-    color: white;
+    background-color: var(--red-danger); color: white;
 }
 
-/* 5. SEÇÕES DO SEU APP (MANTIDAS E AJUSTADAS) */
-
-/* Barra superior (se você usar) */
-.topbar {
-    background: linear-gradient(90deg, var(--green-darkest) 0%, var(--green-dark) 100%); /* <- MUDADO */
-    padding: 12px 20px;
-    color: white;
-    border-radius: 8px;
-    margin-bottom: 18px;
-}
-
-/* Card de Projeto (Mantido) */
-.project-card {
-    background: var(--card-bg);
-    border: 1px solid #e6eef8;
+/* 5. INPUTS E FORMULÁRIOS */
+.stTextInput > div > div > input,
+.stSelectbox > div > div > select,
+.stTextArea > div > textarea {
     border-radius: 10px;
-    padding: 12px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
-    margin-bottom: 10px;
+    border: 1.2px solid #bfc9db;
+    padding: 8px;
+    font-size: 1rem;
+    transition: border-color 0.2s;
+    background-color: #FAFAFA;
+}
+.stTextInput > div > div > input:focus,
+.stTextArea > div > textarea:focus {
+    border-color: var(--green-main);
+    outline: none;
 }
 
-/* Card de Métrica (Mantido) */
-.metric-card {
+/* 6. CARDS */
+.project-card, .metric-card, div[data-testid="stForm"] {
     background: var(--card-bg);
-    padding: 12px;
-    border-radius: 8px;
+    border-radius: 14px;
+    box-shadow: 0 4px 16px rgba(33,41,58,0.09);
     border: 1px solid #e6eef8;
-    text-align: center;
+    padding: 18px 22px;
+    margin-bottom: 18px;
+    transition: box-shadow 0.3s;
+}
+.project-card:hover, .metric-card:hover {
+    box-shadow: 0 8px 28px rgba(33,41,58,0.13);
 }
 
-/* Texto 'muted' (Mantido) */
+/* 7. TABELAS */
+[data-testid="stDataFrame"] table {
+    border-radius: 6px;
+    overflow: hidden;
+    border-collapse: separate;
+    font-size: 0.97rem;
+}
+[data-testid="stDataFrame"] th {
+    background: var(--green-light);
+    color: var(--green-darkest);
+    font-weight: bold;
+}
+[data-testid="stDataFrame"] td {
+    background: #fff;
+}
+
+/* 8. TEXTO E UTILS */
 .small-muted {
     color: var(--muted);
 }
+body, html {
+    font-size: 1rem;
+    background-color: var(--page-bg);
+    color: #343541;
+}
+
+/* 9. RESPONSIVIDADE */
+@media (max-width: 900px) {
+  .section-title-center { font-size: 2rem; }
+  .project-card, .metric-card { padding: 10px; }
+}
+@media (max-width: 600px) {
+  .project-card, .metric-card, div[data-testid="stForm"] {
+    width: 98% !important;
+    min-width: unset !important;
+    box-sizing: border-box;
+    padding: 8px 4px;
+  }
+  .section-title-center { font-size: 1.5rem; }
+}
+
+/* 10. SCROLLBAR PARA SIDEBAR */
+[data-testid="stSidebar"]::-webkit-scrollbar { width: 8px; }
+[data-testid="stSidebar"]::-webkit-scrollbar-thumb { background-color: #B2DFDB; border-radius: 20px; }
+
+/* 11. ANIMAÇÕES SUAVES */
+* { transition: all 0.2s ease; }
