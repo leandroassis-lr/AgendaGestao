@@ -710,11 +710,11 @@ def main():
             st.session_state.tela_configuracoes = True
             st.session_state.tela_cadastro_proj = False # Reseta o outro
             st.rerun()
-            
-        if st.sidebar.button("Logout", use_container_width=True):
+           
+        if st.sidebar.button("Logout", use_container_width=True, type="primary"): 
             st.session_state.clear()
             st.rerun()
-        
+    
         # --- Lógica de Exibição da Página (Atualizada) ---
         
         # ⬇️ Roteamento principal atualizado ⬇️
@@ -733,4 +733,5 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
