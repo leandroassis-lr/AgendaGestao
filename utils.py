@@ -348,7 +348,7 @@ def load_css():
 
         --muted: #6b7280;
         --card-bg: #F0F8FF;
-        --page-bg: #DCDCDC; 
+        --page-bg: #7FFFD4; 
     }
 
     /* 2. FUNDOS (Página e Sidebar) */
@@ -596,6 +596,7 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
 
 
 
