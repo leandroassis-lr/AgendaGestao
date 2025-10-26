@@ -125,31 +125,46 @@ def tela_login():
         st.error("Não foi possível carregar 'Foto 2.jpg'.")
         imagem_principal = None
         
-# --- Layout principal do Login ---
+# --- LOGIN DO SISTEMA ---
 st.markdown("## 🔐 Acesso ao Sistema de Gestão")
 
+# --- Layout com duas colunas: formulário à esquerda, logo à direita ---
 col1, col2 = st.columns([2, 1])
 
 with col1:
     nome = st.text_input("Nome de usuário")
     email = st.text_input("E-mail corporativo")
-    
-if st.button("Entrar"):
-    # --- Acesso temporário liberado apenas para Leandro ---
-    if nome.strip().lower() == "leandro" and email.strip().lower() == "leandro.assis@allarmi.com.br":
-        st.session_state["autenticado"] = True
-        st.session_state["usuario"] = "Leandro"
-        st.session_state["email"] = "leandro.assis@allarmi.com.br"
-        st.rerun()  # 🔁 força atualização da página para entrar no sistema
-    else:
-        st.error("Acesso temporário liberado apenas para Leandro.")
+
+    # --- Botão Entrar ---
+    if st.button("Entrar"):
+        # Acesso temporário apenas para Leandro
+        if nome.strip().lower() == "leandro" and email.strip().lower() == "leandro.assis@allarmi.com.br":
+            st.session_state["autenticado"] = True
+            st.session_state["usuario"] = "Leandro"
+            st.session_state["email"] = "leandro.assis@allarmi.com.br"
+            st.success("Acesso liberado! Bem-vindo, Leandro 👋")
+            st.rerun()  # recarrega a página e entra no sistema
+        else:
+            st.error("Acesso temporário liberado apenas para Leandro.")
 
 with col2:
+    # CSS para centralizar verticalmente a imagem
+    st.markdown(
+        """
+        <style>
+            [data-testid="column"]:nth-child(2) {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
     try:
-        st.image("Foto 2.jpg", width=180)
-    except Exception as e:
-        st.warning("Não foi possível carregar a imagem do logo.")
-
+        st.image("Foto 2.jpg", width=200)
+    except Exception:
+        st.warning("Não foi possível carregar o logo (Foto 2.jpg).")
 
 # ----------------- Função: Tela de Cadastro de Usuário (chamada em Configurações) -----------------
 def tela_cadastro_usuario():
@@ -567,6 +582,7 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
 
 
