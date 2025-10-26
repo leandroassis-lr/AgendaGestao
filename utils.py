@@ -340,182 +340,9 @@ def dataframe_to_excel_bytes(df):
 # --- Funções Utilitárias ---
 
 def load_css():
-   
-    st.markdown("""
-    <style>
-    /* ======================================== */
-    /* === NOVOS ESTILOS - APP GESTÃO ALLARMI === */
-    /* ======================================== */
-
-    /* 1. PALETA DE CORES */
-    :root {
-        --green-darkest: #C1FFC1; /* Para títulos principais E sidebar */
-        --green-dark: #2e7d32;    /* Para subtítulos */
-        --green-main: #43a047;   /* Para botões e bordas */
-        --green-light: #e8f5e9;  /* Para textos de destaque na sidebar */
-        --red-danger: #d32f2f;   /* Para botões (Logout, Excluir) */
-
-        --muted: #6b7280;
-        --card-bg: #F0F8FF;
-        --page-bg: #FFFFE0; 
-    }
-
-    /* 2. FUNDOS (Página e Sidebar) */
-
-    /* Fundo da Página Principal */
-    [data-testid="stAppViewContainer"] {
-        background-color: var(--page-bg);
-    }
-
-    /* FUNDO DA SIDEBAR (MUDADO PARA VERDE ESCURO) */
-    [data-testid="stSidebar"] {
-        background-color: var(--green-darkest) !important;
-    }
-
-    /* 3. TÍTULOS E TEXTOS */
-
-    /* Título Principal (PROJETOS) */
-    .section-title-center {
-        /* ... (sem mudanças) ... */
-        font-size: 2.5rem;
-        font-weight: 700;
-        color: var(--green-darkest);
-        text-align: center;
-        padding-bottom: 10px;
-        margin-bottom: 25px;
-        border-bottom: 4px solid var(--green-light);
-    }
-
-    /* Subtítulos (Filtros e Busca, etc.) */
-    h4 {
-        /* ... (sem mudanças) ... */
-        color: var(--green-dark);
-        font-weight: 600;
-        padding-bottom: 5px;
-        border-left: 5px solid var(--green-main);
-        padding-left: 10px;
-        margin-top: 1rem;
-    }
-
-    /* Título h5 dentro dos cards */
-    .project-card h5 {
-        margin: 0;
-        font-size: 16px;
-        color: var(--green-darkest);
-    }
+   with open("style.css") as f:
+    st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
     
-    /* --- NOVOS ESTILOS DA SIDEBAR ESCURA --- */
-
-    /* Ajusta todo o texto na sidebar escura para branco */
-    [data-testid="stSidebar"] div,
-    [data-testid="stSidebar"] p,
-    [data-testid="stSidebar"] li {
-        color: white;
-    }
-    
-    /* Título "Bem-vindo(a), Leandro!" */
-    [data-testid="stSidebar"] [data-testid="stHeading"]:first-of-type h1 {
-         font-size: 1.75rem; 
-         font-weight: 700;
-         color: white;
-    }
-    
-    /* Títulos "Ações", "Sistema" */
-    [data-testid="stSidebar"] [data-testid="stHeading"]:not(:first-of-type) h1 {
-        font-size: 1.2rem; 
-        color: var(--green-light); /* Verde claro para destaque */
-        border-bottom: 2px solid var(--green-main);
-        padding-bottom: 5px;
-        margin-top: 15px;
-    }
-
-    /* "Info Box" (data) na sidebar */
-    [data-testid="stSidebar"] [data-testid="stAlert"] {
-        background-color: var(--green-dark);
-        border: 1px solid var(--green-main);
-    }
-    /* Texto dentro do info box */
-    [data-testid="stSidebar"] [data-testid="stAlert"] p {
-         color: white;
-    }
-
-    /* 4. BOTÕES E NAVEGAÇÃO (ATUALIZADO) */
-
-    /* Estilo principal (ex: Novo Projeto) */
-    .stButton > button {
-        border: 2px solid var(--green-main);
-        background-color: transparent;
-        color: var(--green-main);
-        border-radius: 8px;
-        padding: 8px 15px;
-        font-weight: 600;
-        transition: all 0.3s ease;
-    }
-
-    .stButton > button:hover {
-        background-color: var(--green-main);
-        color: white;
-        border-color: var(--green-main);
-    }
-
-    .stButton > button:focus {
-        box-shadow: 0 0 0 3px rgba(67, 160, 71, 0.3);
-        border-color: var(--green-dark);
-    }
-
-    /* Estilo "Primary" (Logout, Excluir) */
-    .stButton > button[kind="primary"] {
-        border: 2px solid var(--red-danger);
-        background-color: transparent;
-        color: var(--red-danger);
-    }
-
-    .stButton > button[kind="primary"]:hover {
-        background-color: var(--red-danger);
-        color: white;
-    }
-
-    /* --- NOVO: Estilo dos Links de Navegação (Agenda, Indicadores, etc.) --- */
-    [data-testid="stPageLink"] a {
-        /* Imita o estilo do .stButton */
-        display: block; 
-        border: 2px solid var(--green-main);
-        background-color: transparent;
-        color: var(--green-main);
-        border-radius: 8px;
-        padding: 8px 15px;
-        font-weight: 600;
-        transition: all 0.3s ease;
-        margin-bottom: 8px; /* Espaço entre os botões */
-        text-decoration: none; /* Remove sublinhado */
-    }
-
-    /* Hover para os links de navegação */
-    [data-testid="stPageLink"] a:hover {
-        background-color: var(--green-main);
-        color: white;
-        border-color: var(--green-main);
-        text-decoration: none;
-    }
-
-    /* Estilo da PÁGINA ATIVA (ex: quando estiver em 'Agenda') */
-    [data-testid="stPageLink"][aria-current="true"] a {
-        background-color: var(--green-main);
-        color: white;
-    }
-    
-    /* 5. SEÇÕES DO APP (Mantidas) */
-    
-    .project-card {
-        background: var(--card-bg);
-        border: 1px solid #e6eef8;
-        border-radius: 10px;
-        padding: 12px;
-        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
-        margin-bottom: 10px;
-    }
-    
-    </style>""", unsafe_allow_html=True)
 def autenticar_direto(email):
     df_users = carregar_usuarios_db()
     if not df_users.empty and 'email' in df_users.columns:
@@ -524,10 +351,8 @@ def autenticar_direto(email):
             return user.iloc[0]["nome"]
     return None
 
-
 def clean_key(text):
     return re.sub(r'[^a-zA-Z0-9_]', '_', str(text).lower())
-
 
 def get_status_color(status):
     s = str(status or "").strip().lower()
@@ -605,14 +430,3 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
-
-
-
-
-
-
-
-
-
-
-
