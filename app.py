@@ -146,11 +146,8 @@ if st.button("Entrar"):
         st.success("Acesso liberado! Bem-vindo, Leandro 👋")
     else:
         st.error("Acesso temporário liberado apenas para Leandro.")
-
-
-    # --- Coluna direita (Imagem) ---
-   with col2:
-       
+        
+with col2:
     st.markdown("<div style='display:flex;justify-content:center;align-items:center;height:100%;'>", unsafe_allow_html=True)
     st.image("Foto 2.jpg", use_column_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
@@ -572,6 +569,7 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
 
 
