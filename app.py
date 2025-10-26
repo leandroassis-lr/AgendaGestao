@@ -30,14 +30,11 @@ def _to_date_safe(val):
 st.set_page_config(page_title="Projetos - GESTÃO", page_icon="📋", layout="wide")
 utils.load_css() # Carrega o CSS do arquivo utils
 
-
 # ----------------- Função: Tela de Login -----------------
 def tela_login():
     # --- CSS exclusivo da tela de login ---
     st.markdown("""
     <style>
-    /* ... (Todo o seu CSS da tela_login fica aqui) ... */
-    
     /* Remove a sidebar SÓ na tela de login */
     [data-testid="stSidebar"] {
         display: none;
@@ -99,7 +96,7 @@ def tela_login():
         text-align: center;
     }
 
-        /* Centraliza o logotipo na direita */
+    /* Centraliza o logotipo na direita */
     .login-logo-container {
         display: flex;
         justify-content: center;
@@ -110,7 +107,7 @@ def tela_login():
     }
 
     .login-logo-container img {
-        max-width: 35%; /* 🔹 Reduzi de 50% para 35% (cerca de 30% menor) */
+        max-width: 35%; /* Reduzido cerca de 30% */
         height: auto;
         border-radius: 50%;
         -webkit-mask-image: -webkit-radial-gradient(white, black);
@@ -118,8 +115,10 @@ def tela_login():
         filter: brightness(1.1) contrast(1.1);
         box-shadow: 0 0 15px rgba(0,0,0,0.3);
         display: block;
-        margin: auto; /* 🔹 Garante centralização horizontal */
+        margin: auto;
     }
+    </style>
+    """, unsafe_allow_html=True)
 
     # --- IMAGEM PRINCIPAL ---
     try:
@@ -129,44 +128,43 @@ def tela_login():
         imagem_principal = None
 
     # --- Layout (duas colunas) ---
-    col1, col2 = st.columns([1, 1], gap="small") 
+    col1, col2 = st.columns([1, 1], gap="small")
 
     # --- Coluna esquerda (Login) ---
     with col1:
         st.subheader("Seja bem vindo à plataforma de gestão de projetos Allarmi")     
         st.subheader("Acesse sua conta")
-        st.write("") 
+        st.write("")
 
         with st.form("form_login"):
             nome = st.text_input("Nome", key="login_nome")
             email = st.text_input("E-mail", key="login_email")
-            
+
             if st.form_submit_button("Entrar"):
                 # --- Acesso temporário liberado para Leandro ---
                 if nome.strip().lower() == "leandro" and email.strip().lower() == "leandro.assis@allarmi.com.br":
                     st.session_state["autenticado"] = True
                     st.success("Acesso liberado! Bem-vindo, Leandro 👋")
-                    
-                    # Restaurei a lógica de transição para a tela de boas-vindas
-                    nome_usuario = "Leandro" 
+
+                    nome_usuario = "Leandro"
                     st.session_state.update(usuario=nome_usuario, logado=True, boas_vindas=True, tela_principal=False)
                     st.rerun()
                 else:
                     st.error("Acesso negado, tente novamente")
 
+    # --- Coluna direita (Logo) ---
     with col2:
-    if imagem_principal:
-        st.markdown(
-            f"""
-            <div class="login-logo-container">
-                <img src="data:image/png;base64,{utils.image_to_base64(imagem_principal)}" alt="Logo Allarmi">
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-    else:
-        st.warning("Não foi possível carregar a imagem do logo.")
-
+        if imagem_principal:
+            st.markdown(
+                f"""
+                <div class="login-logo-container">
+                    <img src="data:image/png;base64,{utils.image_to_base64(imagem_principal)}" alt="Logo Allarmi">
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        else:
+            st.warning("Não foi possível carregar a imagem do logo.")
 
 # ----------------- Função: Tela de Cadastro de Usuário -----------------#
 
@@ -778,5 +776,6 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
 
