@@ -33,7 +33,6 @@ utils.load_css() # Carrega o CSS do arquivo utils
 
 # ----------------- Função: Tela de Login -----------------
 def tela_login():
-    # --- CSS exclusivo da tela de login ---
     st.markdown("""
     <style>
     /* Remove a sidebar SÓ na tela de login */
@@ -46,21 +45,18 @@ def tela_login():
         background: linear-gradient(90deg, #e8f5e9 0%, #e8f5e9 50%, #1b5e20 50%, #1b5e20 100%);
     }
 
-    /* Garante que o container principal ocupe toda a altura */
     section.main > div {
         display: flex; 
-        align-items: stretch; /* Garante que as colunas ocupem a altura total */
+        align-items: stretch;
         justify-content: center;
         height: 100vh;
-        /* Remover max-width e padding aqui se for globalmente aplicado */
     }
 
-    /* --- CORREÇÃO: Centraliza verticalmente o conteúdo de CADA COLUNA --- */
     div[data-testid="stHorizontalBlock"] > div[data-testid^="stVerticalBlock"] {
         display: flex;
-        flex-direction: column; /* Empilha os itens na coluna */
-        justify-content: center; /* Centraliza o conteúdo verticalmente */
-        height: 100vh; /* Ocupa a altura total da viewport */
+        flex-direction: column;
+        justify-content: center;
+        height: 100vh;
     }
 
     /* Estilo do formulário */
@@ -70,7 +66,7 @@ def tela_login():
         border-radius: 16px;
         box-shadow: 0 0 20px rgba(0,0,0,0.15);
         width: 380px;
-        margin: auto; /* Centraliza o formulário horizontalmente na coluna */
+        margin: auto;
     }
 
     .stButton > button {
@@ -91,29 +87,32 @@ def tela_login():
         border: 1px solid #ccc;
     }
 
-    /* Títulos na coluna do formulário (esquerda) */
+    /* Títulos */
     div[data-testid="stHorizontalBlock"] > div:nth-child(1) h1, 
     div[data-testid="stHorizontalBlock"] > div:nth-child(1) h2,
     div[data-testid="stHorizontalBlock"] > div:nth-child(1) h3,
     div[data-testid="stHorizontalBlock"] > div:nth-child(1) .stSubheader {
         color: #1b5e20 !important;
-        text-align: center; /* Centraliza os textos */
+        text-align: center;
     }
 
-    /* Container da imagem na coluna direita (para aplicar o CSS da imagem) */
+    /* Centraliza o logotipo na direita */
     .login-logo-container {
         display: flex;
-        align-items: center;
         justify-content: center;
-        height: 100%; /* Ocupa a altura da coluna para ajudar na centralização */
+        align-items: center;
+        height: 100vh !important;
+        width: 100%;
+        text-align: center;
     }
 
     .login-logo-container img {
-        max-width: 70% !important; 
-        border-radius: 70%; 
-        -webkit-mask-image: -webkit-radial-gradient(white, black); 
+        max-width: 70%;
+        height: auto;
+        border-radius: 70%;
+        -webkit-mask-image: -webkit-radial-gradient(white, black);
         mask-image: radial-gradient(white, black);
-        filter: brightness(1.2) contrast(1.1); 
+        filter: brightness(1.2) contrast(1.1);
         box-shadow: 0 0 15px rgba(0,0,0,0.3);
     }
     </style>
@@ -122,7 +121,7 @@ def tela_login():
     # --- IMAGEM PRINCIPAL ---
     try:
         imagem_principal = Image.open("Foto 2.jpg")
-    except Exception as e:
+    except Exception:
         st.error("Não foi possível carregar 'Foto 2.jpg'.")
         imagem_principal = None
 
@@ -136,58 +135,51 @@ def tela_login():
         st.write("") 
 
         with st.form("form_login"):
-            email = st.text_input("Nome", key="login_email")
-            st.text_input("Senha (Desativada)", type="password", disabled=True)
-            
+            nome = st.text_input("Nome", key="login_nome")
+            email = st.text_input("E-mail", key="login_email")
+
             if st.form_submit_button("Conectar-se", use_container_width=True):
-                nome_usuario = "Visitante"
-                if email:
-                    nome_usuario = utils.autenticar_direto(email) or email
-                st.session_state.update(usuario=nome_usuario, logado=True, boas_vindas=True, tela_principal=False)
-                st.rerun()
-        
-        st.divider()
-        if st.button("Novo usuário", key="btn_novo_usuario", use_container_width=True):
-            st.session_state.cadastro = True
-            st.rerun()
+                if not nome or not email:
+                    st.error("Por favor, preencha *Nome* e *E-mail* para continuar.")
+                else:
+                    usuario_valido = utils.validar_usuario(nome, email)
+                    if usuario_valido:
+                        st.session_state.update(usuario=nome, logado=True, boas_vindas=True, tela_principal=False)
+                        st.rerun()
+                    else:
+                        st.error("Usuário não encontrado. Verifique o nome e e-mail cadastrados.")
 
     # --- Coluna direita (Imagem) ---
     with col2:
         st.markdown('<div class="login-logo-container">', unsafe_allow_html=True)
         if imagem_principal:
-            st.image(imagem_principal) 
+            st.image(imagem_principal)
         st.markdown('</div>', unsafe_allow_html=True)
 
 
-# ----------------- Função: Tela de Cadastro -----------------
+# ----------------- Função: Tela de Cadastro de Usuário (chamada em Configurações) -----------------
 def tela_cadastro_usuario():
     st.subheader("Cadastrar Novo Usuário")
     with st.form("form_cadastro_usuario"):
         nome = st.text_input("Nome", key="cad_nome")
         email = st.text_input("Email", key="cad_email")
-        senha = st.text_input("Senha", type="password", key="cad_senha")
+        senha = st.text_input("Senha (opcional)", type="password", key="cad_senha")
         if st.form_submit_button("Cadastrar"):
             if not nome or not email:
                 st.error("Preencha Nome e Email.")
                 return
             
             df = utils.carregar_usuarios_db() 
-            
-            if not df.empty and email.lower() in df["email"].astype(str).str.lower().values:
+            if not df.empty and email.lower() in df["Email"].astype(str).str.lower().values:
                 st.error("Email já cadastrado!")
             else:
                 nova_linha = pd.DataFrame([[nome, email, senha]], columns=["Nome", "Email", "Senha"])
                 df_novo = pd.concat([df, nova_linha], ignore_index=True)
                 if utils.salvar_usuario_db(df_novo): 
-                    st.success("Usuário cadastrado!")
-                    st.session_state.cadastro = False
-                    st.rerun()
+                    st.success("Usuário cadastrado com sucesso!")
                 else:
                     st.error("Erro ao salvar usuário no banco de dados.")
 
-    if st.button("Voltar para Login"):
-        st.session_state.cadastro = False
-        st.rerun()
 
 # ----------------- Função: Tela de Boas-Vindas -----------------
 def tela_boas_vindas():
@@ -203,36 +195,20 @@ def tela_boas_vindas():
 
     st.markdown("""
     <style>
-    /* Esconde a sidebar e a barra de ferramentas SÓ nesta tela */
     [data-testid="stSidebar"], [data-testid="stToolbar"] {
         display: none;
     }
 
-    /* Aplica o fundo verde claro à página INTEIRA */
-    body { 
-        background-color: #e8f5e9 !important; 
-    }
-    [data-testid="stAppViewContainer"] {
-        background-color: #e8f5e9 !important; 
-    }
-    section.main {
-        background-color: #e8f5e9 !important; 
-    }
-    [data-testid="stVerticalBlock"] > div { 
+    body, [data-testid="stAppViewContainer"], section.main, [data-testid="stVerticalBlock"], [data-testid="stHorizontalBlock"] > div {
         background-color: #e8f5e9 !important;
     }
-    [data-testid="stHorizontalBlock"] > div { 
-        background-color: #e8f5e9 !important;
-    }
-    
+
     .welcome-screen-container { 
         display: flex;
         flex-direction: column; 
         align-items: center;
-        /* --- CORREÇÃO: Posição --- */
-        justify-content: flex-start; /* Alinha no topo */
-        padding-top: 35vh; /* Adiciona espaço acima (15% da altura da tela) */
-        /* --- FIM CORREÇÃO --- */
+        justify-content: flex-start;
+        padding-top: 35vh;
         height: 100vh; 
         text-align: center;
         animation: fadeIn 1s ease-in-out;
@@ -245,32 +221,27 @@ def tela_boas_vindas():
     }
 
     .welcome-screen-container h1 {
-        /* --- CORREÇÃO: Tamanho --- */
-        font-size: 10.75rem; /* Aumentado em 50% (era 2.5rem) */
-        /* --- FIM CORREÇÃO --- */
-        margin-bottom: 55px; /* Aumenta um pouco o espaço abaixo */
+        font-size: 3rem;
+        margin-bottom: 25px;
         color: #1b5e20; 
     }
 
     .welcome-screen-container p {
-        /* --- CORREÇÃO: Tamanho --- */
-        font-size: 8.95rem; /* Aumentado em 50% (era 1.3rem) */
-        /* --- FIM CORREÇÃO --- */
+        font-size: 1.4rem;
         opacity: 0.9;
         color: #1b5e20; 
     }
     </style>
     """, unsafe_allow_html=True)
 
-    # Conteúdo da tela de boas-vindas
-        
     st.markdown(f"""
+        <div class="welcome-screen-container">
             <h1>Seja bem-vindo, {st.session_state.usuario} 👋</h1>
             <p>{msg}</p>
-        </div> 
+        </div>
     """, unsafe_allow_html=True)
 
-    time.sleep(5) 
+    time.sleep(5)
     st.session_state.boas_vindas = False
     st.session_state.tela_principal = True
     st.rerun()
@@ -602,6 +573,7 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
 
 
