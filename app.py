@@ -139,12 +139,12 @@ def tela_login():
             email = st.text_input("E-mail", key="login_email")
             
 if st.button("Entrar"):
-    # --- Modo temporário: libera acesso direto ao Leandro ---
-    if nome.strip().lower() == "leandro" and email.strip().lower() == "leandro.assis@allarmi.com.br":
-        st.session_state["autenticado"] = True
-        st.success("Acesso liberado! Bem-vindo, Leandro 👋")
-    else:
-        st.error("Acesso temporário liberado apenas para Leandro.")
+ # --- Acesso temporário liberado para Leandro ---
+        if nome.strip().lower() == "leandro" and email.strip().lower() == "leandro.assis@allarmi.com.br":
+            st.session_state["autenticado"] = True
+            st.success("Acesso liberado! Bem-vindo, Leandro 👋")
+        else:
+            st.error("Acesso temporário liberado apenas para Leandro.")
 
     # --- Coluna direita (Imagem) ---
 with col2:
@@ -570,6 +570,7 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
 
 
