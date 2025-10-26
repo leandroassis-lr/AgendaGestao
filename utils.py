@@ -340,7 +340,7 @@ def load_css():
 
     /* 1. PALETA DE CORES */
     :root {
-        --green-darkest: #1b5e20; /* Para títulos principais E sidebar */
+        --green-darkest: #32CD32; /* Para títulos principais E sidebar */
         --green-dark: #2e7d32;    /* Para subtítulos */
         --green-main: #43a047;   /* Para botões e bordas */
         --green-light: #e8f5e9;  /* Para textos de destaque na sidebar */
@@ -348,7 +348,7 @@ def load_css():
 
         --muted: #6b7280;
         --card-bg: #98FB98;
-        --page-bg: #90EE90; /* Fundo principal (branco-azulado) */
+        --page-bg: #E0FFFF; /* Fundo principal (branco-azulado) */
     }
 
     /* 2. FUNDOS (Página e Sidebar) */
@@ -596,4 +596,5 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
 
