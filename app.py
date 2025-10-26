@@ -141,16 +141,13 @@ def tela_login():
             email = st.text_input("E-mail", key="login_email")
 
             if st.form_submit_button("Entrar"):
-                # --- Acesso temporário liberado para Leandro ---
-                if nome.strip().lower() == "leandro" and email.strip().lower() == "leandro.assis@allarmi.com.br":
-                    st.session_state["autenticado"] = True
-                    st.success("Acesso liberado! Bem-vindo, Leandro 👋")
-
-                    nome_usuario = "Leandro"
-                    st.session_state.update(usuario=nome_usuario, logado=True, boas_vindas=True, tela_principal=False)
-                    st.rerun()
-                else:
-                    st.error("Acesso negado, tente novamente")
+            if utils.validar_usuario(nome.strip(), email.strip()):
+                st.session_state["autenticado"] = True
+                st.success(f"Acesso liberado! Bem-vindo, {nome.strip()} 👋")
+                st.session_state.update(usuario=nome.strip(), logado=True, boas_vindas=True, tela_principal=False)
+                st.rerun()
+            else:
+                st.error("Acesso negado, tente novamente")
 
     # --- Coluna direita (Logo) ---
     with col2:
@@ -730,6 +727,7 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
 
 
