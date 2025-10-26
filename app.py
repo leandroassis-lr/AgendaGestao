@@ -355,9 +355,8 @@ def tela_cadastro_projeto():
             st.session_state["tela_cadastro_proj"] = False
             st.rerun()
 
-# 
 # ⬇️ ----------------- FUNÇÃO TELA_PROJETOS (ATUALIZADA) ----------------- ⬇️
-#
+
 def tela_projetos():
     st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True)
     
@@ -389,7 +388,7 @@ def tela_projetos():
         with col:
             if campo in df.columns: 
                 opcoes = ["Todos"] + sorted(df[campo].astype(str).unique().tolist())
-                filtros[campo] = st.selectbox(f"Filtrar por {campo}", opcoes, key=f"filtro_{utils.clean_key(campo)}")
+                filtros[campo] = st.selectbox(f"{campo}", opcoes, key=f"filtro_{utils.clean_key(campo)}")
             else:
                 st.empty() # Ocupa o espaço se a coluna não existir no DB
 
@@ -401,7 +400,7 @@ def tela_projetos():
         campo = "Projeto"
         if campo in df.columns:
             opcoes = ["Todos"] + sorted(df[campo].astype(str).unique().tolist())
-            filtros[campo] = st.selectbox(f"Filtrar por {campo}", opcoes, key=f"filtro_{utils.clean_key(campo)}")
+            filtros[campo] = st.selectbox(f"{campo}", opcoes, key=f"filtro_{utils.clean_key(campo)}")
         else:
             st.empty()
 
@@ -410,7 +409,7 @@ def tela_projetos():
         campo = "Técnico"
         if campo in df.columns:
             opcoes = ["Todos"] + sorted(df[campo].astype(str).unique().tolist())
-            filtros[campo] = st.selectbox(f"Filtrar por {campo}", opcoes, key=f"filtro_{utils.clean_key(campo)}")
+            filtros[campo] = st.selectbox(f"{campo}", opcoes, key=f"filtro_{utils.clean_key(campo)}")
         else:
             st.empty()
             
@@ -734,3 +733,4 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
