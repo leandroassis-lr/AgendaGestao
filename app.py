@@ -355,6 +355,9 @@ def tela_cadastro_projeto():
             st.session_state["tela_cadastro_proj"] = False
             st.rerun()
 
+# 
+# ⬇️ ----------------- FUNÇÃO TELA_PROJETOS (ATUALIZADA) ----------------- ⬇️
+#
 def tela_projetos():
     st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True)
     
@@ -367,31 +370,98 @@ def tela_projetos():
         st.info("Nenhum projeto cadastrado ainda.")
         return
 
+    # --- Conversão de Datas ---
+    # É importante fazer isso ANTES de tentar filtrar
     df['Agendamento'] = pd.to_datetime(df['Agendamento'], errors='coerce')
     df['Agendamento_str'] = df['Agendamento'].dt.strftime("%d/%m/%y").fillna('N/A')
 
+    # --- Início dos Filtros (REESTRUTURADO) ---
     st.markdown("#### 🔍 Filtros e Busca")
     termo_busca = st.text_input("Buscar", key="termo_busca", placeholder="Digite um termo para buscar...")
-    col1, col2, col3, col4 = st.columns(4)
-    
-    filtros = {}
-    campos_filtro = {"Status": col1, "Analista": col2, "Agência": col3, "Gestor": col4, "Projeto": col1, "Técnico": col2}
 
-    for campo, col in campos_filtro.items():
+    filtros = {} # Inicializa o dicionário de filtros
+
+    # --- Linha 1 de Filtros: Status, Analista, Agência, Gestor ---
+    col1, col2, col3, col4 = st.columns(4)
+    campos_linha_1 = {"Status": col1, "Analista": col2, "Agência": col3, "Gestor": col4}
+    
+    for campo, col in campos_linha_1.items():
         with col:
             if campo in df.columns: 
                 opcoes = ["Todos"] + sorted(df[campo].astype(str).unique().tolist())
                 filtros[campo] = st.selectbox(f"Filtrar por {campo}", opcoes, key=f"filtro_{utils.clean_key(campo)}")
+            else:
+                st.empty() # Ocupa o espaço se a coluna não existir no DB
 
+    # --- Linha 2 de Filtros: Projeto, Técnico, Data Início, Data Fim ---
+    col5, col6, col7, col8 = st.columns(4) # Nova linha de colunas
+    
+    # Filtro Projeto (col5)
+    with col5:
+        campo = "Projeto"
+        if campo in df.columns:
+            opcoes = ["Todos"] + sorted(df[campo].astype(str).unique().tolist())
+            filtros[campo] = st.selectbox(f"Filtrar por {campo}", opcoes, key=f"filtro_{utils.clean_key(campo)}")
+        else:
+            st.empty()
+
+    # Filtro Técnico (col6)
+    with col6:
+        campo = "Técnico"
+        if campo in df.columns:
+            opcoes = ["Todos"] + sorted(df[campo].astype(str).unique().tolist())
+            filtros[campo] = st.selectbox(f"Filtrar por {campo}", opcoes, key=f"filtro_{utils.clean_key(campo)}")
+        else:
+            st.empty()
+            
+    # ⬇️ --- NOVOS FILTROS DE DATA (col7 e col8) --- ⬇️
+    # (Exatamente como você pediu, ao lado do Técnico)
+    with col7:
+        data_inicio = st.date_input(
+            "Agendamento (de)", 
+            value=None, 
+            key="data_inicio_filtro", 
+            format="DD/MM/YYYY"
+        )
+        
+    with col8:
+        data_fim = st.date_input(
+            "Agendamento (até)", 
+            value=None, 
+            key="data_fim_filtro", 
+            format="DD/MM/YYYY"
+        )
+    # ⬆️ --- FIM DOS NOVOS FILTROS DE DATA --- ⬆️
+
+    # --- Lógica de Aplicação dos Filtros ---
     df_filtrado = df.copy()
+    
+    # 1. Aplica filtros de selectbox (Status, Analista, etc.)
     for campo, valor in filtros.items():
         if valor != "Todos" and campo in df_filtrado.columns:
             df_filtrado = df_filtrado[df_filtrado[campo].astype(str) == valor]
 
+    # 2. Aplica filtro de Data de Início
+    if data_inicio:
+        df_filtrado = df_filtrado[
+            (df_filtrado['Agendamento'].notna()) & 
+            (df_filtrado['Agendamento'] >= pd.to_datetime(data_inicio)) # Compara a partir de 00:00:00
+        ]
+    # 3. Aplica filtro de Data de Fim
+    if data_fim:
+        df_filtrado = df_filtrado[
+            (df_filtrado['Agendamento'].notna()) & 
+            (df_filtrado['Agendamento'] <= pd.to_datetime(data_fim).replace(hour=23, minute=59, second=59)) # Compara até 23:59:59
+        ]
+
+    # 4. Aplica filtro de texto (busca)
     if termo_busca:
         termo = termo_busca.lower().strip()
         mask_busca = df_filtrado.apply(lambda row: row.astype(str).str.lower().str.contains(termo, na=False).any(), axis=1)
         df_filtrado = df_filtrado[mask_busca]
+    
+    # --- O RESTO DA FUNÇÃO CONTINUA IGUAL ---
+    # (Exportar para Excel, Paginação, Cards de Projeto, etc.)
 
     st.divider()
     col_info_export, col_export_btn = st.columns([4, 1.2])
@@ -590,10 +660,7 @@ def tela_projetos():
             if st.button("Próxima ➡️", use_container_width=True, disabled=(st.session_state.page_number >= total_pages - 1)):
                 st.session_state.page_number += 1
                 st.rerun()
-        
-# 
-# ⬇️ ----------------- CONTROLE PRINCIPAL (ATUALIZADO) ----------------- ⬇️
-#
+                
 def main():
     # Inicializa os estados da sessão
     if "logado" not in st.session_state:
@@ -667,4 +734,3 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
-
