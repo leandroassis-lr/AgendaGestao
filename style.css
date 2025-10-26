@@ -1,39 +1,6 @@
 :root {
-
-  --sidebar-text: #FFFFFF;          /* Branco puro para o texto principal */
-  --sidebar-text-faded: #B0BCC7;    /* Cinza claro para placeholders ou texto "desativado" */
-}
-
-[data-testid="stSidebar"] p, 
-[data-testid="stSidebar"] a,
-[data-testid="stSidebar"] [data-testid="stSidebarNavLink"],
-[data-testid="stSidebar"] [data-testid="stSidebarNavLink"] span {
-    color: var(--sidebar-text) !important;
-    opacity: 0.9; /* Suaviza o branco puro */
-}
-
-/* Efeito hover para os links */
-[data-testid="stSidebar"] a:hover,
-[data-testid="stSidebar"] [data-testid="stSidebarNavLink"]:hover span {
-    color: var(--sidebar-text) !important;
-    opacity: 1.0; /* Cor total ao passar o mouse */
-}
-
-/* --- CORREÇÃO: Barra de Busca da Sidebar --- */
-[data-testid="stSidebar"] input[type="text"] {
-    background-color: var(--gray-dark); /* Fundo um pouco mais claro que a sidebar */
-    color: var(--sidebar-text);         /* Texto digitado em branco */
-    border: 1px solid var(--gray-dark);
-    border-radius: var(--std-radius);
-}
-
-/* Cor do texto placeholder (ex: "app") */
-[data-testid="stSidebar"] input[type="text"]::placeholder {
-    color: var(--sidebar-text-faded);
-    opacity: 0.8;
-}
-  /* NOVA PALETA DE CORES */
-  --primary-color: #006A4E;     /* Um verde clássico e profundo (substitui o --blue-main) */
+  /* --- PALETA DE CORES PRINCIPAL --- */
+  --primary-color: #006A4E;     /* Um verde clássico e profundo */
   --primary-dark: #004D38;      /* Verde mais escuro para hovers */
   --primary-light: #E0EFEA;     /* Um verde bem claro para fundos (ex: header de tabela) */
   
@@ -49,27 +16,62 @@
   --card-bg: #FFFFFF;
   --page-bg: #F7F9F9;          /* Um cinza quase branco, ligeiramente frio */
   
+  /* --- PALETA DA SIDEBAR (Correção) --- */
+  --sidebar-text: #FFFFFF;          /* Branco puro para o texto principal */
+  --sidebar-text-faded: #B0BCC7;    /* Cinza claro para placeholders */
+
+  /* --- VALORES GLOBAIS --- */
   --font-family: 'Montserrat', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  --std-radius: 10px;          /* Raio de borda padronizado para um look mais "sério" */
+  --std-radius: 10px;          /* Raio de borda padronizado */
   --std-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
+/* --- ESTILOS GLOBAIS DA PÁGINA --- */
 [data-testid="stAppViewContainer"] {
   background-color: var(--page-bg);
   font-family: var(--font-family);
   color: var(--gray-dark);
 }
 
-/* --- Sidebar Clássica (Contraste Escuro) --- */
+/* --- SIDEBAR --- */
 [data-testid="stSidebar"] {
   background-color: var(--gray-darkest);
-  color: var(--gray-light);
+  color: var(--gray-light); /* Cor padrão para texto que não é link */
   border-top-right-radius: var(--std-radius);
   border-bottom-right-radius: var(--std-radius);
   padding: 1.5rem 1rem;
   font-weight: 600;
 }
 
+/* Links de Navegação da Sidebar (Agenda, Indicadores, etc.) */
+[data-testid="stSidebar"] p, 
+[data-testid="stSidebar"] a,
+[data-testid="stSidebar"] [data-testid="stSidebarNavLink"],
+[data-testid="stSidebar"] [data-testid="stSidebarNavLink"] span {
+    color: var(--sidebar-text) !important;
+    opacity: 0.9;
+}
+
+[data-testid="stSidebar"] a:hover,
+[data-testid="stSidebar"] [data-testid="stSidebarNavLink"]:hover span {
+    color: var(--sidebar-text) !important;
+    opacity: 1.0;
+}
+
+/* Barra de Busca da Sidebar (ex: "app") */
+[data-testid="stSidebar"] input[type="text"] {
+    background-color: var(--gray-dark);
+    color: var(--sidebar-text);
+    border: 1px solid var(--gray-dark);
+    border-radius: var(--std-radius);
+}
+
+[data-testid="stSidebar"] input[type="text"]::placeholder {
+    color: var(--sidebar-text-faded);
+    opacity: 0.8;
+}
+
+/* Botões dentro da Sidebar */
 [data-testid="stSidebar"] .stButton > button {
   background-color: var(--primary-color);
   color: white;
@@ -82,7 +84,8 @@
   background-color: var(--primary-dark);
 }
 
-/* --- Títulos e Headers --- */
+
+/* --- TÍTULOS E HEADERS --- */
 .section-title-center {
   text-align: center;
   font-size: 2.7rem;
@@ -98,19 +101,17 @@
 h4 {
   color: var(--gray-darkest);
   padding-left: 10px;
-  /* Usando a cor de acento aqui para um toque clássico */
   border-left: 6px solid var(--accent-color); 
   margin-top: 2rem;
   font-weight: 700;
   font-size: 1.25rem;
 }
 
-/* --- Cards e Formulários --- */
+/* --- CARDS E FORMULÁRIOS --- */
 .project-card, .metric-card, div[data-testid="stForm"] {
   background: var(--card-bg);
   border-radius: var(--std-radius);
   padding: 20px 28px;
-  /* Sombra mais sutil e neutra (menos azulada) */
   box-shadow: var(--std-shadow);
   border: 1px solid var(--gray-border);
   transition: box-shadow 0.3s ease-in-out;
@@ -126,17 +127,15 @@ h4 {
   font-size: 1.15rem;
 }
 
-/* --- Botões Principais --- */
+/* --- BOTÕES PRINCIPAIS (Fora da Sidebar) --- */
 .stButton > button {
   background-color: var(--primary-color);
   color: white;
   padding: 10px 26px;
-  /* Raio padronizado */
   border-radius: var(--std-radius); 
   border: none;
   font-weight: 700;
   font-size: 1rem;
-  /* Sombra baseada na cor primária */
   box-shadow: 0 5px 15px rgba(0, 106, 78, 0.25);
   transition: background-color 0.3s ease, box-shadow 0.3s ease;
 }
@@ -162,7 +161,7 @@ h4 {
   box-shadow: 0 8px 25px rgba(171, 44, 56, 0.6);
 }
 
-/* --- Inputs e Seletores --- */
+/* --- INPUTS E SELETORES (Fora da Sidebar) --- */
 .stTextInput > div > div > input,
 .stTextArea > div > textarea,
 .stSelectbox > div > div > select {
@@ -181,16 +180,15 @@ h4 {
   outline: none;
 }
 
-/* --- Tabelas (DataFrames) --- */
+/* --- TABELAS (DataFrames) --- */
 [data-testid="stDataFrame"] table {
   border-radius: var(--std-radius);
   border-collapse: separate;
   font-size: 1rem;
-  overflow: hidden; /* Garante que o radius do header funcione */
+  overflow: hidden; 
 }
 
 [data-testid="stDataFrame"] th {
-  /* Header de tabela com o verde-claro */
   background-color: var(--primary-light); 
   color: var(--primary-dark);
   font-weight: 700;
@@ -203,7 +201,7 @@ h4 {
   padding: 12px 12px;
 }
 
-/* --- Responsividade (Mantida) --- */
+/* --- RESPONSIVIDADE --- */
 @media (max-width: 900px) {
   .section-title-center {
     font-size: 2rem;
@@ -224,4 +222,3 @@ h4 {
     font-size: 1.6rem;
   }
 }
-
