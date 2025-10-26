@@ -107,7 +107,7 @@ def tela_login():
     }
 
     .login-logo-container img {
-        max-width: 85%;
+        max-width: 100%;
         height: auto;
         border-radius: 50%;
         -webkit-mask-image: -webkit-radial-gradient(white, black);
@@ -776,6 +776,7 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
 
 
