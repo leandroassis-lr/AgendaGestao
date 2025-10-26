@@ -147,7 +147,7 @@ if st.button("Entrar"):
             st.error("Acesso temporário liberado apenas para Leandro.")
 
     # --- Coluna direita (Imagem) ---
-with col2:
+    with col2:
         st.markdown('<div class="login-logo-container">', unsafe_allow_html=True)
         if imagem_principal:
             st.image(imagem_principal)
@@ -570,6 +570,7 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
 
 
