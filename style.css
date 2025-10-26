@@ -1,4 +1,37 @@
 :root {
+
+  --sidebar-text: #FFFFFF;          /* Branco puro para o texto principal */
+  --sidebar-text-faded: #B0BCC7;    /* Cinza claro para placeholders ou texto "desativado" */
+}
+
+[data-testid="stSidebar"] p, 
+[data-testid="stSidebar"] a,
+[data-testid="stSidebar"] [data-testid="stSidebarNavLink"],
+[data-testid="stSidebar"] [data-testid="stSidebarNavLink"] span {
+    color: var(--sidebar-text) !important;
+    opacity: 0.9; /* Suaviza o branco puro */
+}
+
+/* Efeito hover para os links */
+[data-testid="stSidebar"] a:hover,
+[data-testid="stSidebar"] [data-testid="stSidebarNavLink"]:hover span {
+    color: var(--sidebar-text) !important;
+    opacity: 1.0; /* Cor total ao passar o mouse */
+}
+
+/* --- CORREÇÃO: Barra de Busca da Sidebar --- */
+[data-testid="stSidebar"] input[type="text"] {
+    background-color: var(--gray-dark); /* Fundo um pouco mais claro que a sidebar */
+    color: var(--sidebar-text);         /* Texto digitado em branco */
+    border: 1px solid var(--gray-dark);
+    border-radius: var(--std-radius);
+}
+
+/* Cor do texto placeholder (ex: "app") */
+[data-testid="stSidebar"] input[type="text"]::placeholder {
+    color: var(--sidebar-text-faded);
+    opacity: 0.8;
+}
   /* NOVA PALETA DE CORES */
   --primary-color: #006A4E;     /* Um verde clássico e profundo (substitui o --blue-main) */
   --primary-dark: #004D38;      /* Verde mais escuro para hovers */
@@ -191,3 +224,4 @@ h4 {
     font-size: 1.6rem;
   }
 }
+
