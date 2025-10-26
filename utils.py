@@ -328,53 +328,121 @@ def dataframe_to_excel_bytes(df):
         df_to_export.to_excel(writer, index=False, sheet_name='Projetos')
     return output.getvalue()
 
-
 # --- Funções Utilitárias ---
 
 def load_css():
-    st.markdown("""<style>
-    .main-title { font-size: 3em; font-weight: bold; text-align: center; color: #1E88E5; } 
-    .section-title-center { font-size: 2em; font-weight: bold; text-align: center; margin-bottom: 20px; } 
-    .project-card { border: 1px solid #e0e0e0; border-radius: 10px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+   
+    st.markdown("""
+    <style>
+    /* ======================================== */
+    /* === NOVOS ESTILOS - APP GESTÃO ALLARMI === */
+    /* ======================================== */
 
-    /* --- NOVOS ESTILOS PARA O LOGIN --- */
-    
-    /* Coluna da Direita (Verde Escuro) */
-    .login-right-container {
-        background-color: #004D40; /* Seu verde escuro */
-        border-radius: 15px;
-        padding: 3rem 2rem;
-        color: white;
+    /* 1. PALETA DE CORES */
+    :root {
+        --green-darkest: #1b5e20; /* Para títulos principais */
+        --green-dark: #2e7d32;    /* Para subtítulos */
+        --green-main: #43a047;   /* Para botões e bordas */
+        --green-light: #e8f5e9;  /* Para fundos (Sidebar) */
+        --red-danger: #d32f2f;   /* Para botões (Logout, Excluir) */
+
+        --muted: #6b7280;
+        --card-bg: #ffffff;
+        --page-bg: #f7fbff; /* Fundo principal (branco-azulado) */
+    }
+
+    /* 2. FUNDOS (Página e Sidebar) */
+
+    /* Fundo da Página Principal */
+    [data-testid="stAppViewContainer"] {
+        background-color: var(--page-bg);
+    }
+
+    /* FUNDO DA SIDEBAR (NOVO) */
+    [data-testid="stSidebar"] {
+        background-color: var(--green-light) !important;
+    }
+
+    /* 3. TÍTULOS E TEXTOS */
+
+    /* Título Principal (PROJETOS) */
+    .section-title-center {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: var(--green-darkest);
         text-align: center;
-        min-height: 600px; /* Garante uma altura mínima */
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        padding-bottom: 10px;
+        margin-bottom: 25px;
+        border-bottom: 4px solid var(--green-light);
     }
 
-    .login-right-container img {
-        max-width: 100%;
-        border-radius: 10px;
-        margin-bottom: 1.5rem;
-    }
-
-    .login-right-container h2 {
+    /* Subtítulos (Filtros e Busca, etc.) */
+    h4 {
+        color: var(--green-dark);
         font-weight: 600;
+        padding-bottom: 5px;
+        border-left: 5px solid var(--green-main);
+        padding-left: 10px;
+        margin-top: 1rem;
+    }
+
+    /* Título h5 dentro dos cards */
+    .project-card h5 {
+        margin: 0;
+        font-size: 16px;
+        color: var(--green-darkest);
+    }
+
+    /* 4. BOTÕES */
+
+    /* Estilo principal (ex: Novo Projeto) */
+    .stButton > button {
+        border: 2px solid var(--green-main);
+        background-color: transparent;
+        color: var(--green-main);
+        border-radius: 8px;
+        padding: 8px 15px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+
+    /* Hover (passar o mouse) */
+    .stButton > button:hover {
+        background-color: var(--green-main);
         color: white;
-        font-size: 1.75em;
+        border-color: var(--green-main);
+    }
+
+    /* Foco (ao clicar) */
+    .stButton > button:focus {
+        box-shadow: 0 0 0 3px rgba(67, 160, 71, 0.3);
+        border-color: var(--green-dark);
+    }
+
+    /* Estilo "Primary" (Logout, Excluir) */
+    .stButton > button[kind="primary"] {
+        border: 2px solid var(--red-danger);
+        background-color: transparent;
+        color: var(--red-danger);
+    }
+
+    .stButton > button[kind="primary"]:hover {
+        background-color: var(--red-danger);
+        color: white;
+    }
+
+    /* 5. SEÇÕES DO APP */
+    
+    /* Card de Projeto (Mantido) */
+    .project-card {
+        background: var(--card-bg);
+        border: 1px solid #e6eef8;
+        border-radius: 10px;
+        padding: 12px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+        margin-bottom: 10px;
     }
     
-    /* Coluna da Esquerda (Formulário) */
-    .login-left-container {
-        padding: 3rem 2rem;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        min-height: 600px; /* Alinha com a altura da direita */
-    }
-
-    /* --- FIM DOS NOVOS ESTILOS --- */
     </style>""", unsafe_allow_html=True)
 
 def autenticar_direto(email):
@@ -466,6 +534,7 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
 
 
 
