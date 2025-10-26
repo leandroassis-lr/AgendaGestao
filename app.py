@@ -129,7 +129,7 @@ def tela_login():
         imagem_principal = None
 
     # --- Layout (duas colunas) ---
-    col1, col2 = st.columns([1, 3], gap="small") 
+    col1, col2 = st.columns([1, 1], gap="small") 
 
     # --- Coluna esquerda (Login) ---
     with col1:
@@ -586,6 +586,7 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
 
 
