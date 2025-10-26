@@ -158,7 +158,7 @@ def tela_login():
             st.markdown(
                 f"""
                 <div class="login-logo-container">
-                    <img src="data:image/png;base64,{utils.image_to_base64(imagem_principal)}" alt="Logo Allarmi">
+                    <img src="data:image/png;base64,{utils.image_to_base64(imagem_principal)}" alt="Foto 2.jpg">
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -776,6 +776,7 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
 
 
