@@ -124,33 +124,29 @@ def tela_login():
     except Exception:
         st.error("Não foi possível carregar 'Foto 2.jpg'.")
         imagem_principal = None
-
-    # --- Layout (duas colunas) ---
-    col1, col2 = st.columns([1, 1], gap="small") 
-
-    # --- Coluna esquerda (Login) ---
-    with col1:
-        st.subheader("Seja bem vindo à plataforma de gestão de projetos Allarmi")     
-        st.subheader("Acesse sua conta")
-        st.write("") 
-
-        with st.form("form_login"):
-            nome = st.text_input("Nome", key="login_nome")
-            email = st.text_input("E-mail", key="login_email")
-
-# --- Botão de Login ---
-if st.button("Entrar"):
-    # --- Modo temporário: libera acesso direto ao Leandro ---
-    if nome.strip().lower() == "leandro" and email.strip().lower() == "leandro.assis@allarmi.com.br":
-        st.session_state["autenticado"] = True
-        st.success("Acesso liberado! Bem-vindo, Leandro 👋")
-    else:
-        st.error("Acesso temporário liberado apenas para Leandro.")
         
+# --- Layout principal do Login ---
+st.markdown("## 🔐 Acesso ao Sistema de Gestão")
+
+col1, col2 = st.columns([2, 1])
+
+with col1:
+    nome = st.text_input("Nome de usuário")
+    email = st.text_input("E-mail corporativo")
+
+    if st.button("Entrar"):
+        # --- Acesso temporário liberado para Leandro ---
+        if nome.strip().lower() == "leandro" and email.strip().lower() == "leandro.assis@allarmi.com.br":
+            st.session_state["autenticado"] = True
+            st.success("Acesso liberado! Bem-vindo, Leandro 👋")
+        else:
+            st.error("Acesso temporário liberado apenas para Leandro.")
+
 with col2:
-    st.markdown("<div style='display:flex;justify-content:center;align-items:center;height:100%;'>", unsafe_allow_html=True)
-    st.image("Foto 2.jpg", use_column_width=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+    try:
+        st.image("Foto 2.jpg", width=180)
+    except Exception as e:
+        st.warning("Não foi possível carregar a imagem do logo.")
 
 
 # ----------------- Função: Tela de Cadastro de Usuário (chamada em Configurações) -----------------
@@ -569,6 +565,7 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
 
 
