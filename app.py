@@ -33,8 +33,11 @@ utils.load_css() # Carrega o CSS do arquivo utils
 
 # ----------------- Função: Tela de Login -----------------
 def tela_login():
+    # --- CSS exclusivo da tela de login ---
     st.markdown("""
     <style>
+    /* ... (Todo o seu CSS da tela_login fica aqui, igual ao que você mandou) ... */
+    
     /* Remove a sidebar SÓ na tela de login */
     [data-testid="stSidebar"] {
         display: none;
@@ -138,19 +141,38 @@ def tela_login():
             nome = st.text_input("Nome", key="login_nome")
             email = st.text_input("E-mail", key="login_email")
             
-if st.button("Entrar"):
- # --- Acesso temporário liberado para Leandro ---
-        if nome.strip().lower() == "leandro" and email.strip().lower() == "leandro.assis@allarmi.com.br":
-            st.session_state["autenticado"] = True
-            st.success("Acesso liberado! Bem-vindo, Leandro 👋")
-        else:
-            st.error("Acesso temporário liberado apenas para Leandro.")
+            # 
+            # ⬇️ CORREÇÃO 1: Botão movido para DENTRO do form e corrigido para 'st.form_submit_button'
+            # 
+            if st.form_submit_button("Entrar"):
+                # --- Acesso temporário liberado para Leandro ---
+                if nome.strip().lower() == "leandro" and email.strip().lower() == "leandro.assis@allarmi.com.br":
+                    st.session_state["autenticado"] = True
+                    st.success("Acesso liberado! Bem-vindo, Leandro 👋")
+                    
+                    # Restaurei a lógica de transição para a tela de boas-vindas
+                    nome_usuario = "Leandro" 
+                    st.session_state.update(usuario=nome_usuario, logado=True, boas_vindas=True, tela_principal=False)
+                    st.rerun()
+                else:
+                    st.error("Acesso temporário liberado apenas para Leandro.")
 
-with col2:
-    try:
-        st.image("Foto 2.jpg", width=180)
-    except Exception as e:
-        st.warning("Não foi possível carregar a imagem do logo.")
+    # 
+    # ⬇️ CORREÇÃO 2: Bloco 'with col2:' movido para DENTRO da função 'tela_login', alinhado com 'with col1:'
+    #
+    with col2:
+        try:
+            # Use a div 'login-logo-container' para que seu CSS seja aplicado
+            st.markdown('<div class="login-logo-container">', unsafe_allow_html=True)
+            if imagem_principal:
+                # Use 'use_container_width=True' para a imagem se ajustar ao CSS
+                st.image(imagem_principal, use_container_width=True) 
+            else:
+                 st.warning("Não foi possível carregar a imagem do logo.")
+            st.markdown('</div>', unsafe_allow_html=True)
+        except Exception as e:
+            st.warning(f"Não foi possível carregar a imagem do logo: {e}")
+
 # ----------------- Função: Tela de Cadastro de Usuário (chamada em Configurações) -----------------
 def tela_cadastro_usuario():
     st.subheader("Cadastrar Novo Usuário")
@@ -567,6 +589,7 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
 
 
