@@ -6,6 +6,15 @@ import html
 import psycopg2
 from psycopg2 import sql
 import io
+import base64
+from io import BytesIO
+from PIL import Image
+
+def image_to_base64(image):
+    """Converte uma imagem PIL em string Base64 para exibição no Streamlit."""
+    buffered = BytesIO()
+    image.save(buffered, format="PNG")
+    return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
 # --- Conexão com o Banco de Dados (PostgreSQL) ---
 @st.cache_resource
@@ -596,6 +605,7 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
 
 
 
