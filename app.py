@@ -32,7 +32,7 @@ utils.load_css() # Carrega o CSS do arquivo utils
 
 # ----------------- Função: Tela de Login -----------------
 def tela_login():
-    # --- CSS exclusivo da tela de login ---
+  
     st.markdown("""
     <style>
     /* Remove a sidebar SÓ na tela de login */
@@ -101,13 +101,13 @@ def tela_login():
         display: flex;
         justify-content: center;
         align-items: center;
-        height: 100vh !important;
+        height: 150vh !important;
         width: 100%;
         text-align: center;
     }
 
     .login-logo-container img {
-        max-width: 35%; /* Reduzido cerca de 30% */
+        max-width: 65%; /* Reduzido cerca de 30% */
         height: auto;
         border-radius: 50%;
         -webkit-mask-image: -webkit-radial-gradient(white, black);
@@ -776,6 +776,7 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
 
 
