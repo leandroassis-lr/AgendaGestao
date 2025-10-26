@@ -146,14 +146,11 @@ if st.button("Entrar"):
         else:
             st.error("Acesso temporário liberado apenas para Leandro.")
 
-    # --- Coluna direita (Imagem) ---
-    with col2:
-        st.markdown('<div class="login-logo-container">', unsafe_allow_html=True)
-        if imagem_principal:
-            st.image(imagem_principal)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-
+with col2:
+    try:
+        st.image("Foto 2.jpg", width=180)
+    except Exception as e:
+        st.warning("Não foi possível carregar a imagem do logo.")
 # ----------------- Função: Tela de Cadastro de Usuário (chamada em Configurações) -----------------
 def tela_cadastro_usuario():
     st.subheader("Cadastrar Novo Usuário")
@@ -570,6 +567,7 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
 
 
