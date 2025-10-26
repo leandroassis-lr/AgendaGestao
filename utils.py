@@ -260,7 +260,17 @@ def salvar_usuario_db(df):
     except Exception as e:
         st.error(f"Erro ao salvar usuários: {e}")
         return False
-
+        
+def validar_usuario(nome, email):
+    """Valida se o usuário existe no banco."""
+    df = carregar_usuarios_db()
+    if df.empty:
+        return False
+    cond = (
+        df["nome"].astype(str).str.lower().eq(nome.lower()) &
+        df["email"].astype(str).str.lower().eq(email.lower())
+    )
+    return cond.any()
 
 # --- Funções de Importação/Exportação ---
 def generate_excel_template_bytes():
@@ -456,5 +466,6 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
 
 
