@@ -110,9 +110,9 @@ def tela_login():
     }
 
     .login-logo-container img {
-        max-width: 70%;
+        max-width: 50%;
         height: auto;
-        border-radius: 70%;
+        border-radius: 50%;
         -webkit-mask-image: -webkit-radial-gradient(white, black);
         mask-image: radial-gradient(white, black);
         filter: brightness(1.2) contrast(1.1);
@@ -141,9 +141,6 @@ def tela_login():
             nome = st.text_input("Nome", key="login_nome")
             email = st.text_input("E-mail", key="login_email")
             
-            # 
-            # ⬇️ CORREÇÃO 1: Botão movido para DENTRO do form e corrigido para 'st.form_submit_button'
-            # 
             if st.form_submit_button("Entrar"):
                 # --- Acesso temporário liberado para Leandro ---
                 if nome.strip().lower() == "leandro" and email.strip().lower() == "leandro.assis@allarmi.com.br":
@@ -586,6 +583,7 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
 
 
