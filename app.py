@@ -167,12 +167,8 @@ def tela_login():
         except Exception as e:
             st.warning(f"Não foi possível carregar a imagem do logo: {e}")
 
-# 
-# ⬇️ ----------------- FUNÇÃO DE CADASTRO ATUALIZADA ----------------- ⬇️
-#
-# (Esta é a sua função original, mas melhorada com colunas
-#  para o formulário não ficar tão largo)
-#
+# ----------------- Função: Tela de Cadastro de Usuário -----------------#
+
 def tela_cadastro_usuario():
     st.subheader("Cadastrar Novo Usuário")
 
@@ -191,33 +187,42 @@ def tela_cadastro_usuario():
                     return
                 
                 df = utils.carregar_usuarios_db() 
-                if not df.empty and email.lower() in df["Email"].astype(str).str.lower().values:
+
+                # Padroniza os nomes das colunas para "Capitalized" (ex: "email" -> "Email")
+                # Isso corrige o erro se o arquivo foi salvo com colunas em minúsculas.
+                if not df.empty:
+                    df.columns = [col.capitalize() for col in df.columns]
+
+                # Agora verificamos se o email existe na coluna padronizada "Email"
+                email_check_list = []
+                if not df.empty and "Email" in df.columns:
+                    email_check_list = df["Email"].astype(str).str.lower().values
+
+                if email.lower() in email_check_list:
+                
                     st.error("Email já cadastrado!")
                 else:
-                    nova_linha = pd.DataFrame([[nome, email, senha]], columns=["Nome", "Email", "Senha"])
+                    nova_linha = pd.DataFrame([[nome, email, senha]], columns=["Nome", "Email", "Senha"]) 
                     df_novo = pd.concat([df, nova_linha], ignore_index=True)
+
                     if utils.salvar_usuario_db(df_novo): 
                         st.success("Usuário cadastrado com sucesso!")
+                        st.rerun() # Adicionado para atualizar a lista de usuários abaixo
                     else:
                         st.error("Erro ao salvar usuário no banco de dados.")
     with col2:
-        st.empty() # Coluna vazia para espaçamento
+        st.empty()
 
-# 
-# ⬇️ ----------------- NOVA FUNÇÃO (Página de Configurações) ----------------- ⬇️
-#
-# (Esta é a nova "página" que chama o seu formulário de cadastro
-#  e também exibe a lista de usuários)
-#
+# ----------------- NOVA FUNÇÃO (Página de Configurações) -----------------
+
 def tela_configuracoes():
-    # Botão de voltar, igual ao da tela_cadastro_projeto
+   
     if st.button("⬅️ Voltar para Projetos"):
         st.session_state.tela_configuracoes = False
         st.rerun()
         
     st.title("Configurações do Sistema")
-    
-    # 1. Chamar a função de cadastro de usuário (o formulário)
+        
     tela_cadastro_usuario() 
     
     st.divider()
@@ -227,14 +232,24 @@ def tela_configuracoes():
     try:
         df_users = utils.carregar_usuarios_db()
         if not df_users.empty:
-            # Oculta a coluna de senha por segurança
-            st.dataframe(df_users.drop(columns=["Senha"], errors='ignore'), use_container_width=True)
+            
+           
+            # Padroniza as colunas (ex: "nome" -> "Nome", "email" -> "Email")
+            df_users.columns = [col.capitalize() for col in df_users.columns]
+            
+            # Colunas que queremos mostrar (ignora "Senha" e outras)
+            cols_to_show = [col for col in ["Nome", "Email"] if col in df_users.columns]
+            
+            if not cols_to_show:
+                st.warning("O arquivo de usuários existe, mas não contém as colunas 'Nome' ou 'Email'.")
+            else:
+                st.dataframe(df_users[cols_to_show], use_container_width=True)
+           
         else:
             st.info("Nenhum usuário cadastrado ainda.")
     except Exception as e:
         st.error(f"Não foi possível carregar usuários: {e}")
-
-
+        
 # ----------------- Função: Tela de Boas-Vindas -----------------
 def tela_boas_vindas():
     mensagens = [
@@ -652,3 +667,4 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
