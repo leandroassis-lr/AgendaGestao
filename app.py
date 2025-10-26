@@ -36,7 +36,7 @@ def tela_login():
     # --- CSS exclusivo da tela de login ---
     st.markdown("""
     <style>
-    /* ... (Todo o seu CSS da tela_login fica aqui, igual ao que você mandou) ... */
+    /* ... (Todo o seu CSS da tela_login fica aqui) ... */
     
     /* Remove a sidebar SÓ na tela de login */
     [data-testid="stSidebar"] {
@@ -163,32 +163,76 @@ def tela_login():
                 st.image(imagem_principal, use_container_width=True) 
             else:
                  st.warning("Não foi possível carregar a imagem do logo.")
-           
+            
         except Exception as e:
             st.warning(f"Não foi possível carregar a imagem do logo: {e}")
 
-# ----------------- Função: Tela de Cadastro de Usuário (chamada em Configurações) -----------------
+# 
+# ⬇️ ----------------- FUNÇÃO DE CADASTRO ATUALIZADA ----------------- ⬇️
+#
+# (Esta é a sua função original, mas melhorada com colunas
+#  para o formulário não ficar tão largo)
+#
 def tela_cadastro_usuario():
     st.subheader("Cadastrar Novo Usuário")
-    with st.form("form_cadastro_usuario"):
-        nome = st.text_input("Nome", key="cad_nome")
-        email = st.text_input("Email", key="cad_email")
-        senha = st.text_input("Senha (opcional)", type="password", key="cad_senha")
-        if st.form_submit_button("Cadastrar"):
-            if not nome or not email:
-                st.error("Preencha Nome e Email.")
-                return
+
+    # Usar colunas para limitar a largura do formulário
+    col1, col2 = st.columns([1, 2]) 
+    with col1:
+        # Adicionado clear_on_submit=True para limpar o form após o cadastro
+        with st.form("form_cadastro_usuario", clear_on_submit=True): 
+            nome = st.text_input("Nome", key="cad_nome")
+            email = st.text_input("Email", key="cad_email")
+            senha = st.text_input("Senha (opcional)", type="password", key="cad_senha")
             
-            df = utils.carregar_usuarios_db() 
-            if not df.empty and email.lower() in df["Email"].astype(str).str.lower().values:
-                st.error("Email já cadastrado!")
-            else:
-                nova_linha = pd.DataFrame([[nome, email, senha]], columns=["Nome", "Email", "Senha"])
-                df_novo = pd.concat([df, nova_linha], ignore_index=True)
-                if utils.salvar_usuario_db(df_novo): 
-                    st.success("Usuário cadastrado com sucesso!")
+            if st.form_submit_button("Cadastrar"):
+                if not nome or not email:
+                    st.error("Preencha Nome e Email.")
+                    return
+                
+                df = utils.carregar_usuarios_db() 
+                if not df.empty and email.lower() in df["Email"].astype(str).str.lower().values:
+                    st.error("Email já cadastrado!")
                 else:
-                    st.error("Erro ao salvar usuário no banco de dados.")
+                    nova_linha = pd.DataFrame([[nome, email, senha]], columns=["Nome", "Email", "Senha"])
+                    df_novo = pd.concat([df, nova_linha], ignore_index=True)
+                    if utils.salvar_usuario_db(df_novo): 
+                        st.success("Usuário cadastrado com sucesso!")
+                    else:
+                        st.error("Erro ao salvar usuário no banco de dados.")
+    with col2:
+        st.empty() # Coluna vazia para espaçamento
+
+# 
+# ⬇️ ----------------- NOVA FUNÇÃO (Página de Configurações) ----------------- ⬇️
+#
+# (Esta é a nova "página" que chama o seu formulário de cadastro
+#  e também exibe a lista de usuários)
+#
+def tela_configuracoes():
+    # Botão de voltar, igual ao da tela_cadastro_projeto
+    if st.button("⬅️ Voltar para Projetos"):
+        st.session_state.tela_configuracoes = False
+        st.rerun()
+        
+    st.title("Configurações do Sistema")
+    
+    # 1. Chamar a função de cadastro de usuário (o formulário)
+    tela_cadastro_usuario() 
+    
+    st.divider()
+    
+    # 2. Adicionar a visualização de usuários
+    st.subheader("Visualizar Usuários Cadastrados")
+    try:
+        df_users = utils.carregar_usuarios_db()
+        if not df_users.empty:
+            # Oculta a coluna de senha por segurança
+            st.dataframe(df_users.drop(columns=["Senha"], errors='ignore'), use_container_width=True)
+        else:
+            st.info("Nenhum usuário cadastrado ainda.")
+    except Exception as e:
+        st.error(f"Não foi possível carregar usuários: {e}")
 
 
 # ----------------- Função: Tela de Boas-Vindas -----------------
@@ -532,8 +576,9 @@ def tela_projetos():
                 st.session_state.page_number += 1
                 st.rerun()
         
-# ----------------- CONTROLE PRINCIPAL -----------------
-
+# 
+# ⬇️ ----------------- CONTROLE PRINCIPAL (ATUALIZADO) ----------------- ⬇️
+#
 def main():
     # Inicializa os estados da sessão
     if "logado" not in st.session_state:
@@ -546,62 +591,64 @@ def main():
         st.session_state.tela_principal = False
     if "tela_cadastro_proj" not in st.session_state: 
         st.session_state.tela_cadastro_proj = False
+        
+    # ⬇️ ADICIONADO NOVO ESTADO ⬇️
+    if "tela_configuracoes" not in st.session_state: 
+        st.session_state.tela_configuracoes = False
 
     # --- LÓGICA PRINCIPAL DE ROTEAMENTO ---
     if not st.session_state.logado:
-        if st.session_state.cadastro:
-            tela_cadastro_usuario()
-        else:
-            tela_login()
-            
+        # Removi a lógica 'if st.session_state.cadastro:' pois
+        # sua tela de login atual não possui o botão "Novo usuário".
+        # O cadastro agora é feito *dentro* do app.
+        tela_login()
+        
     elif st.session_state.boas_vindas:
         tela_boas_vindas()
         
     elif st.session_state.tela_principal:
+        
+        # --- Sidebar (Atualizada) ---
         st.sidebar.title(f"Bem-vindo(a), {st.session_state.get('usuario', 'Visitante')}! 📋")
         st.sidebar.info(f"Hoje é: {datetime.now().strftime('%d/%m/%Y')}")
         st.sidebar.divider()
+        
         st.sidebar.title("Ações")
+        
+        # ⬇️ BOTÃO NOVO PROJETO (Atualizado para resetar a tela de config) ⬇️
         if st.sidebar.button("➕ Novo Projeto", use_container_width=True):
             st.session_state.tela_cadastro_proj = True
+            st.session_state.tela_configuracoes = False # Reseta o outro
             st.rerun()
+            
         st.sidebar.divider()
         st.sidebar.title("Sistema")
+        
+        # ⬇️ BOTÃO CONFIGURAÇÕES (Adicionado) ⬇️
+        if st.sidebar.button("⚙️ Configurações", use_container_width=True):
+            st.session_state.tela_configuracoes = True
+            st.session_state.tela_cadastro_proj = False # Reseta o outro
+            st.rerun()
+            
         if st.sidebar.button("Logout", use_container_width=True):
             st.session_state.clear()
             st.rerun()
         
-        if st.session_state.get("tela_cadastro_proj"):
-            tela_cadastro_projeto()
+        # --- Lógica de Exibição da Página (Atualizada) ---
+        
+        # ⬇️ Roteamento principal atualizado ⬇️
+        if st.session_state.get("tela_configuracoes"):
+            tela_configuracoes() # Mostra a nova tela de Configurações
+        elif st.session_state.get("tela_cadastro_proj"):
+            tela_cadastro_projeto() # Mostra o cadastro de projeto
         else:
-            tela_projetos()
+            tela_projetos() # Tela padrão
             
     else:
+        # Rota padrão caso nenhum estado esteja definido
         st.session_state.boas_vindas = True
         st.rerun()
 
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
