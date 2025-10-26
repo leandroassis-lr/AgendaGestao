@@ -129,7 +129,7 @@ def tela_login():
         imagem_principal = None
 
     # --- Layout (duas colunas) ---
-    col1, col2 = st.columns([1, 2], gap="small") 
+    col1, col2 = st.columns([1, 3], gap="small") 
 
     # --- Coluna esquerda (Login) ---
     with col1:
@@ -156,10 +156,7 @@ def tela_login():
                     st.rerun()
                 else:
                     st.error("Acesso temporário liberado apenas para Leandro.")
-
-    # 
-    # ⬇️ CORREÇÃO 2: Bloco 'with col2:' movido para DENTRO da função 'tela_login', alinhado com 'with col1:'
-    #
+                    
     with col2:
         try:
             # Use a div 'login-logo-container' para que seu CSS seja aplicado
@@ -589,6 +586,7 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
 
 
