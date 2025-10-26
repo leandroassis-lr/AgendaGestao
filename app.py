@@ -329,7 +329,7 @@ div[data-testid="stHorizontalBlock"] > div:nth-child(1) .stSubheader {
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 100vh !important;
+    height: 60vh !important;
     width: 100%;
     text-align: center;
 }
@@ -359,6 +359,19 @@ div[data-testid="stHorizontalBlock"] > div:nth-child(1) .stSubheader {
     st.session_state.boas_vindas = False
     st.session_state.tela_principal = True
     st.rerun()
+
+    with col2:
+        if imagem_principal:
+            st.markdown(
+                f"""
+                <div class="login-logo-container">
+                    <img src="data:image/png;base64,{utils.image_to_base64(imagem_principal)}" alt="Foto 2.jpg">
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        else:
+            st.warning("Não foi possível carregar a imagem do logo.")
 
 # --- Funções tela_cadastro_projeto e tela_projetos (sem alterações) ---
 def tela_cadastro_projeto():
@@ -776,6 +789,7 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
 
 
