@@ -124,47 +124,35 @@ def tela_login():
     except Exception:
         st.error("Não foi possível carregar 'Foto 2.jpg'.")
         imagem_principal = None
-        
-# --- LOGIN DO SISTEMA ---
-st.markdown("## 🔐 Acesso ao Sistema de Gestão")
 
-# --- Layout com duas colunas: formulário à esquerda, logo à direita ---
-col1, col2 = st.columns([2, 1])
+    # --- Layout (duas colunas) ---
+    col1, col2 = st.columns([2, 1], gap="small") 
 
-with col1:
-    nome = st.text_input("Nome de usuário")
-    email = st.text_input("E-mail corporativo")
+    # --- Coluna esquerda (Login) ---
+    with col1:
+        st.subheader("Seja bem vindo à plataforma de gestão de projetos Allarmi")     
+        st.subheader("Acesse sua conta")
+        st.write("") 
 
-    # --- Botão Entrar ---
-    if st.button("Entrar"):
-        # Acesso temporário apenas para Leandro
-        if nome.strip().lower() == "leandro" and email.strip().lower() == "leandro.assis@allarmi.com.br":
-            st.session_state["autenticado"] = True
-            st.session_state["usuario"] = "Leandro"
-            st.session_state["email"] = "leandro.assis@allarmi.com.br"
-            st.success("Acesso liberado! Bem-vindo, Leandro 👋")
-            st.rerun()  # recarrega a página e entra no sistema
-        else:
-            st.error("Acesso temporário liberado apenas para Leandro.")
+        with st.form("form_login"):
+            nome = st.text_input("Nome", key="login_nome")
+            email = st.text_input("E-mail", key="login_email")
+            
+if st.button("Entrar"):
+    # --- Modo temporário: libera acesso direto ao Leandro ---
+    if nome.strip().lower() == "leandro" and email.strip().lower() == "leandro.assis@allarmi.com.br":
+        st.session_state["autenticado"] = True
+        st.success("Acesso liberado! Bem-vindo, Leandro 👋")
+    else:
+        st.error("Acesso temporário liberado apenas para Leandro.")
 
-with col2:
-    # CSS para centralizar verticalmente a imagem
-    st.markdown(
-        """
-        <style>
-            [data-testid="column"]:nth-child(2) {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
-    try:
-        st.image("Foto 2.jpg", width=200)
-    except Exception:
-        st.warning("Não foi possível carregar o logo (Foto 2.jpg).")
+    # --- Coluna direita (Imagem) ---
+    with col2:
+       
+        if imagem_principal:
+            st.image(imagem_principal)
+        st.markdown('</div>', unsafe_allow_html=True)
+
 
 # ----------------- Função: Tela de Cadastro de Usuário (chamada em Configurações) -----------------
 def tela_cadastro_usuario():
@@ -582,6 +570,7 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
 
 
