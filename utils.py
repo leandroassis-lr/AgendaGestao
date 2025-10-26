@@ -347,8 +347,8 @@ def load_css():
         --red-danger: #d32f2f;   /* Para botões (Logout, Excluir) */
 
         --muted: #6b7280;
-        --card-bg: #ffffff;
-        --page-bg: #f7fbff; /* Fundo principal (branco-azulado) */
+        --card-bg: #98FB98;
+        --page-bg: #00FF7F; /* Fundo principal (branco-azulado) */
     }
 
     /* 2. FUNDOS (Página e Sidebar) */
@@ -429,9 +429,6 @@ def load_css():
     [data-testid="stSidebar"] [data-testid="stAlert"] p {
          color: white;
     }
-
-    /* --- FIM DOS ESTILOS DA SIDEBAR --- */
-
 
     /* 4. BOTÕES E NAVEGAÇÃO (ATUALIZADO) */
 
@@ -599,8 +596,3 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
-
-
-
-
-
