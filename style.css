@@ -2,7 +2,7 @@
   --blue-darkest: #6959CD;
   --blue-dark: #145374;
   --blue-main: #1e90ff;
-  --blue-light: #191970;
+  --blue-light: #483D8B;
   --gray-dark: #2e2e2e;
   --gray-light: #f5f7fa;
   --red-alert: #e63946;
@@ -167,6 +167,7 @@ h4 {
     font-size: 1.6rem;
   }
 }
+
 
 
 
