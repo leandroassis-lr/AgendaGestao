@@ -163,13 +163,13 @@ def tela_login():
     with col2:
         try:
             # Use a div 'login-logo-container' para que seu CSS seja aplicado
-            st.markdown('<div class="login-logo-container">', unsafe_allow_html=True)
+            
             if imagem_principal:
                 # Use 'use_container_width=True' para a imagem se ajustar ao CSS
                 st.image(imagem_principal, use_container_width=True) 
             else:
                  st.warning("Não foi possível carregar a imagem do logo.")
-            st.markdown('</div>', unsafe_allow_html=True)
+           
         except Exception as e:
             st.warning(f"Não foi possível carregar a imagem do logo: {e}")
 
@@ -589,6 +589,7 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
 
 
