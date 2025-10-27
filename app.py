@@ -452,26 +452,29 @@ from datetime import date, datetime, timedelta
 from datetime import date, datetime, timedelta 
 # ... (outros imports) ...
 
-# ⬇️ --- FUNÇÃO TELA_PROJETOS (Layout Cabeçalho Atualizado) --- ⬇️
+# (Imports e outras funções permanecem iguais)
+from datetime import date, datetime, timedelta 
+import streamlit as st
+import pandas as pd
+import html
+import utils # Certifique-se que utils está importado
+
+# ⬇️ --- FUNÇÃO TELA_PROJETOS (Ajustes Finais no Cabeçalho) --- ⬇️
 
 def tela_projetos():
     st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True)
     
     # Carrega dados (sem alterações)
+    # ... (código de carregar df, df_sla, df_etapas_config) ...
     df = utils.carregar_projetos_db()
     df_sla = utils.carregar_config_db("sla") 
     df_etapas_config = utils.carregar_config_db("etapas_evolucao") 
-    
-    if df.empty:
-        st.info("Nenhum projeto cadastrado ainda.")
-        return
-
-    # Conversão de Datas (sem alterações)
+    if df.empty: st.info("Nenhum projeto cadastrado ainda."); return
     df['Agendamento'] = pd.to_datetime(df['Agendamento'], errors='coerce') 
     df['Agendamento_str'] = df['Agendamento'].dt.strftime("%d/%m/%y").fillna('N/A')
 
     # Filtros (sem alterações)
-    # ... (código dos filtros aqui) ...
+    # ... (código dos filtros) ...
     st.markdown("#### 🔍 Filtros e Busca")
     termo_busca = st.text_input("Buscar", key="termo_busca", placeholder="Digite um termo para buscar...")
     filtros = {} 
@@ -506,9 +509,9 @@ def tela_projetos():
         termo = termo_busca.lower().strip()
         mask_busca = df_filtrado.apply(lambda row: row.astype(str).str.lower().str.contains(termo, na=False, regex=False).any(), axis=1)
         df_filtrado = df_filtrado[mask_busca]
-    
+
     # Exportar e Paginação (sem alterações)
-    # ... (código de exportar e paginação aqui) ...
+    # ... (código de exportar e paginação) ...
     st.divider()
     col_info_export, col_export_btn = st.columns([4, 1.2]); total_items = len(df_filtrado)
     with col_info_export: st.info(f"Projetos encontrados: {total_items}")
@@ -535,14 +538,14 @@ def tela_projetos():
     for _, row in df_paginado.iterrows():
         project_id = row['ID']
         
-        # --- Sanitização de Dados (sem alterações) ---
+        # --- Sanitização (sem alterações) ---
         status_raw = row.get('Status', 'N/A'); status_text = html.escape(str(status_raw))
         analista_text = html.escape(str(row.get('Analista', 'N/A')))
         agencia_text = html.escape(str(row.get("Agência", "N/A")))
         projeto_nome_text = html.escape(str(row.get("Projeto", "N/A"))) 
         agendamento_str = row.get('Agendamento_str', 'N/A') 
 
-        # --- Lógica do Lembrete Visual (sem alterações) ---
+        # --- Lembrete Visual (sem alterações) ---
         lembrete_ativo = False; icone_lembrete = ""; cor_lembrete_sla = "orange"; texto_lembrete_extra = ""
         agendamento_date_obj = row.get('Agendamento').date() if pd.notna(row.get('Agendamento')) else None
         if agendamento_date_obj and hoje <= agendamento_date_obj <= limite_lembrete:
@@ -552,8 +555,8 @@ def tela_projetos():
         sla_text, sla_color_original = utils.calcular_sla(row, df_sla)
         sla_color_final = cor_lembrete_sla if lembrete_ativo else sla_color_original
 
-        # --- Lógica Próxima Etapa (sem alterações) ---
-        proxima_etapa_texto = "Nenhuma etapa configurada" 
+        # --- >>> LÓGICA PRÓXIMA ETAPA (TEXTO AJUSTADO) <<< ---
+        proxima_etapa_texto = "Nenhuma etapa configurada" # Padrão
         etapas_configuradas_df = df_etapas_config[df_etapas_config["Nome do Projeto"] == projeto_nome_text] if "Nome do Projeto" in df_etapas_config.columns else pd.DataFrame()
         if not etapas_configuradas_df.empty and "Etapa" in etapas_configuradas_df.columns:
             todas_etapas_lista = etapas_configuradas_df["Etapa"].astype(str).str.strip().tolist()
@@ -561,47 +564,40 @@ def tela_projetos():
             if pd.notna(etapas_concluidas_str) and isinstance(etapas_concluidas_str, str) and etapas_concluidas_str.strip():
                  etapas_concluidas_lista = [e.strip() for e in etapas_concluidas_str.split(',') if e.strip()]
             proxima_etapa = next((etapa for etapa in todas_etapas_lista if etapa not in etapas_concluidas_lista), None)
-            if proxima_etapa: proxima_etapa_texto = f"Próxima Etapa: {proxima_etapa}"
-            elif len(todas_etapas_lista) > 0: proxima_etapa_texto = "✔️ Todas as etapas concluídas"
+            
+            # Ajuste aqui: proxima_etapa_texto agora é SÓ o nome da etapa ou a mensagem
+            if proxima_etapa: 
+                proxima_etapa_texto = proxima_etapa # Apenas o nome da etapa
+            elif len(todas_etapas_lista) > 0: 
+                proxima_etapa_texto = "✔️ Todas concluídas" # Mensagem mais curta
 
-        # --- >>> MUDANÇA NO CABEÇALHO DO CARD <<< ---
+        # --- Cabeçalho do Card (com estilo da próxima etapa ajustado) ---
         st.markdown("<div class='project-card'>", unsafe_allow_html=True)
-        # Ajuste nas colunas: Aumentei a última para caber o texto extra
         col_info_card, col_analista_card, col_agencia_card, col_status_card = st.columns([2.5, 2, 1.5, 2.0]) 
-        
-        # Coluna 1 (Esquerda): Data e Nome do Projeto
         with col_info_card:
             st.markdown(f"<h6>{icone_lembrete} 📅 {agendamento_str}</h6>", unsafe_allow_html=True) 
             st.markdown(f"<h5 style='margin:2px 0'>{projeto_nome_text.upper()}</h5>", unsafe_allow_html=True)
-            # REMOVIDO: A próxima etapa não fica mais aqui
-            
-        # Coluna 2 (Meio-Esquerda): Analista e SLA
         with col_analista_card:
             st.markdown(f"**Analista:** {analista_text}")
             st.markdown(f"<p style='color:{sla_color_final}; font-weight:bold;'>{sla_text}</p>", unsafe_allow_html=True)
             st.markdown(texto_lembrete_extra, unsafe_allow_html=True) 
-            
-        # Coluna 3 (Meio-Direita): Agência
         with col_agencia_card:
             st.markdown(f"**Agência:** {agencia_text}") 
-            
-        # Coluna 4 (Direita): Status Principal e Próxima Etapa
         with col_status_card:
             status_color_name = utils.get_status_color(str(status_raw)) 
-            # Use um container flexível para alinhar à direita e empilhar verticalmente
+            # --- >>> AJUSTE NO ESTILO DA PRÓXIMA ETAPA <<< ---
             st.markdown(
                 f"""<div style="height:100%; display:flex; flex-direction: column; align-items: flex-end; justify-content: center;">
                     <span style="background-color:{status_color_name}; color:black; padding:8px 15px; border-radius:5px; font-weight:bold; font-size:0.9em; margin-bottom: 5px;">{status_text}</span>
-                    <span style="font-size: 0.85em; color: var(--primary-dark); font-weight: 600; text-align: right;">{proxima_etapa_texto}</span>
+                    <span style="font-size: 0.95em; /* Aumentado */ color: var(--primary-dark); font-weight: bold; /* Negrito */ text-align: right;">{proxima_etapa_texto}</span> 
                 </div>""",
                 unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
-        
+
         # --- Expander com Formulário de Edição (Validação de Finalização já incluída) ---
-        
         with st.expander(f"Ver/Editar Detalhes - ID: {project_id}"):
-            # (Todo o código do formulário de edição permanece o mesmo aqui)
-            # ... (Copie e cole o código 'with st.form(...):' da versão anterior aqui) ...
+            # (Todo o código do formulário de edição permanece o mesmo)
+            # ... (Copie e cole o código 'with st.form(...):' da sua versão anterior aqui) ...
             with st.form(f"form_edicao_card_{project_id}"):
                 
                 # --- Seção de Evolução ---
@@ -720,7 +716,6 @@ def tela_projetos():
                         st.success(f"Projeto '{novo_projeto}' (ID: {project_id}) atualizado.")
                         st.rerun()
 
-
     # --- Paginação (sem alterações) ---
     st.divider()
     if total_pages > 1:
@@ -732,9 +727,9 @@ def tela_projetos():
             if st.button("Próxima ➡️", use_container_width=True, disabled=(st.session_state.page_number >= total_pages - 1)): 
                 st.session_state.page_number += 1; 
                 st.rerun()
-                
-# ----------------- FUNÇÃO MAIN (ATUALIZADA) -----------------
-# (Com roteamento corrigido e botão "Usuários")
+
+            
+# ----------------- FUNÇÃO MAIN -----------------
 
 def main():
     # Inicializa os estados da sessão
@@ -800,6 +795,7 @@ if __name__ == "__main__":
     # Adicionado para criar tabelas se não existirem (importante para novas instalações)
     utils.criar_tabelas_iniciais() 
     main()
+
 
 
 
