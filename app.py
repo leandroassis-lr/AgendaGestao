@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
-from datetime import date, datetime
+# --- Make sure this line includes timedelta ---
+from datetime import date, datetime, timedelta 
 import random
 import time
 from PIL import Image
@@ -812,6 +813,7 @@ if __name__ == "__main__":
     # Adicionado para criar tabelas se não existirem (importante para novas instalações)
     utils.criar_tabelas_iniciais() 
     main()
+
 
 
 
