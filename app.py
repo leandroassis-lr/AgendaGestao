@@ -770,13 +770,13 @@ def main():
             st.session_state.tela_cadastro_proj = False 
             st.rerun()
             
-        if st.sidebar.button("Logout", use_container_width=True, type="primary")
+        if st.sidebar.button("Logout", use_container_width=True, type="primary"):
             st.session_state.clear()
             st.rerun()
     
         # --- Lógica de Exibição da Página (Atualizada) ---
               
-        if st.session_state.get("tela_configuracoes")
+        if st.session_state.get("tela_configuracoes"):
             tela_configuracoes() 
         elif st.session_state.get("tela_cadastro_proj"):
             tela_cadastro_projeto() 
@@ -790,6 +790,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
