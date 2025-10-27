@@ -36,39 +36,39 @@
 /* --- SIDEBAR --- */
 [data-testid="stSidebar"] {
   background-color: var(--gray-darkest);
-  color: var(--gray-light); /* Cor padrão para texto que não é link */
+  color: var(--gray-light);
   border-top-right-radius: var(--std-radius);
   border-bottom-right-radius: var(--std-radius);
   padding: 1.5rem 1rem;
   font-weight: 600;
 }
 
-/* Links de Navegação da Sidebar (Agenda, Indicadores, etc.) */
+/* Links de Navegação da Sidebar */
 [data-testid="stSidebar"] p, 
 [data-testid="stSidebar"] a,
 [data-testid="stSidebar"] [data-testid="stSidebarNavLink"],
 [data-testid="stSidebar"] [data-testid="stSidebarNavLink"] span {
-    color: var(--sidebar-text) !important;
-    opacity: 0.9;
+  color: var(--sidebar-text) !important;
+  opacity: 0.9;
 }
 
 [data-testid="stSidebar"] a:hover,
 [data-testid="stSidebar"] [data-testid="stSidebarNavLink"]:hover span {
-    color: var(--sidebar-text) !important;
-    opacity: 1.0;
+  color: var(--sidebar-text) !important;
+  opacity: 1.0;
 }
 
-/* Barra de Busca da Sidebar (ex: "app") */
+/* Barra de Busca da Sidebar */
 [data-testid="stSidebar"] input[type="text"] {
-    background-color: var(--gray-dark);
-    color: var(--sidebar-text);
-    border: 1px solid var(--gray-dark);
-    border-radius: var(--std-radius);
+  background-color: var(--gray-dark);
+  color: var(--sidebar-text);
+  border: 1px solid var(--gray-dark);
+  border-radius: var(--std-radius);
 }
 
 [data-testid="stSidebar"] input[type="text"]::placeholder {
-    color: var(--sidebar-text-faded);
-    opacity: 0.8;
+  color: var(--sidebar-text-faded);
+  opacity: 0.8;
 }
 
 /* Botões dentro da Sidebar */
@@ -83,7 +83,6 @@
 [data-testid="stSidebar"] .stButton > button:hover {
   background-color: var(--primary-dark);
 }
-
 
 /* --- TÍTULOS E HEADERS --- */
 .section-title-center {
@@ -107,8 +106,7 @@ h4 {
   font-size: 1.25rem;
 }
 
-/* --- CARDS E FORMULÁRIOS (Atualizado) --- */
-/* (Regra SEM o .project-card agora) */
+/* --- CARDS E FORMULÁRIOS --- */
 .main .metric-card, .main div[data-testid="stForm"] {
   background: var(--card-bg);
   border-radius: var(--std-radius);
@@ -119,24 +117,32 @@ h4 {
 }
 
 /* --- DIVISOR DE PROJETOS (CABEÇALHO) --- */
-/* (Regra NOVA e separada para o .project-card) */
 .project-card {
-  /* Estilos originais */
   background: var(--card-bg);
   border-radius: var(--std-radius);
-  padding: 20px 28px; /* Padding original */
+  padding: 20px 28px;
   box-shadow: var(--std-shadow);
-  border: 1px solid var(--gray-border); /* Borda original (exceto topo) */
+  border: 1px solid var(--gray-border);
   transition: box-shadow 0.3s ease-in-out;
-  border-top: none; /* Remove a borda superior original para não duplicar */
-
-  /* Linhas do Divisor */
-  margin-top: 10px; /* Espaço ACIMA da linha */
-  border-top: 1px solid var(--primary-light); /* Linha divisória (espessura e cor) */
-  padding-top: 15px; /* Espaço ABAIXO da linha (substitui o padding-top original) */
+  border-top: none;
+  margin-top: 10px;
+  border-top: 1px solid var(--primary-light);
+  padding-top: 15px;
 }
 
-/* Regras Hover e H5 (mantidas como estavam) */
+/* --- AJUSTE DO DIVISOR ENTRE AS DEMANDAS (REDUZIR FAIXA BRANCA) --- */
+.project-card {
+  margin-top: 4px !important;      
+  padding-top: 8px !important;     
+  padding-bottom: 10px !important; 
+  border-top: 1px solid var(--gray-border);
+}
+
+.project-card + .project-card {
+  margin-top: 2px !important;
+}
+
+/* --- HOVERS E TÍTULOS DOS CARDS --- */
 .project-card:hover, .metric-card:hover {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
@@ -147,7 +153,7 @@ h4 {
   font-size: 1.15rem;
 }
 
-/* --- BOTÕES PRINCIPAIS (Fora da Sidebar) --- */
+/* --- BOTÕES PRINCIPAIS (FORA DA SIDEBAR) --- */
 .stButton > button {
   background-color: var(--primary-color);
   color: white;
@@ -170,7 +176,7 @@ h4 {
   box-shadow: 0 0 14px 4px var(--primary-light);
 }
 
-/* Botão de Alerta (Ex: Deletar) */
+/* Botão de Alerta */
 .stButton > button[kind="primary"] {
   background-color: var(--red-alert);
   box-shadow: 0 5px 15px rgba(230, 57, 70, 0.4);
@@ -181,7 +187,7 @@ h4 {
   box-shadow: 0 8px 25px rgba(171, 44, 56, 0.6);
 }
 
-/* --- INPUTS E SELETORES (Fora da Sidebar) --- */
+/* --- INPUTS E SELETORES --- */
 .stTextInput > div > div > input,
 .stTextArea > div > textarea,
 .stSelectbox > div > div > select {
@@ -200,7 +206,7 @@ h4 {
   outline: none;
 }
 
-/* --- TABELAS (DataFrames) --- */
+/* --- TABELAS --- */
 [data-testid="stDataFrame"] table {
   border-radius: var(--std-radius);
   border-collapse: separate;
@@ -243,15 +249,10 @@ h4 {
   }
 }
 
+/* --- CONTAINER PRINCIPAL --- */
 .main .block-container {
-    max-width: 1100px;   /* <-- Esta é a largura do seu conteúdo. Ajuste (ex: 900px ou 1200px) como preferir */
-    margin-left: auto;
-    margin-right: auto;
-    padding-top: 2rem;  /* Adiciona um espaço extra abaixo do topo */
+  max-width: 1100px;   
+  margin-left: auto;
+  margin-right: auto;
+  padding-top: 2rem;  
 }
-
-
-
-
-
-
