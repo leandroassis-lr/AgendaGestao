@@ -222,3 +222,10 @@ h4 {
     font-size: 1.6rem;
   }
 }
+
+.main .block-container {
+    max-width: 1100px;   /* <-- Esta é a largura do seu conteúdo. Ajuste (ex: 900px ou 1200px) como preferir */
+    margin-left: auto;
+    margin-right: auto;
+    padding-top: 2rem;  /* Adiciona um espaço extra abaixo do topo */
+}
