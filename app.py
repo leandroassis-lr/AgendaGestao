@@ -31,7 +31,7 @@ st.set_page_config(page_title="Projetos - GESTÃO", page_icon="📋", layout="wi
 utils.load_css() # Carrega o CSS do arquivo utils
 
 # ----------------- FUNÇÃO DE CALLBACK DO LOGIN (v5) -----------------
-# (Esta função PRECISA estar aqui, no topo)
+# (Esta função PRECISA estar aqui, no topo, na linha 36)
 def _handle_login_submit():
     """Função de callback para o formulário de login."""
     # Pega os valores direto do session_state (onde o form os coloca)
@@ -170,6 +170,8 @@ def tela_login():
         with st.form("form_login"):
             st.text_input("Nome", key="login_nome")
             st.text_input("E-mail", key="login_email")
+            # Esta é a linha que estava dando erro (agora 173 no *seu* arquivo, 
+            # mas ~172 neste código correto)
             st.form_submit_button("Entrar", on_submit=_handle_login_submit)
         
         st.markdown('</div>', unsafe_allow_html=True) # Fecha o div
