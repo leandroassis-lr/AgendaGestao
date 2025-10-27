@@ -140,9 +140,9 @@ h4 {
 
   /* --- Espaçamento e aparência --- */
   margin-top: 1px;              /* Espaço entre cada card */
-  padding-top: 2px;             /* Espaço entre a linha e o texto */
-  padding-bottom: 4px;          /* Espaço inferior */
-  border-top: 3px solid var(--accent-color);
+  padding-top: 1px;             /* Espaço entre a linha e o texto */
+  padding-bottom: 2px;          /* Espaço inferior */
+  border-top: 3px solid #CCE8E1;
   background: linear-gradient(to bottom, #F8FBFA 0%, #FFFFFF 100%);
 }
 
@@ -270,6 +270,7 @@ h4 {
   margin-right: auto;
   padding-top: 2rem;  
 }
+
 
 
 
