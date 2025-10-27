@@ -130,16 +130,30 @@ h4 {
   padding-top: 15px;
 }
 
-/* --- AJUSTE DO DIVISOR ENTRE AS DEMANDAS (REDUZIR FAIXA BRANCA) --- */
+/* --- AJUSTE VISUAL DO DIVISOR ENTRE AS DEMANDAS --- */
 .project-card {
-  margin-top: 2px !important;      
-  padding-top: 5px !important;     
-  padding-bottom: 8px !important; 
-  border-top: 1px solid var(--gray-border);
+  background: var(--card-bg);
+  border-radius: var(--std-radius);
+  box-shadow: var(--std-shadow);
+  border: 1px solid var(--gray-border);
+  transition: box-shadow 0.3s ease-in-out;
+
+  /* --- Espaçamento e aparência --- */
+  margin-top: 12px;              /* Espaço entre cada card */
+  padding-top: 18px;             /* Espaço entre a linha e o texto */
+  padding-bottom: 12px;          /* Espaço inferior */
+  border-top: 3px solid var(--primary-light); /* Linha de destaque */
+  background-color: #FCFDFD;     /* Fundo levemente diferente do branco puro */
 }
 
+/* Deixa o segundo card e seguintes com um espaçamento menor */
 .project-card + .project-card {
-  margin-top: 2px !important;
+  margin-top: 10px;
+}
+
+/* Efeito hover */
+.project-card:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
 }
 
 /* --- HOVERS E TÍTULOS DOS CARDS --- */
@@ -256,4 +270,5 @@ h4 {
   margin-right: auto;
   padding-top: 2rem;  
 }
+
 
