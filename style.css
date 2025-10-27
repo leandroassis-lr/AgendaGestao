@@ -108,7 +108,7 @@ h4 {
 }
 
 /* --- CARDS E FORMULÁRIOS --- */
-.metric-card, div[data-testid="stForm"] {
+.main .metric-card, .main div[data-testid="stForm"] {
   background: var(--card-bg);
   border-radius: var(--std-radius);
   padding: 20px 28px;
@@ -245,4 +245,5 @@ h4 {
     margin-right: auto;
     padding-top: 2rem;  /* Adiciona um espaço extra abaixo do topo */
 }
+
 
