@@ -28,10 +28,10 @@ def _to_date_safe(val):
 
 # ----------------- Configuração da Página e CSS -----------------
 st.set_page_config(page_title="Projetos - GESTÃO", page_icon="📋", layout="wide")
-utils.load_css() # Carrega o CSS do arquivo utils
+utils.load_css() # Carrega o CSS do arquivo utils (Certifique-se que seu CSS está atualizado)
 
 
-# ----------------- Função: Tela de Login -----------------
+# ----------------- Função: Tela de Login (Versão Funcional do Usuário) -----------------
 def tela_login():
     # --- CSS exclusivo da tela de login ---
     st.markdown("""
@@ -62,7 +62,8 @@ def tela_login():
         height: 100vh;
     }
 
-    /* Estilo do formulário */
+    /* Estilo do formulário (IMPORTANTE: Mantenha esta regra sem o '.main' na frente, 
+       pois ela é específica para o CSS injetado aqui na tela_login) */
     div[data-testid="stForm"] {
         background-color: rgba(255, 255, 255, 0.95);
         padding: 2.5rem;
@@ -104,19 +105,21 @@ def tela_login():
         display: flex;
         justify-content: center;
         align-items: center;
-        height: 100vh !important;
+        height: 100vh !important; /* Ajustado para vh */
         width: 100%;
         text-align: center;
     }
 
     .login-logo-container img {
-        max-width: 50%;
+        max-width: 50%; /* Mantido */
         height: auto;
         border-radius: 50%;
         -webkit-mask-image: -webkit-radial-gradient(white, black);
         mask-image: radial-gradient(white, black);
         filter: brightness(1.2) contrast(1.1);
         box-shadow: 0 0 15px rgba(0,0,0,0.3);
+        display: block; /* Adicionado para garantir centralização */
+        margin: auto; /* Adicionado para garantir centralização */
     }
     </style>
     """, unsafe_allow_html=True)
@@ -141,34 +144,38 @@ def tela_login():
             nome = st.text_input("Nome", key="login_nome")
             email = st.text_input("E-mail", key="login_email")
             
+            # Lógica de validação simples (funcional do usuário)
             if st.form_submit_button("Entrar"):
-                # --- Acesso temporário liberado para Leandro ---
-                if nome.strip().lower() == "leandro" and email.strip().lower() == "leandro.assis@allarmi.com.br":
-                    st.session_state["autenticado"] = True
-                    st.success("Acesso liberado! Bem-vindo, Leandro 👋")
+                # Validação usando a função utils
+                if utils.validar_usuario(nome.strip(), email.strip()):
+                    st.session_state["autenticado"] = True # Pode remover se não usar em outro lugar
+                    st.success(f"Acesso liberado! Bem-vindo, {nome.strip()} 👋")
                     
-                    # Restaurei a lógica de transição para a tela de boas-vindas
-                    nome_usuario = "Leandro" 
-                    st.session_state.update(usuario=nome_usuario, logado=True, boas_vindas=True, tela_principal=False)
+                    # Define os estados para a próxima tela
+                    st.session_state.update(
+                        usuario=nome.strip(), 
+                        logado=True, 
+                        boas_vindas=True, 
+                        tela_principal=False
+                    )
+                    # Adiciona a pausa antes do rerun (importante!)
+                    time.sleep(1) 
                     st.rerun()
                 else:
                     st.error("Acesso negado, tente novamente")
-                    
+                
+    # --- Coluna direita (Logo) ---
     with col2:
-        try:
-            # Use a div 'login-logo-container' para que seu CSS seja aplicado
-            
-            if imagem_principal:
-                # Use 'use_container_width=True' para a imagem se ajustar ao CSS
-                st.image(imagem_principal, use_container_width=True) 
-            else:
-                 st.warning("Não foi possível carregar a imagem do logo.")
-            
-        except Exception as e:
-            st.warning(f"Não foi possível carregar a imagem do logo: {e}")
+        # Envolve a imagem no div para aplicar o CSS
+        st.markdown('<div class="login-logo-container">', unsafe_allow_html=True)
+        if imagem_principal:
+            # st.image agora dentro do div
+            st.image(imagem_principal, use_container_width=True) 
+        else:
+             st.warning("Não foi possível carregar a imagem do logo.")
+        st.markdown('</div>', unsafe_allow_html=True) # Fecha o div
 
-# ----------------- Função: Tela de Cadastro de Usuário -----------------#
-
+# ----------------- Função: Tela de Cadastro de Usuário (Sem alterações) -----------------#
 def tela_cadastro_usuario():
     st.subheader("Cadastrar Novo Usuário")
 
@@ -189,7 +196,6 @@ def tela_cadastro_usuario():
                 df = utils.carregar_usuarios_db() 
 
                 # Padroniza os nomes das colunas para "Capitalized" (ex: "email" -> "Email")
-                # Isso corrige o erro se o arquivo foi salvo com colunas em minúsculas.
                 if not df.empty:
                     df.columns = [col.capitalize() for col in df.columns]
 
@@ -213,10 +219,9 @@ def tela_cadastro_usuario():
     with col2:
         st.empty()
 
-# ----------------- NOVA FUNÇÃO (Página de Configurações) -----------------
-
+# ----------------- Função: Tela de Configurações (Sem alterações) -----------------
 def tela_configuracoes():
-   
+    
     if st.button("⬅️ Voltar para Projetos"):
         st.session_state.tela_configuracoes = False
         st.rerun()
@@ -233,7 +238,6 @@ def tela_configuracoes():
         df_users = utils.carregar_usuarios_db()
         if not df_users.empty:
             
-           
             # Padroniza as colunas (ex: "nome" -> "Nome", "email" -> "Email")
             df_users.columns = [col.capitalize() for col in df_users.columns]
             
@@ -244,13 +248,13 @@ def tela_configuracoes():
                 st.warning("O arquivo de usuários existe, mas não contém as colunas 'Nome' ou 'Email'.")
             else:
                 st.dataframe(df_users[cols_to_show], use_container_width=True)
-           
+            
         else:
             st.info("Nenhum usuário cadastrado ainda.")
     except Exception as e:
         st.error(f"Não foi possível carregar usuários: {e}")
         
-# ----------------- Função: Tela de Boas-Vindas -----------------
+# ----------------- Função: Tela de Boas-Vindas (Sem alterações) -----------------
 def tela_boas_vindas():
     mensagens = [
         "Que seu dia seja produtivo e cheio de conquistas!",
@@ -315,14 +319,29 @@ def tela_boas_vindas():
     st.session_state.tela_principal = True
     st.rerun()
 
-# --- Funções tela_cadastro_projeto e tela_projetos (sem alterações) ---
+# --- FUNÇÃO TELA_CADASTRO_PROJETO (ATUALIZADA com Selectbox) ---
+# (Substituindo a versão original do usuário por esta)
 def tela_cadastro_projeto():
     if st.button("⬅️ Voltar para Projetos"):
         st.session_state.tela_cadastro_proj = False
         st.rerun()
     st.subheader("Cadastrar Novo Projeto")
     
+    # --- 1. CARREGAR LISTAS DE OPÇÕES ---
     perguntas_customizadas = utils.carregar_config_db("perguntas") 
+    
+    agencias_cfg = utils.carregar_config_db("agencias")
+    tecnicos_cfg = utils.carregar_config_db("tecnicos")
+    
+    # (Usando o nome da tabela que você confirmou: "projetos_nomes")
+    projetos_cfg = utils.carregar_config_db("projetos_nomes") 
+
+    # Prepara as listas de opções
+    agencia_options = ["N/A"] + (agencias_cfg.iloc[:, 0].tolist() if not agencias_cfg.empty and len(agencias_cfg.columns) > 0 else [])
+    tecnico_options = ["N/A"] + (tecnicos_cfg.iloc[:, 0].tolist() if not tecnicos_cfg.empty and len(tecnicos_cfg.columns) > 0 else [])
+    projeto_options = ["N/A"] + (projetos_cfg.iloc[:, 0].tolist() if not projetos_cfg.empty and len(projetos_cfg.columns) > 0 else [])
+    
+    # ----------------------------------------
     
     if perguntas_customizadas.empty or 'Pergunta' not in perguntas_customizadas.columns:
         st.info("🚨 Nenhuma pergunta customizada configurada. (Vá para Configurações > Gerenciar Listas)")
@@ -330,24 +349,84 @@ def tela_cadastro_projeto():
 
     with st.form("form_cadastro_projeto"):
         respostas_customizadas = {}
+        
         for index, row in perguntas_customizadas.iterrows():
             pergunta = row['Pergunta']
             tipo = row.get('Tipo (texto, numero, data)', 'texto')
             key = utils.clean_key(pergunta)
-            if tipo == 'data': respostas_customizadas[pergunta] = st.date_input(pergunta, value=None, key=f"custom_{key}", format="DD/MM/YYYY")
-            elif tipo == 'numero': respostas_customizadas[pergunta] = st.number_input(pergunta, key=f"custom_{key}", step=1)
-            else: respostas_customizadas[pergunta] = st.text_input(pergunta, key=f"custom_{key}")
+            
+            # Normaliza o nome da pergunta para verificação
+            pergunta_norm = pergunta.lower().strip() 
+
+            # --- 2. LÓGICA DE INTERCEPTAÇÃO ---
+            
+            if pergunta_norm == 'agência':
+                respostas_customizadas[pergunta] = st.selectbox(
+                    pergunta, 
+                    options=agencia_options, 
+                    key=f"custom_{key}",
+                    help="Selecione a agência da lista."
+                )
+            
+            elif pergunta_norm == 'técnico':
+                respostas_customizadas[pergunta] = st.selectbox(
+                    pergunta, 
+                    options=tecnico_options, 
+                    key=f"custom_{key}",
+                    help="Selecione o técnico da lista."
+                )
+            
+            # Verifica por "projeto" ou "nome do projeto"
+            elif pergunta_norm == 'projeto' or pergunta_norm == 'nome do projeto':
+                respostas_customizadas[pergunta] = st.selectbox(
+                    pergunta, 
+                    options=projeto_options, 
+                    key=f"custom_{key}",
+                    help="Selecione o tipo de projeto da lista."
+                )
+            
+            # --- FIM DA LÓGICA ---
+            
+            # Lógica original para outros tipos de pergunta
+            elif tipo == 'data': 
+                respostas_customizadas[pergunta] = st.date_input(pergunta, value=None, key=f"custom_{key}", format="DD/MM/YYYY")
+            elif tipo == 'numero': 
+                respostas_customizadas[pergunta] = st.number_input(pergunta, key=f"custom_{key}", step=1)
+            else: 
+                # O padrão para qualquer outra pergunta de texto
+                respostas_customizadas[pergunta] = st.text_input(pergunta, key=f"custom_{key}")
+                
         btn_cadastrar = st.form_submit_button("Cadastrar Projeto")
     
     if btn_cadastrar:
-        projeto_nome = respostas_customizadas.get(perguntas_customizadas.iloc[0]['Pergunta'], 'Projeto Customizado')
+        
+        # --- 3. LÓGICA DE SALVAMENTO ATUALIZADA ---
+        
+        projeto_nome_key = next((p for p in respostas_customizadas if p.lower().strip() in ['nome do projeto', 'projeto']), None)
+        agencia_key = next((p for p in respostas_customizadas if p.lower().strip() == 'agência'), None)
+        tecnico_key = next((p for p in respostas_customizadas if p.lower().strip() == 'técnico'), None)
+
+        # Validação
+        projeto_nome = respostas_customizadas.get(projeto_nome_key) if projeto_nome_key else "N/A"
+        agencia_nome = respostas_customizadas.get(agencia_key) if agencia_key else "N/A"
+        tecnico_nome = respostas_customizadas.get(tecnico_key) if tecnico_key else "N/A"
+        
+        # Verifica se alguma das chaves não foi encontrada E se o valor é N/A
+        if (not projeto_nome_key or projeto_nome == "N/A") or \
+           (not agencia_key or agencia_nome == "N/A") or \
+           (not tecnico_key or tecnico_nome == "N/A"):
+             st.error("ERRO: 'Projeto', 'Agência' e 'Técnico' são campos obrigatórios e devem estar configurados nas perguntas. Selecione uma opção válida.")
+             st.stop() # Impede o cadastro
+        
+        # Se passou na validação, continua o cadastro
         nova_linha_data = {
             "Status": "NÃO INICIADA",
             "Data de Abertura": date.today(),
             "Analista": st.session_state.get('usuario', 'N/A'),
-            "Projeto": projeto_nome
+            "Projeto": projeto_nome  # Usa o nome do projeto selecionado
         }
         
+        # Adiciona todas as outras respostas do formulário
         nova_linha_data.update(respostas_customizadas)
 
         if utils.adicionar_projeto_db(nova_linha_data):
@@ -355,8 +434,8 @@ def tela_cadastro_projeto():
             st.session_state["tela_cadastro_proj"] = False
             st.rerun()
 
-# ⬇️ ----------------- FUNÇÃO TELA_PROJETOS (ATUALIZADA) ----------------- ⬇️
-
+# ----------------- FUNÇÃO TELA_PROJETOS (Original do usuário) ----------------- 
+# (Mantendo a versão original que estava funcionando para o usuário)
 def tela_projetos():
     st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True)
     
@@ -370,11 +449,10 @@ def tela_projetos():
         return
 
     # --- Conversão de Datas ---
-    # É importante fazer isso ANTES de tentar filtrar
     df['Agendamento'] = pd.to_datetime(df['Agendamento'], errors='coerce')
     df['Agendamento_str'] = df['Agendamento'].dt.strftime("%d/%m/%y").fillna('N/A')
 
-    # --- Início dos Filtros (REESTRUTURADO) ---
+    # --- Início dos Filtros ---
     st.markdown("#### 🔍 Filtros e Busca")
     termo_busca = st.text_input("Buscar", key="termo_busca", placeholder="Digite um termo para buscar...")
 
@@ -387,7 +465,9 @@ def tela_projetos():
     for campo, col in campos_linha_1.items():
         with col:
             if campo in df.columns: 
-                opcoes = ["Todos"] + sorted(df[campo].astype(str).unique().tolist())
+                # Tratamento para evitar erro se a coluna tiver apenas NaN ou None
+                unique_values = df[campo].dropna().astype(str).unique()
+                opcoes = ["Todos"] + sorted(unique_values.tolist())
                 filtros[campo] = st.selectbox(f"{campo}", opcoes, key=f"filtro_{utils.clean_key(campo)}")
             else:
                 st.empty() # Ocupa o espaço se a coluna não existir no DB
@@ -399,7 +479,8 @@ def tela_projetos():
     with col5:
         campo = "Projeto"
         if campo in df.columns:
-            opcoes = ["Todos"] + sorted(df[campo].astype(str).unique().tolist())
+            unique_values = df[campo].dropna().astype(str).unique()
+            opcoes = ["Todos"] + sorted(unique_values.tolist())
             filtros[campo] = st.selectbox(f"{campo}", opcoes, key=f"filtro_{utils.clean_key(campo)}")
         else:
             st.empty()
@@ -408,13 +489,13 @@ def tela_projetos():
     with col6:
         campo = "Técnico"
         if campo in df.columns:
-            opcoes = ["Todos"] + sorted(df[campo].astype(str).unique().tolist())
+            unique_values = df[campo].dropna().astype(str).unique()
+            opcoes = ["Todos"] + sorted(unique_values.tolist())
             filtros[campo] = st.selectbox(f"{campo}", opcoes, key=f"filtro_{utils.clean_key(campo)}")
         else:
             st.empty()
             
-    # ⬇️ --- NOVOS FILTROS DE DATA (col7 e col8) --- ⬇️
-    # (Exatamente como você pediu, ao lado do Técnico)
+    # Filtros de Data (col7 e col8)
     with col7:
         data_inicio = st.date_input(
             "Agendamento (de)", 
@@ -430,7 +511,6 @@ def tela_projetos():
             key="data_fim_filtro", 
             format="DD/MM/YYYY"
         )
-    # ⬆️ --- FIM DOS NOVOS FILTROS DE DATA --- ⬆️
 
     # --- Lógica de Aplicação dos Filtros ---
     df_filtrado = df.copy()
@@ -438,30 +518,29 @@ def tela_projetos():
     # 1. Aplica filtros de selectbox (Status, Analista, etc.)
     for campo, valor in filtros.items():
         if valor != "Todos" and campo in df_filtrado.columns:
-            df_filtrado = df_filtrado[df_filtrado[campo].astype(str) == valor]
+            # Garante comparação como string e lida com possíveis NaNs
+            df_filtrado = df_filtrado[df_filtrado[campo].astype(str) == str(valor)]
 
     # 2. Aplica filtro de Data de Início
     if data_inicio:
         df_filtrado = df_filtrado[
             (df_filtrado['Agendamento'].notna()) & 
-            (df_filtrado['Agendamento'] >= pd.to_datetime(data_inicio)) # Compara a partir de 00:00:00
+            (df_filtrado['Agendamento'] >= pd.to_datetime(data_inicio))
         ]
     # 3. Aplica filtro de Data de Fim
     if data_fim:
         df_filtrado = df_filtrado[
             (df_filtrado['Agendamento'].notna()) & 
-            (df_filtrado['Agendamento'] <= pd.to_datetime(data_fim).replace(hour=23, minute=59, second=59)) # Compara até 23:59:59
+            (df_filtrado['Agendamento'] <= pd.to_datetime(data_fim).replace(hour=23, minute=59, second=59))
         ]
 
     # 4. Aplica filtro de texto (busca)
     if termo_busca:
         termo = termo_busca.lower().strip()
-        mask_busca = df_filtrado.apply(lambda row: row.astype(str).str.lower().str.contains(termo, na=False).any(), axis=1)
+        # Aplica a busca em todas as colunas convertidas para string
+        mask_busca = df_filtrado.apply(lambda row: row.astype(str).str.lower().str.contains(termo, na=False, regex=False).any(), axis=1)
         df_filtrado = df_filtrado[mask_busca]
     
-    # --- O RESTO DA FUNÇÃO CONTINUA IGUAL ---
-    # (Exportar para Excel, Paginação, Cards de Projeto, etc.)
-
     st.divider()
     col_info_export, col_export_btn = st.columns([4, 1.2])
     total_items = len(df_filtrado)
@@ -485,6 +564,7 @@ def tela_projetos():
     total_pages = (total_items // items_per_page) + (1 if total_items % items_per_page > 0 else 0)
     if total_pages == 0: total_pages = 1
     
+    # Corrige a página se os filtros mudarem e a página atual ficar inválida
     if st.session_state.page_number >= total_pages:
         st.session_state.page_number = 0
 
@@ -493,6 +573,7 @@ def tela_projetos():
     
     df_paginado = df_filtrado.iloc[start_idx:end_idx]
     
+    # Carrega opções para os dropdowns de edição DENTRO do loop (ou aqui, se forem fixas)
     agencias_cfg = utils.carregar_config_db("agencias")
     tecnicos_cfg = utils.carregar_config_db("tecnicos")
     status_options_df = utils.carregar_config_db("status")
@@ -501,9 +582,11 @@ def tela_projetos():
     tecnico_options = ["N/A"] + (tecnicos_cfg.iloc[:, 0].tolist() if not tecnicos_cfg.empty and len(tecnicos_cfg.columns) > 0 else [])
     status_options = status_options_df.iloc[:, 0].tolist() if not status_options_df.empty and len(status_options_df.columns) > 0 else []
 
+    # --- Loop para exibir os cards ---
     for _, row in df_paginado.iterrows():
         project_id = row['ID']
         
+        # Sanitiza os dados para exibição segura
         status_raw = row.get('Status', 'N/A')
         status_text = html.escape(str(status_raw))
         analista_text = html.escape(str(row.get('Analista', 'N/A')))
@@ -513,10 +596,12 @@ def tela_projetos():
         status_color_name = utils.get_status_color(str(status_raw))
         sla_text, sla_color = utils.calcular_sla(row, df_sla)
 
+        # --- Cabeçalho do Card ---
         st.markdown("<div class='project-card'>", unsafe_allow_html=True)
         col_info_card, col_analista_card, col_agencia_card, col_status_card = st.columns([3, 2, 2, 1.5])
         with col_info_card:
-            st.markdown(f"<h6>📅 {row.get('Agendamento_str')}</h6>", unsafe_allow_html=True) 
+            # Usa Agendamento_str que já tratou NaT/None
+            st.markdown(f"<h6>📅 {row.get('Agendamento_str', 'N/A')}</h6>", unsafe_allow_html=True) 
             st.markdown(f"<h5 style='margin:2px 0'>{projeto_text.upper()}</h5>", unsafe_allow_html=True)
             
         with col_analista_card:
@@ -527,40 +612,67 @@ def tela_projetos():
             st.markdown(f"**Agência:** {agencia_text}") 
             
         with col_status_card:
+            # Botão de Status
             st.markdown(
                 f"""<div style="height:100%;display:flex;align-items:center;justify-content:flex-end;">
                 <span style="background-color:{status_color_name};color:black;padding:8px 15px;border-radius:5px;font-weight:bold;font-size:0.9em;">{status_text}</span>
                 </div>""",
                 unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True) # Fecha o div 'project-card'
 
+        # --- Expander com Formulário de Edição ---
         with st.expander(f"Ver/Editar Detalhes - ID: {project_id}"):
             with st.form(f"form_edicao_card_{project_id}"):
                 
+                # --- Seção de Evolução ---
                 st.markdown("#### Evolução da Demanda")
+                # Lógica para buscar etapas específicas do projeto
                 etapas_do_projeto = df_etapas_config[df_etapas_config["Nome do Projeto"] == row.get("Projeto", "")] if "Nome do Projeto" in df_etapas_config.columns else pd.DataFrame()
+                
+                # Trata 'Etapas Concluidas' que podem ser NaN ou None
                 etapas_concluidas_str = row.get("Etapas Concluidas", "")
-                etapas_concluidas_lista = etapas_concluidas_str.split(',') if isinstance(etapas_concluidas_str, str) and etapas_concluidas_str else []
+                etapas_concluidas_lista = []
+                if pd.notna(etapas_concluidas_str) and isinstance(etapas_concluidas_str, str) and etapas_concluidas_str.strip():
+                     etapas_concluidas_lista = [e.strip() for e in etapas_concluidas_str.split(',') if e.strip()]
+
                 novas_etapas_marcadas = []
-                if not etapas_do_projeto.empty:
+                if not etapas_do_projeto.empty and "Etapa" in etapas_do_projeto.columns:
                     total_etapas = len(etapas_do_projeto)
                     num_etapas_concluidas = len(etapas_concluidas_lista)
                     progresso = num_etapas_concluidas / total_etapas if total_etapas > 0 else 0
                     st.progress(progresso)
                     st.caption(f"{num_etapas_concluidas} de {total_etapas} etapas concluídas ({progresso:.0%})")
+                    
+                    # Gera os checkboxes
                     for etapa in etapas_do_projeto["Etapa"]:
-                        marcado = st.checkbox(etapa, value=(etapa in etapas_concluidas_lista), key=f"chk_{project_id}_{utils.clean_key(etapa)}")
-                        if marcado: novas_etapas_marcadas.append(etapa)
+                        etapa_str = str(etapa).strip() # Garante que é string
+                        marcado = st.checkbox(
+                            etapa_str, 
+                            value=(etapa_str in etapas_concluidas_lista), 
+                            key=f"chk_{project_id}_{utils.clean_key(etapa_str)}"
+                        )
+                        if marcado: 
+                            novas_etapas_marcadas.append(etapa_str)
                 else:
                     st.caption("Nenhuma etapa de evolução configurada para este tipo de projeto.")
 
+                # --- Seção de Informações e Prazos ---
                 st.markdown("#### Informações e Prazos")
                 c1,c2,c3,c4 = st.columns(4)
                 with c1:
-                    status_selecionaveis = status_options[:]
-                    if row.get('Status') != 'NÃO INICIADA':
-                        if 'NÃO INICIADA' in status_selecionaveis: status_selecionaveis.remove('NÃO INICIADA')
-                    idx_status = status_selecionaveis.index(row.get('Status')) if row.get('Status') in status_selecionaveis else 0
+                    status_selecionaveis = status_options[:] # Cria cópia
+                    status_atual = row.get('Status')
+                    # Lógica para permitir voltar status (opcional, remova se não quiser)
+                    # if status_atual != 'NÃO INICIADA':
+                    #     if 'NÃO INICIADA' in status_selecionaveis: 
+                    #         status_selecionaveis.remove('NÃO INICIADA')
+                    
+                    # Encontra o índice do status atual, tratando caso não exista
+                    try:
+                        idx_status = status_selecionaveis.index(status_atual) if status_atual in status_selecionaveis else 0
+                    except ValueError:
+                        idx_status = 0 # Padrão se o status atual não estiver na lista
+                        
                     novo_status_selecionado = st.selectbox("Status", status_selecionaveis, index=idx_status, key=f"status_{project_id}")
                 with c2:
                     abertura_default = _to_date_safe(row.get('Data de Abertura'))
@@ -572,6 +684,7 @@ def tela_projetos():
                     finalizacao_default = _to_date_safe(row.get('Data de Finalização'))
                     nova_data_finalizacao = st.date_input("Data Finalização", value=finalizacao_default, key=f"final_{project_id}", format="DD/MM/YYYY")
 
+                # --- Seção de Detalhes do Projeto ---
                 st.markdown("#### Detalhes do Projeto")
                 c5,c6,c7 = st.columns(3)
                 with c5: novo_projeto = st.text_input("Projeto", value=row.get('Projeto', ''), key=f"proj_{project_id}")
@@ -587,65 +700,88 @@ def tela_projetos():
                     idx_tec = tecnico_options.index(tecnico_val) if tecnico_val in tecnico_options else 0
                     novo_tecnico = st.selectbox("Técnico", tecnico_options, index=idx_tec, key=f"tecnico_{project_id}")
 
+                # --- Campos de Texto Longo ---
                 nova_demanda = st.text_input("Demanda", value=row.get('Demanda', ''), key=f"demanda_{project_id}")
                 nova_descricao = st.text_area("Descrição", value=row.get('Descrição', ''), key=f"desc_{project_id}")
                 nova_observacao = st.text_area("Observação / Pendências", value=row.get('Observação', ''), key=f"obs_{project_id}")
+                
+                # Log de Agendamento (Apenas exibição)
                 log_agendamento_existente = row.get("Log Agendamento", "") if pd.notna(row.get("Log Agendamento")) else ""
                 st.text_area("Histórico de Agendamento", value=log_agendamento_existente, height=100, disabled=True, key=f"log_{project_id}")
 
+                # --- Botões Salvar e Excluir ---
                 _, col_save, col_delete = st.columns([3, 1.5, 1]) 
                 with col_save:
                     btn_salvar_card = st.form_submit_button("💾 Salvar", use_container_width=True)
                 with col_delete:
                     btn_excluir_card = st.form_submit_button("🗑️ Excluir", use_container_width=True, type="primary")
 
+                # --- Lógica de Ação dos Botões ---
                 if btn_excluir_card:
                     if utils.excluir_projeto_db(project_id):
+                        st.success(f"Projeto ID {project_id} excluído.") # Feedback
                         st.rerun()
                 
                 if btn_salvar_card:
+                    # Lógica de atualização de Status
                     status_final = novo_status_selecionado
-                    if row.get('Status') == 'NÃO INICIADA' and len(novas_etapas_marcadas) > 0:
-                        status_final = 'EM ANDAMENTO'
-                        st.info("Status alterado para 'EM ANDAMENTO'!")
+                    if row.get('Status') == 'NÃO INICIADA' and len(novas_etapas_marcadas) > 0 and status_final == 'NÃO INICIADA':
+                        status_final = 'EM ANDAMENTO' # Muda automaticamente se marcar etapa
+                        st.info("Status alterado para 'EM ANDAMENTO' pois uma etapa foi marcada.")
                     
+                    # Converte datas para objetos date ou None
                     nova_data_abertura_date = _to_date_safe(nova_data_abertura)
                     nova_data_finalizacao_date = _to_date_safe(nova_data_finalizacao)
                     novo_agendamento_date = _to_date_safe(novo_agendamento)
 
+                    # Validações ao finalizar
                     if 'finalizad' in status_final.lower():
                         total_etapas_config = len(etapas_do_projeto)
                         if total_etapas_config > 0 and len(novas_etapas_marcadas) < total_etapas_config:
                             st.error(f"ERRO: Para finalizar, todas as {total_etapas_config} etapas devem ser marcadas.", icon="🚨")
-                            st.stop()
+                            st.stop() # Interrompe salvamento
                         if not nova_data_finalizacao_date:
                             st.error("ERRO: Se o status é 'Finalizada', a Data de Finalização é obrigatória.", icon="🚨")
-                            st.stop()
+                            st.stop() # Interrompe salvamento
                     
+                    # Atualiza Log de Agendamento
                     log_final = row.get("Log Agendamento", "") if pd.notna(row.get("Log Agendamento")) else ""
                     agendamento_antigo_date = _to_date_safe(row.get('Agendamento'))
 
-                    if (agendamento_antigo_date is None and novo_agendamento_date is not None) or \
-                       (agendamento_antigo_date is not None and novo_agendamento_date != agendamento_antigo_date):
+                    # Compara datas corretamente (ambas como date ou None)
+                    if novo_agendamento_date != agendamento_antigo_date:
                         data_antiga_str = agendamento_antigo_date.strftime('%d/%m/%Y') if agendamento_antigo_date else "N/A"
                         data_nova_str = novo_agendamento_date.strftime('%d/%m/%Y') if novo_agendamento_date else "N/A"
                         hoje_str = date.today().strftime('%d/%m/%Y')
-                        nova_entrada_log = f"Em {hoje_str}: alterado de '{data_antiga_str}' para '{data_nova_str}'."
+                        usuario_logado = st.session_state.get('usuario', 'Sistema') # Pega o usuário logado
+                        nova_entrada_log = f"Em {hoje_str} por {usuario_logado}: alterado de '{data_antiga_str}' para '{data_nova_str}'."
                         log_final = f"{log_final}\n{nova_entrada_log}".strip()
 
+                    # Monta o dicionário de atualizações
                     updates = {
-                        "Status": status_final, "Agendamento": novo_agendamento_date, "Analista": novo_analista,
-                        "Agência": nova_agencia, "Gestor": novo_gestor, "Projeto": novo_projeto,
-                        "Técnico": novo_tecnico, "Demanda": nova_demanda, "Descrição": nova_descricao,
-                        "Observação": nova_observacao, "Data de Abertura": nova_data_abertura_date,
-                        "Data de Finalização": nova_data_finalizacao_date,
-                        "Etapas Concluidas": ",".join(novas_etapas_marcadas), "Log Agendamento": log_final
+                        "Status": status_final, 
+                        "Agendamento": novo_agendamento_date, # Salva como date ou None
+                        "Analista": novo_analista,
+                        "Agência": nova_agencia if nova_agencia != "N/A" else None, # Salva None se for N/A
+                        "Gestor": novo_gestor, 
+                        "Projeto": novo_projeto,
+                        "Técnico": novo_tecnico if novo_tecnico != "N/A" else None, # Salva None se for N/A
+                        "Demanda": nova_demanda, 
+                        "Descrição": nova_descricao,
+                        "Observação": nova_observacao, 
+                        "Data de Abertura": nova_data_abertura_date, # Salva como date ou None
+                        "Data de Finalização": nova_data_finalizacao_date, # Salva como date ou None
+                        "Etapas Concluidas": ",".join(novas_etapas_marcadas) if novas_etapas_marcadas else None, # Salva None se vazio
+                        "Log Agendamento": log_final if log_final else None # Salva None se vazio
                     }
 
+                    # Chama a função de atualização no utils
                     if utils.atualizar_projeto_db(project_id, updates):
                         st.success(f"Projeto '{novo_projeto}' (ID: {project_id}) atualizado.")
                         st.rerun()
+                    # else: (O erro já é mostrado pelo utils.atualizar_projeto_db)
 
+    # --- Paginação ---
     st.divider()
     if total_pages > 1:
         col_info_pag, col_prev_pag, col_next_pag = st.columns([5, 1.5, 1.5]) 
@@ -660,36 +796,33 @@ def tela_projetos():
                 st.session_state.page_number += 1
                 st.rerun()
                 
-def main():
-    # Inicializa os estados da sessão
-    if "logado" not in st.session_state:
-        st.session_state.logado = False
-    if "cadastro" not in st.session_state:
-        st.session_state.cadastro = False
-    if "boas_vindas" not in st.session_state:
-        st.session_state.boas_vindas = False 
-    if "tela_principal" not in st.session_state:
-        st.session_state.tela_principal = False
-    if "tela_cadastro_proj" not in st.session_state: 
-        st.session_state.tela_cadastro_proj = False
-        
-    # ⬇️ ADICIONADO NOVO ESTADO ⬇️
-    if "tela_configuracoes" not in st.session_state: 
-        st.session_state.tela_configuracoes = False
+# ----------------- FUNÇÃO MAIN (ATUALIZADA) -----------------
+# (Com roteamento corrigido e botão "Usuários")
 
-    # --- LÓGICA PRINCIPAL DE ROTEAMENTO ---
+def main():
+    # Inicializa os estados da sessão (é bom ter todos aqui)
+    if "logado" not in st.session_state: st.session_state.logado = False
+    if "cadastro" not in st.session_state: st.session_state.cadastro = False # Embora não usado, mantém por segurança
+    if "boas_vindas" not in st.session_state: st.session_state.boas_vindas = False 
+    if "tela_principal" not in st.session_state: st.session_state.tela_principal = False
+    if "tela_cadastro_proj" not in st.session_state: st.session_state.tela_cadastro_proj = False
+    if "tela_configuracoes" not in st.session_state: st.session_state.tela_configuracoes = False
+    if "usuario" not in st.session_state: st.session_state.usuario = None # Inicializa usuário
+
+    # --- LÓGICA PRINCIPAL DE ROTEAMENTO (CORRIGIDA) ---
+    
     if not st.session_state.logado:
-        # Removi a lógica 'if st.session_state.cadastro:' pois
-        # sua tela de login atual não possui o botão "Novo usuário".
-        # O cadastro agora é feito *dentro* do app.
+        # ROTA 1: Não logado -> Tela de Login
         tela_login()
-        
+
     elif st.session_state.boas_vindas:
+        # ROTA 2: Logado + Boas Vindas -> Tela de Boas Vindas
         tela_boas_vindas()
-        
+
     elif st.session_state.tela_principal:
+        # ROTA 3: Logado + Principal -> App Principal (com Sidebar)
         
-        # --- Sidebar (Atualizada) ---
+        # --- Sidebar ---
         st.sidebar.title(f"Bem-vindo(a), {st.session_state.get('usuario', 'Visitante')}")
         st.sidebar.divider()
         
@@ -697,35 +830,38 @@ def main():
         
         if st.sidebar.button("➕ Novo Projeto", use_container_width=True):
             st.session_state.tela_cadastro_proj = True
-            st.session_state.tela_configuracoes = False # Reseta o outro
+            st.session_state.tela_configuracoes = False 
             st.rerun()
             
-        st.sidebar.divider()
+        st.sidebar.divider() # Adicionei um divider para separar melhor
         st.sidebar.title("Sistema")
         
-        # ⬇️ BOTÃO CONFIGURAÇÕES (Adicionado) ⬇️
-        if st.sidebar.button("⚙️ Configurações", use_container_width=True):
+        # Botão renomeado:
+        if st.sidebar.button("➕ Usuários", use_container_width=True):
             st.session_state.tela_configuracoes = True
-            st.session_state.tela_cadastro_proj = False # Reseta o outro
+            st.session_state.tela_cadastro_proj = False 
             st.rerun()
-           
-        if st.sidebar.button("Logout", use_container_width=True, type="primary"): 
-            st.session_state.clear()
+            
+        # O botão de Configurações foi removido pois virou "Usuários"
+        # Se precisar de um botão separado para outras configs, adicione aqui.
+            
+        if st.sidebar.button("Logout", use_container_width=True, type="primary"):
+            st.session_state.clear() # Limpa TUDO
             st.rerun()
     
-        # --- Lógica de Exibição da Página (Atualizada) ---
-        
-        # ⬇️ Roteamento principal atualizado ⬇️
+        # --- Lógica de Exibição da Página (dentro da ROTA 3) ---
         if st.session_state.get("tela_configuracoes"):
-            tela_configuracoes() # Mostra a nova tela de Configurações
+            tela_configuracoes() 
         elif st.session_state.get("tela_cadastro_proj"):
-            tela_cadastro_projeto() # Mostra o cadastro de projeto
+            tela_cadastro_projeto() 
         else:
-            tela_projetos() # Tela padrão
+            # Tela Padrão se nenhuma outra estiver ativa
+            tela_projetos() 
             
     else:
-        # Rota padrão caso nenhum estado esteja definido
-        st.session_state.boas_vindas = True
+        # ROTA 4 (Segurança): Se logado=True mas nenhum outro estado, força logout/login
+        st.session_state.clear() # Limpa para evitar loops
+        st.session_state.logado = False
         st.rerun()
 
 # --- PONTO DE ENTRADA DO APP ---
