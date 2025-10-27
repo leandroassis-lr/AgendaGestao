@@ -132,9 +132,9 @@ h4 {
 
 /* --- AJUSTE DO DIVISOR ENTRE AS DEMANDAS (REDUZIR FAIXA BRANCA) --- */
 .project-card {
-  margin-top: 4px !important;      
-  padding-top: 8px !important;     
-  padding-bottom: 10px !important; 
+  margin-top: 2px !important;      
+  padding-top: 5px !important;     
+  padding-bottom: 8px !important; 
   border-top: 1px solid var(--gray-border);
 }
 
@@ -256,3 +256,4 @@ h4 {
   margin-right: auto;
   padding-top: 2rem;  
 }
+
