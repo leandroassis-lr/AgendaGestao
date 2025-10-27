@@ -30,6 +30,7 @@ def _to_date_safe(val):
 st.set_page_config(page_title="Projetos - GESTÃO", page_icon="📋", layout="wide")
 utils.load_css() # Carrega o CSS do arquivo utils
 
+# ----------------- FUNÇÃO DE CALLBACK DO LOGIN (v5) -----------------
 def _handle_login_submit():
     """Função de callback para o formulário de login."""
     # Pega os valores direto do session_state (onde o form os coloca)
@@ -37,14 +38,21 @@ def _handle_login_submit():
     email = st.session_state.login_email
     
     if utils.validar_usuario(nome.strip(), email.strip()):
-        # Se for válido, define o estado de sucesso
-        st.session_state.login_tentativa = "sucesso"
-        st.session_state.login_nome_temp = nome.strip()
+        # --- ATUALIZAÇÃO IMPORTANTE ---
+        # O estado final é definido AQUI, DENTRO do callback.
+        # Isso garante que ele seja salvo antes do script recarregar.
+        st.session_state.update(
+            usuario=nome.strip(), 
+            logado=True, 
+            boas_vindas=True, 
+            tela_principal=False,
+            login_tentativa="sucesso" # Define o estado para a mensagem de feedback
+        )
     else:
         # Se for inválido, define o estado de falha
         st.session_state.login_tentativa = "falha"
         
-# ----------------- Função: Tela de Login (CORRIGIDA v3 - Com Callback) -----------------
+# ----------------- Função: Tela de Login (CORRIGIDA v5) -----------------
 def tela_login():
     
     st.markdown("""
@@ -135,31 +143,30 @@ def tela_login():
     </style>
     """, unsafe_allow_html=True)
 
-    # --- IMAGEM PRINCIPAL (Sem alteração) ---
+    # --- IMAGEM PRINCIPAL ---
     try:
         imagem_principal = Image.open("Foto 2.jpg")
     except Exception:
         st.error("Não foi possível carregar 'Foto 2.jpg'.")
         imagem_principal = None
 
-    # --- Layout (duas colunas) (Sem alteração) ---
+    # --- Layout (duas colunas) ---
     col1, col2 = st.columns([1, 1], gap="small")
 
-    # --- Coluna esquerda (Login) (LÓGICA ALTERADA) ---
+    # --- Coluna esquerda (Login) ---
     with col1:
         # 1. Inicializa o estado da tentativa
         if "login_tentativa" not in st.session_state:
             st.session_state.login_tentativa = None
         
-        # 2. Encapsula o formulário no nosso DIV customizado
+        # 2. Encapsula o formulário
         st.markdown('<div class="login-form-container">', unsafe_allow_html=True)
         
         st.subheader("Seja bem vindo à plataforma de gestão de projetos Allarmi")     
         st.subheader("Acesse sua conta")
         st.write("")
 
-        # 3. USA O 'on_submit' PARA CHAMAR A FUNÇÃO DE CALLBACK
-        # A lógica NÃO está mais dentro de um 'if st.form_submit_button'.
+        # 3. USA O 'on_submit'
         with st.form("form_login"):
             st.text_input("Nome", key="login_nome")
             st.text_input("E-mail", key="login_email")
@@ -168,26 +175,19 @@ def tela_login():
         st.markdown('</div>', unsafe_allow_html=True) # Fecha o div
 
         # 4. LÓGICA DE FEEDBACK (FORA DO FORMULÁRIO)
-        # O script continua aqui DEPOIS do callback 'on_submit' ter rodado.
         if st.session_state.login_tentativa == "sucesso":
-            # Atualiza o estado real da sessão
-            st.session_state.update(
-                usuario=st.session_state.login_nome_temp, 
-                logado=True, 
-                boas_vindas=True, 
-                tela_principal=False,
-                login_tentativa=None # Reseta o estado da tentativa
-            )
-            
+            # O estado (logado=True) JÁ FOI DEFINIDO pelo callback.
+            # Nós agora apenas mostramos a mensagem e damos o rerun.
             st.success(f"Acesso liberado! Bem-vindo, {st.session_state.usuario} 👋")
+            st.session_state.login_tentativa = None # Reseta a tentativa
             time.sleep(1) # Pausa para ver a mensagem
-            st.rerun() # Agora o rerun vai funcionar, pois o estado já foi salvo
+            st.rerun() 
 
         elif st.session_state.login_tentativa == "falha":
             st.error("Acesso negado, tente novamente")
-            st.session_state.login_tentativa = None # Reseta para a próxima tentativa
+            st.session_state.login_tentativa = None # Reseta
             
-    # --- Coluna direita (Logo) (Sem alteração) ---
+    # --- Coluna direita (Logo) ---
     with col2:
         if imagem_principal:
             st.markdown(
@@ -200,6 +200,7 @@ def tela_login():
             )
         else:
             st.warning("Não foi possível carregar a imagem do logo.")
+
 # ----------------- Função: Tela de Cadastro de Usuário -----------------#
 
 def tela_cadastro_usuario():
@@ -222,7 +223,6 @@ def tela_cadastro_usuario():
                 df = utils.carregar_usuarios_db() 
 
                 # Padroniza os nomes das colunas para "Capitalized" (ex: "email" -> "Email")
-                # Isso corrige o erro se o arquivo foi salvo com colunas em minúsculas.
                 if not df.empty:
                     df.columns = [col.capitalize() for col in df.columns]
 
@@ -249,7 +249,7 @@ def tela_cadastro_usuario():
 # ----------------- NOVA FUNÇÃO (Página de Configurações) -----------------
 
 def tela_configuracoes():
-   
+    
     if st.button("⬅️ Voltar para Projetos"):
         st.session_state.tela_configuracoes = False
         st.rerun()
@@ -266,7 +266,7 @@ def tela_configuracoes():
         df_users = utils.carregar_usuarios_db()
         if not df_users.empty:
             
-           
+            
             # Padroniza as colunas (ex: "nome" -> "Nome", "email" -> "Email")
             df_users.columns = [col.capitalize() for col in df_users.columns]
             
@@ -277,7 +277,7 @@ def tela_configuracoes():
                 st.warning("O arquivo de usuários existe, mas não contém as colunas 'Nome' ou 'Email'.")
             else:
                 st.dataframe(df_users[cols_to_show], use_container_width=True)
-           
+            
         else:
             st.info("Nenhum usuário cadastrado ainda.")
     except Exception as e:
@@ -347,8 +347,8 @@ def tela_boas_vindas():
     st.session_state.boas_vindas = False
     st.session_state.tela_principal = True
     st.rerun()
-  
-# ---- função tela_cadastro_projeto() --------
+    
+# --- FUNÇÃO TELA_CADASTRO_PROJETO (ATUALIZADA com Selectbox) ---
 
 def tela_cadastro_projeto():
     if st.button("⬅️ Voltar para Projetos"):
@@ -356,17 +356,22 @@ def tela_cadastro_projeto():
         st.rerun()
     st.subheader("Cadastrar Novo Projeto")
     
+    # --- 1. CARREGAR LISTAS DE OPÇÕES ---
     perguntas_customizadas = utils.carregar_config_db("perguntas") 
     
     agencias_cfg = utils.carregar_config_db("agencias")
     tecnicos_cfg = utils.carregar_config_db("tecnicos")
     
+    # (Carregando o nome de tabela que você confirmou)
     projetos_cfg = utils.carregar_config_db("projetos_nomes") 
 
+    # Prepara as listas de opções
     agencia_options = ["N/A"] + (agencias_cfg.iloc[:, 0].tolist() if not agencias_cfg.empty and len(agencias_cfg.columns) > 0 else [])
     tecnico_options = ["N/A"] + (tecnicos_cfg.iloc[:, 0].tolist() if not tecnicos_cfg.empty and len(tecnicos_cfg.columns) > 0 else [])
     projeto_options = ["N/A"] + (projetos_cfg.iloc[:, 0].tolist() if not projetos_cfg.empty and len(projetos_cfg.columns) > 0 else [])
-        
+    
+    # ----------------------------------------
+    
     if perguntas_customizadas.empty or 'Pergunta' not in perguntas_customizadas.columns:
         st.info("🚨 Nenhuma pergunta customizada configurada. (Vá para Configurações > Gerenciar Listas)")
         return
@@ -426,8 +431,6 @@ def tela_cadastro_projeto():
         
         # --- 3. LÓGICA DE SALVAMENTO ATUALIZADA ---
         
-        # Encontra a chave do "Nome do Projeto" nas respostas (para ser mais robusto)
-        # Isso funciona mesmo que a pergunta seja "Projeto" ou "Nome do Projeto"
         projeto_nome_key = next((p for p in respostas_customizadas if p.lower().strip() in ['nome do projeto', 'projeto']), None)
         agencia_key = next((p for p in respostas_customizadas if p.lower().strip() == 'agência'), None)
         tecnico_key = next((p for p in respostas_customizadas if p.lower().strip() == 'técnico'), None)
@@ -460,7 +463,8 @@ def tela_cadastro_projeto():
             st.success(f"Projeto '{projeto_nome}' cadastrado!")
             st.session_state["tela_cadastro_proj"] = False
             st.rerun()
-# ⬇️ ----------------- FUNÇÃO TELA_PROJETOS (ATUALIZADA) ----------------- ⬇️
+
+# ----------------- FUNÇÃO TELA_PROJETOS (Original) ----------------- 
 
 def tela_projetos():
     st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True)
@@ -475,11 +479,10 @@ def tela_projetos():
         return
 
     # --- Conversão de Datas ---
-    # É importante fazer isso ANTES de tentar filtrar
     df['Agendamento'] = pd.to_datetime(df['Agendamento'], errors='coerce')
     df['Agendamento_str'] = df['Agendamento'].dt.strftime("%d/%m/%y").fillna('N/A')
 
-    # --- Início dos Filtros (REESTRUTURADO) ---
+    # --- Início dos Filtros ---
     st.markdown("#### 🔍 Filtros e Busca")
     termo_busca = st.text_input("Buscar", key="termo_busca", placeholder="Digite um termo para buscar...")
 
@@ -518,8 +521,7 @@ def tela_projetos():
         else:
             st.empty()
             
-    # ⬇️ --- NOVOS FILTROS DE DATA (col7 e col8) --- ⬇️
-    # (Exatamente como você pediu, ao lado do Técnico)
+    # Filtros de Data (col7 e col8)
     with col7:
         data_inicio = st.date_input(
             "Agendamento (de)", 
@@ -535,7 +537,6 @@ def tela_projetos():
             key="data_fim_filtro", 
             format="DD/MM/YYYY"
         )
-    # ⬆️ --- FIM DOS NOVOS FILTROS DE DATA --- ⬆️
 
     # --- Lógica de Aplicação dos Filtros ---
     df_filtrado = df.copy()
@@ -549,13 +550,13 @@ def tela_projetos():
     if data_inicio:
         df_filtrado = df_filtrado[
             (df_filtrado['Agendamento'].notna()) & 
-            (df_filtrado['Agendamento'] >= pd.to_datetime(data_inicio)) # Compara a partir de 00:00:00
+            (df_filtrado['Agendamento'] >= pd.to_datetime(data_inicio))
         ]
     # 3. Aplica filtro de Data de Fim
     if data_fim:
         df_filtrado = df_filtrado[
             (df_filtrado['Agendamento'].notna()) & 
-            (df_filtrado['Agendamento'] <= pd.to_datetime(data_fim).replace(hour=23, minute=59, second=59)) # Compara até 23:59:59
+            (df_filtrado['Agendamento'] <= pd.to_datetime(data_fim).replace(hour=23, minute=59, second=59))
         ]
 
     # 4. Aplica filtro de texto (busca)
@@ -564,9 +565,6 @@ def tela_projetos():
         mask_busca = df_filtrado.apply(lambda row: row.astype(str).str.lower().str.contains(termo, na=False).any(), axis=1)
         df_filtrado = df_filtrado[mask_busca]
     
-    # --- O RESTO DA FUNÇÃO CONTINUA IGUAL ---
-    # (Exportar para Excel, Paginação, Cards de Projeto, etc.)
-
     st.divider()
     col_info_export, col_export_btn = st.columns([4, 1.2])
     total_items = len(df_filtrado)
@@ -764,6 +762,9 @@ def tela_projetos():
             if st.button("Próxima ➡️", use_container_width=True, disabled=(st.session_state.page_number >= total_pages - 1)):
                 st.session_state.page_number += 1
                 st.rerun()
+                
+# ----------------- FUNÇÃO MAIN (ATUALIZADA) -----------------
+# (Com roteamento corrigido e botão "Usuários")
 
 def main():
     # Inicializa os estados da sessão
@@ -808,7 +809,8 @@ def main():
             
         st.sidebar.title("Sistema")
         
-        if st.sidebar.button("⚙️ Configurações", use_container_width=True):
+        # Botão renomeado:
+        if st.sidebar.button("➕ Usuários", use_container_width=True):
             st.session_state.tela_configuracoes = True
             st.session_state.tela_cadastro_proj = False 
             st.rerun()
@@ -818,7 +820,7 @@ def main():
             st.rerun()
     
         # --- Lógica de Exibição da Página ---
-        if st.session_state.get("tela_configuracoes")
+        if st.session_state.get("tela_configuracoes"):
             tela_configuracoes() 
         elif st.session_state.get("tela_cadastro_proj"):
             tela_cadastro_projeto() 
@@ -833,4 +835,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
