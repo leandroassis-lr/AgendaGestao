@@ -31,8 +31,9 @@ st.set_page_config(page_title="Projetos - GESTÃO", page_icon="📋", layout="wi
 utils.load_css() # Carrega o CSS do arquivo utils
 
 # ----------------- Função: Tela de Login -----------------
+
 def tela_login():
-  
+    
     st.markdown("""
     <style>
     /* Remove a sidebar SÓ na tela de login */
@@ -59,7 +60,7 @@ def tela_login():
         height: 100vh;
     }
 
-    /* Estilo do formulário */
+    /* Estilo do formulário (sem conflito agora) */
     div[data-testid="stForm"] {
         background-color: rgba(255, 255, 255, 0.95);
         padding: 2.5rem;
@@ -141,14 +142,31 @@ def tela_login():
             email = st.text_input("E-mail", key="login_email")
 
             if st.form_submit_button("Entrar"):
+                # Valida o usuário
                 if utils.validar_usuario(nome.strip(), email.strip()):
-                    st.session_state["autenticado"] = True
+                    
+                    # 1. ATUALIZA O ESTADO IMEDIATAMENTE
+                    st.session_state.update(
+                        usuario=nome.strip(), 
+                        logado=True, 
+                        boas_vindas=True, 
+                        tela_principal=False
+                    )
+                    
+                    # 2. MOSTRA A MENSAGEM
                     st.success(f"Acesso liberado! Bem-vindo, {nome.strip()} 👋")
-                    st.session_state.update(usuario=nome.strip(), logado=True, boas_vindas=True, tela_principal=False)
-                    st.rerun()
+                    
+                    # 3. PAUSA POR 1 SEGUNDO (CRUCIAL!)
+                    # Isso dá tempo para a mensagem aparecer E 
+                    # o estado da sessão ser salvo antes do rerun.
+                    time.sleep(1) 
+                    
+                    # 4. AGORA FAZ O RERUN
+                    st.rerun() 
                 else:
-                    st.error("Acesso negado, tente novamente")                
-
+                    # Se falhar, apenas mostra o erro
+                    st.error("Acesso negado, tente novamente")
+            
     # --- Coluna direita (Logo) ---
     with col2:
         if imagem_principal:
@@ -790,6 +808,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
