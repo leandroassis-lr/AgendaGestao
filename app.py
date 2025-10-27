@@ -596,9 +596,9 @@ def tela_projetos():
                 </div>""",
                 unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
-        # --- >>> FIM DA MUDANÇA NO CABEÇALHO <<< ---
-
+        
         # --- Expander com Formulário de Edição (Validação de Finalização já incluída) ---
+        
         with st.expander(f"Ver/Editar Detalhes - ID: {project_id}"):
             # (Todo o código do formulário de edição permanece o mesmo aqui)
             # ... (Copie e cole o código 'with st.form(...):' da versão anterior aqui) ...
@@ -800,6 +800,7 @@ if __name__ == "__main__":
     # Adicionado para criar tabelas se não existirem (importante para novas instalações)
     utils.criar_tabelas_iniciais() 
     main()
+
 
 
 
