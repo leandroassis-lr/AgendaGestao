@@ -764,7 +764,7 @@ def tela_projetos():
             if st.button("Próxima ➡️", use_container_width=True, disabled=(st.session_state.page_number >= total_pages - 1)):
                 st.session_state.page_number += 1
                 st.rerun()
-                
+
 def main():
     # Inicializa os estados da sessão
     if "logado" not in st.session_state:
@@ -778,24 +778,30 @@ def main():
     if "tela_cadastro_proj" not in st.session_state: 
         st.session_state.tela_cadastro_proj = False
         
-    # ⬇️ ADICIONADO NOVO ESTADO ⬇️
     if "tela_configuracoes" not in st.session_state: 
         st.session_state.tela_configuracoes = False
 
-    # --- LÓGICA PRINCIPAL DE ROTEAMENTO ---
+    # --- LÓGICA PRINCIPAL DE ROTEAMENTO (CORRIGIDA) ---
+    
     if not st.session_state.logado:
-      
+        # ROTA 1: Se não está logado, mostra a tela de login.
         tela_login()
 
+    elif st.session_state.boas_vindas:
+        # ROTA 2: Se está logado E 'boas_vindas' é True, mostra a tela de boas-vindas.
+        # (Esta tela, após 5s, definirá boas_vindas=False e tela_principal=True)
+        tela_boas_vindas()
+
     elif st.session_state.tela_principal:
+        # ROTA 3: Se está logado e já passou das boas-vindas, mostra o app principal.
         
+        # --- Sidebar (Só é desenhada nesta rota) ---
         st.sidebar.title(f"Bem-vindo(a), {st.session_state.get('usuario', 'Visitante')}")
         st.sidebar.divider()
         
         st.sidebar.title("Ações")
         
         if st.sidebar.button("➕ Novo Projeto", use_container_width=True):
-            
             st.session_state.tela_cadastro_proj = True
             st.session_state.tela_configuracoes = False 
             st.rerun()
@@ -811,28 +817,19 @@ def main():
             st.session_state.clear()
             st.rerun()
     
-        # --- Lógica de Exibição da Página (Atualizada) ---
-              
+        # --- Lógica de Exibição da Página ---
         if st.session_state.get("tela_configuracoes"):
             tela_configuracoes() 
         elif st.session_state.get("tela_cadastro_proj"):
             tela_cadastro_projeto() 
         else:
             tela_projetos() 
-                       
+            
     else:
-        # Rota padrão caso nenhum estado esteja definido
-        st.session_state.boas_vindas = True
+        # ROTA 4 (Padrão de Segurança): Se algo der errado (ex: logado=True mas os outros são False)
+        # força o reinício do ciclo de login, limpando o 'logado'.
+        st.session_state.logado = False
         st.rerun()
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
