@@ -30,8 +30,21 @@ def _to_date_safe(val):
 st.set_page_config(page_title="Projetos - GESTÃO", page_icon="📋", layout="wide")
 utils.load_css() # Carrega o CSS do arquivo utils
 
-# ----------------- Função: Tela de Login -----------------
-
+def _handle_login_submit():
+    """Função de callback para o formulário de login."""
+    # Pega os valores direto do session_state (onde o form os coloca)
+    nome = st.session_state.login_nome
+    email = st.session_state.login_email
+    
+    if utils.validar_usuario(nome.strip(), email.strip()):
+        # Se for válido, define o estado de sucesso
+        st.session_state.login_tentativa = "sucesso"
+        st.session_state.login_nome_temp = nome.strip()
+    else:
+        # Se for inválido, define o estado de falha
+        st.session_state.login_tentativa = "falha"
+        
+# ----------------- Função: Tela de Login (CORRIGIDA v3 - Com Callback) -----------------
 def tela_login():
     
     st.markdown("""
@@ -41,18 +54,18 @@ def tela_login():
         display: none;
     }
 
-    /* Fundo dividido para a tela de login */
+    /* Fundo dividido (sem alteração) */
     [data-testid="stAppViewContainer"] {
         background: linear-gradient(90deg, #e8f5e9 0%, #e8f5e9 50%, #1b5e20 50%, #1b5e20 100%);
     }
 
+    /* Colunas (sem alteração) */
     section.main > div {
         display: flex; 
         align-items: stretch;
         justify-content: center;
         height: 100vh;
     }
-
     div[data-testid="stHorizontalBlock"] > div[data-testid^="stVerticalBlock"] {
         display: flex;
         flex-direction: column;
@@ -60,8 +73,11 @@ def tela_login():
         height: 100vh;
     }
 
-    /* Estilo do formulário (sem conflito agora) */
-    div[data-testid="stForm"] {
+    /* * --- MUDANÇA IMPORTANTE NO CSS ---
+     * Agora o estilo do formulário é aplicado a uma classe customizada
+     * '.login-form-container', eliminando o conflito.
+     */
+    .login-form-container div[data-testid="stForm"] {
         background-color: rgba(255, 255, 255, 0.95);
         padding: 2.5rem;
         border-radius: 16px;
@@ -70,7 +86,8 @@ def tela_login():
         margin: auto;
     }
 
-    .stButton > button {
+    /* Regras de botões e inputs agora são filhas da nossa classe */
+    .login-form-container .stButton > button {
         background-color: #43a047 !important;
         color: white !important;
         border: none;
@@ -78,17 +95,15 @@ def tela_login():
         padding: 0.6rem;
         font-weight: bold;
     }
-
-    .stButton > button:hover {
+    .login-form-container .stButton > button:hover {
         background-color: #2e7d32 !important;
     }
-
-    .stTextInput > div > div > input {
+    .login-form-container .stTextInput > div > div > input {
         border-radius: 8px;
         border: 1px solid #ccc;
     }
 
-    /* Títulos */
+    /* Títulos (sem alteração) */
     div[data-testid="stHorizontalBlock"] > div:nth-child(1) h1, 
     div[data-testid="stHorizontalBlock"] > div:nth-child(1) h2,
     div[data-testid="stHorizontalBlock"] > div:nth-child(1) h3,
@@ -97,7 +112,7 @@ def tela_login():
         text-align: center;
     }
 
-    /* Centraliza o logotipo na direita */
+    /* Logo (sem alteração) */
     .login-logo-container {
         display: flex;
         justify-content: center;
@@ -106,7 +121,6 @@ def tela_login():
         width: 110%;
         text-align: center;
     }
-
     .login-logo-container img {
         max-width: 100%;
         height: auto;
@@ -121,53 +135,59 @@ def tela_login():
     </style>
     """, unsafe_allow_html=True)
 
-    # --- IMAGEM PRINCIPAL ---
+    # --- IMAGEM PRINCIPAL (Sem alteração) ---
     try:
         imagem_principal = Image.open("Foto 2.jpg")
     except Exception:
         st.error("Não foi possível carregar 'Foto 2.jpg'.")
         imagem_principal = None
 
-    # --- Layout (duas colunas) ---
+    # --- Layout (duas colunas) (Sem alteração) ---
     col1, col2 = st.columns([1, 1], gap="small")
 
-    # --- Coluna esquerda (Login) ---
+    # --- Coluna esquerda (Login) (LÓGICA ALTERADA) ---
     with col1:
+        # 1. Inicializa o estado da tentativa
+        if "login_tentativa" not in st.session_state:
+            st.session_state.login_tentativa = None
+        
+        # 2. Encapsula o formulário no nosso DIV customizado
+        st.markdown('<div class="login-form-container">', unsafe_allow_html=True)
+        
         st.subheader("Seja bem vindo à plataforma de gestão de projetos Allarmi")     
         st.subheader("Acesse sua conta")
         st.write("")
 
+        # 3. USA O 'on_submit' PARA CHAMAR A FUNÇÃO DE CALLBACK
+        # A lógica NÃO está mais dentro de um 'if st.form_submit_button'.
         with st.form("form_login"):
-            nome = st.text_input("Nome", key="login_nome")
-            email = st.text_input("E-mail", key="login_email")
+            st.text_input("Nome", key="login_nome")
+            st.text_input("E-mail", key="login_email")
+            st.form_submit_button("Entrar", on_submit=_handle_login_submit)
+        
+        st.markdown('</div>', unsafe_allow_html=True) # Fecha o div
 
-            if st.form_submit_button("Entrar"):
-                # Valida o usuário
-                if utils.validar_usuario(nome.strip(), email.strip()):
-                    
-                    # 1. ATUALIZA O ESTADO IMEDIATAMENTE
-                    st.session_state.update(
-                        usuario=nome.strip(), 
-                        logado=True, 
-                        boas_vindas=True, 
-                        tela_principal=False
-                    )
-                    
-                    # 2. MOSTRA A MENSAGEM
-                    st.success(f"Acesso liberado! Bem-vindo, {nome.strip()} 👋")
-                    
-                    # 3. PAUSA POR 1 SEGUNDO (CRUCIAL!)
-                    # Isso dá tempo para a mensagem aparecer E 
-                    # o estado da sessão ser salvo antes do rerun.
-                    time.sleep(1) 
-                    
-                    # 4. AGORA FAZ O RERUN
-                    st.rerun() 
-                else:
-                    # Se falhar, apenas mostra o erro
-                    st.error("Acesso negado, tente novamente")
+        # 4. LÓGICA DE FEEDBACK (FORA DO FORMULÁRIO)
+        # O script continua aqui DEPOIS do callback 'on_submit' ter rodado.
+        if st.session_state.login_tentativa == "sucesso":
+            # Atualiza o estado real da sessão
+            st.session_state.update(
+                usuario=st.session_state.login_nome_temp, 
+                logado=True, 
+                boas_vindas=True, 
+                tela_principal=False,
+                login_tentativa=None # Reseta o estado da tentativa
+            )
             
-    # --- Coluna direita (Logo) ---
+            st.success(f"Acesso liberado! Bem-vindo, {st.session_state.usuario} 👋")
+            time.sleep(1) # Pausa para ver a mensagem
+            st.rerun() # Agora o rerun vai funcionar, pois o estado já foi salvo
+
+        elif st.session_state.login_tentativa == "falha":
+            st.error("Acesso negado, tente novamente")
+            st.session_state.login_tentativa = None # Reseta para a próxima tentativa
+            
+    # --- Coluna direita (Logo) (Sem alteração) ---
     with col2:
         if imagem_principal:
             st.markdown(
@@ -180,7 +200,6 @@ def tela_login():
             )
         else:
             st.warning("Não foi possível carregar a imagem do logo.")
-
 # ----------------- Função: Tela de Cadastro de Usuário -----------------#
 
 def tela_cadastro_usuario():
@@ -808,6 +827,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
