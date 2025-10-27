@@ -317,147 +317,164 @@ def tela_boas_vindas():
     st.session_state.tela_principal = True
     st.rerun()
 
-# --- FUNÇÃO TELA_CADASTRO_PROJETO (ATUALIZADA com Selectbox) ---
-# (Substituindo a versão original do usuário por esta)
+# --- FUNÇÃO TELA_CADASTRO_PROJETO (Versão Final com Selectbox + Verificação Backlog) ---
 def tela_cadastro_projeto():
-    if st.button("⬅️ Voltar para Projetos"):
-        st.session_state.tela_cadastro_proj = False
-        st.rerun()
-    st.subheader("Cadastrar Novo Projeto")
-    
-    # --- 1. CARREGAR LISTAS DE OPÇÕES ---
-    perguntas_customizadas = utils.carregar_config_db("perguntas") 
-    
-    agencias_cfg = utils.carregar_config_db("agencias")
-    tecnicos_cfg = utils.carregar_config_db("tecnicos")
-    
-    # (Usando o nome da tabela que você confirmou: "projetos_nomes")
-    projetos_cfg = utils.carregar_config_db("projetos_nomes") 
 
-    # Prepara as listas de opções
-    agencia_options = ["N/A"] + (agencias_cfg.iloc[:, 0].tolist() if not agencias_cfg.empty and len(agencias_cfg.columns) > 0 else [])
-    tecnico_options = ["N/A"] + (tecnicos_cfg.iloc[:, 0].tolist() if not tecnicos_cfg.empty and len(tecnicos_cfg.columns) > 0 else [])
-    projeto_options = ["N/A"] + (projetos_cfg.iloc[:, 0].tolist() if not projetos_cfg.empty and len(projetos_cfg.columns) > 0 else [])
-    
-    # ----------------------------------------
-    
-    if perguntas_customizadas.empty or 'Pergunta' not in perguntas_customizadas.columns:
-        st.info("🚨 Nenhuma pergunta customizada configurada. (Vá para Configurações > Gerenciar Listas)")
-        return
-
-    with st.form("form_cadastro_projeto"):
-        respostas_customizadas = {}
+    # --- Bloco de Confirmação (Exibido SE duplicado encontrado) ---
+    if st.session_state.get("confirmar_duplicado_backlog", False):
+        id_existente = st.session_state.get("id_projeto_backlog_existente")
+        dados_pendentes = st.session_state.get("dados_novo_projeto_pendente", {})
         
-        for index, row in perguntas_customizadas.iterrows():
-            pergunta = row['Pergunta']
-            tipo = row.get('Tipo (texto, numero, data)', 'texto')
-            key = utils.clean_key(pergunta)
-            
-            # Normaliza o nome da pergunta para verificação
-            pergunta_norm = pergunta.lower().strip() 
-
-            # --- 2. LÓGICA DE INTERCEPTAÇÃO ---
-            
-            if pergunta_norm == 'agência':
-                respostas_customizadas[pergunta] = st.selectbox(
-                    pergunta, 
-                    options=agencia_options, 
-                    key=f"custom_{key}",
-                    help="Selecione a agência da lista."
-                )
-            
-            elif pergunta_norm == 'técnico':
-                respostas_customizadas[pergunta] = st.selectbox(
-                    pergunta, 
-                    options=tecnico_options, 
-                    key=f"custom_{key}",
-                    help="Selecione o técnico da lista."
-                )
-            
-            # Verifica por "projeto" ou "nome do projeto"
-            elif pergunta_norm == 'projeto' or pergunta_norm == 'nome do projeto':
-                respostas_customizadas[pergunta] = st.selectbox(
-                    pergunta, 
-                    options=projeto_options, 
-                    key=f"custom_{key}",
-                    help="Selecione o tipo de projeto da lista."
-                )
-            
-            # --- FIM DA LÓGICA ---
-            
-            # Lógica original para outros tipos de pergunta
-            elif tipo == 'data': 
-                respostas_customizadas[pergunta] = st.date_input(pergunta, value=None, key=f"custom_{key}", format="DD/MM/YYYY")
-            elif tipo == 'numero': 
-                respostas_customizadas[pergunta] = st.number_input(pergunta, key=f"custom_{key}", step=1)
-            else: 
-                # O padrão para qualquer outra pergunta de texto
-                respostas_customizadas[pergunta] = st.text_input(pergunta, key=f"custom_{key}")
+        st.warning(f"⚠️ **Atenção:** Já existe um projeto similar (mesma Agência e Projeto) no backlog com ID {id_existente}, ainda sem agendamento. O que deseja fazer?", icon="⚠️")
+        
+        col1_conf, col2_conf = st.columns(2)
+        with col1_conf:
+            if st.button(f"🔄 Atualizar Projeto Existente (ID: {id_existente})", use_container_width=True):
+                # Prepara dados para atualização (pega dados pendentes)
+                dados_atualizar = {}
+                dados_atualizar.update(dados_pendentes) 
                 
-        btn_cadastrar = st.form_submit_button("Cadastrar Projeto")
-    
-    if btn_cadastrar:
-        
-        # --- 3. LÓGICA DE SALVAMENTO ATUALIZADA ---
-        
-        projeto_nome_key = next((p for p in respostas_customizadas if p.lower().strip() in ['nome do projeto', 'projeto']), None)
-        agencia_key = next((p for p in respostas_customizadas if p.lower().strip() == 'agência'), None)
-        tecnico_key = next((p for p in respostas_customizadas if p.lower().strip() == 'técnico'), None)
+                # Garante que dados padrão como Analista sejam incluídos se não vieram do form
+                if "Analista" not in dados_atualizar:
+                    dados_atualizar["Analista"] = st.session_state.get('usuario', 'N/A')
+                # Garante que Status não seja sobrescrito indevidamente (mantém o do backlog)
+                if "Status" in dados_atualizar:
+                    del dados_atualizar["Status"] 
+                # Garante que agendamento NÃO seja definido ao atualizar backlog
+                if "Agendamento" in dados_atualizar:
+                     del dados_atualizar["Agendamento"]
+                if "agendamento" in dados_atualizar: # Normalizado
+                     del dados_atualizar["agendamento"]
 
-        # Validação
-        projeto_nome = respostas_customizadas.get(projeto_nome_key) if projeto_nome_key else "N/A"
-        agencia_nome = respostas_customizadas.get(agencia_key) if agencia_key else "N/A"
-        tecnico_nome = respostas_customizadas.get(tecnico_key) if tecnico_key else "N/A"
-        
-        # Verifica se alguma das chaves não foi encontrada E se o valor é N/A
-        if (not projeto_nome_key or projeto_nome == "N/A") or \
-           (not agencia_key or agencia_nome == "N/A") or \
-           (not tecnico_key or tecnico_nome == "N/A"):
-             st.error("ERRO: 'Projeto', 'Agência' e 'Técnico' são campos obrigatórios e devem estar configurados nas perguntas. Selecione uma opção válida.")
-             st.stop() # Impede o cadastro
-        
-        # Se passou na validação, continua o cadastro
-        nova_linha_data = {
-            "Status": "NÃO INICIADA",
-            "Data de Abertura": date.today(),
-            "Analista": st.session_state.get('usuario', 'N/A'),
-            "Projeto": projeto_nome  # Usa o nome do projeto selecionado
-        }
-        
-        # Adiciona todas as outras respostas do formulário
-        nova_linha_data.update(respostas_customizadas)
+                if utils.atualizar_projeto_db(id_existente, dados_atualizar):
+                    st.success(f"Projeto ID {id_existente} atualizado no backlog com as novas informações!")
+                    # Limpa flags e volta para a lista
+                    st.session_state.confirmar_duplicado_backlog = False
+                    st.session_state.pop("id_projeto_backlog_existente", None)
+                    st.session_state.pop("dados_novo_projeto_pendente", None)
+                    st.session_state.tela_cadastro_proj = False
+                    time.sleep(1) 
+                    st.rerun()
 
-        if utils.adicionar_projeto_db(nova_linha_data):
-            st.success(f"Projeto '{projeto_nome}' cadastrado!")
-            st.session_state["tela_cadastro_proj"] = False
+        with col2_conf:
+            if st.button("➕ Criar Novo Projeto Mesmo Assim", use_container_width=True, type="primary"):
+                 # Prepara dados para adição (inclui campos padrão)
+                dados_adicionar = {
+                    "Status": "NÃO INICIADA",
+                    "Data de Abertura": date.today(),
+                    "Analista": st.session_state.get('usuario', 'N/A'),
+                }
+                dados_adicionar.update(dados_pendentes) # Adiciona dados do form
+
+                if utils.adicionar_projeto_db(dados_adicionar):
+                    novo_projeto_nome = dados_adicionar.get("Projeto", "Novo Projeto") # Pega nome correto
+                    st.success(f"Novo projeto '{novo_projeto_nome}' criado com sucesso!")
+                     # Limpa flags e volta para a lista
+                    st.session_state.confirmar_duplicado_backlog = False
+                    st.session_state.pop("id_projeto_backlog_existente", None)
+                    st.session_state.pop("dados_novo_projeto_pendente", None)
+                    st.session_state.tela_cadastro_proj = False
+                    time.sleep(1) 
+                    st.rerun()
+        
+        st.divider()
+        if st.button("Cancelar Cadastro"):
+             st.session_state.confirmar_duplicado_backlog = False
+             st.session_state.pop("id_projeto_backlog_existente", None)
+             st.session_state.pop("dados_novo_projeto_pendente", None)
+             st.rerun()
+
+    # --- Exibe o Formulário de Cadastro (SE não estiver na tela de confirmação) ---
+    else:
+        if st.button("⬅️ Voltar para Projetos"):
+            st.session_state.tela_cadastro_proj = False
+            # Limpa flags ao voltar
+            st.session_state.pop("confirmar_duplicado_backlog", None)
+            st.session_state.pop("id_projeto_backlog_existente", None)
+            st.session_state.pop("dados_novo_projeto_pendente", None)
             st.rerun()
+            
+        st.subheader("Cadastrar Novo Projeto")
+        
+        # --- Carrega Listas (igual à sua versão) ---
+        perguntas_customizadas = utils.carregar_config_db("perguntas") 
+        agencias_cfg = utils.carregar_config_db("agencias")
+        tecnicos_cfg = utils.carregar_config_db("tecnicos")
+        projetos_cfg = utils.carregar_config_db("projetos_nomes") 
+        agencia_options = ["N/A"] + (agencias_cfg.iloc[:, 0].tolist() if not agencias_cfg.empty and len(agencias_cfg.columns) > 0 else [])
+        tecnico_options = ["N/A"] + (tecnicos_cfg.iloc[:, 0].tolist() if not tecnicos_cfg.empty and len(tecnicos_cfg.columns) > 0 else [])
+        projeto_options = ["N/A"] + (projetos_cfg.iloc[:, 0].tolist() if not projetos_cfg.empty and len(projetos_cfg.columns) > 0 else [])
+        
+        if perguntas_customizadas.empty or 'Pergunta' not in perguntas_customizadas.columns:
+            st.info("🚨 Nenhuma pergunta customizada configurada.")
+            return
 
-# (Importe timedelta no início do seu app.py, junto com date e datetime)
-from datetime import date, datetime, timedelta 
-# ... (outros imports) ...
+        # --- Formulário (igual à sua versão) ---
+        with st.form("form_cadastro_projeto"):
+            respostas_customizadas = {}
+            for index, row in perguntas_customizadas.iterrows():
+                pergunta = row['Pergunta']; tipo = row.get('Tipo (texto, numero, data)', 'texto'); key = utils.clean_key(pergunta)
+                pergunta_norm = pergunta.lower().strip() 
+                if pergunta_norm == 'agência':
+                    respostas_customizadas[pergunta] = st.selectbox(pergunta, options=agencia_options, key=f"custom_{key}", help="Selecione a agência.")
+                elif pergunta_norm == 'técnico':
+                    respostas_customizadas[pergunta] = st.selectbox(pergunta, options=tecnico_options, key=f"custom_{key}", help="Selecione o técnico.")
+                elif pergunta_norm == 'projeto' or pergunta_norm == 'nome do projeto':
+                    respostas_customizadas[pergunta] = st.selectbox(pergunta, options=projeto_options, key=f"custom_{key}", help="Selecione o projeto.")
+                elif tipo == 'data': respostas_customizadas[pergunta] = st.date_input(pergunta, value=None, key=f"custom_{key}", format="DD/MM/YYYY")
+                elif tipo == 'numero': respostas_customizadas[pergunta] = st.number_input(pergunta, key=f"custom_{key}", step=1)
+                else: respostas_customizadas[pergunta] = st.text_input(pergunta, key=f"custom_{key}")
+            btn_cadastrar = st.form_submit_button("Cadastrar Projeto")
+        
+        # --- Lógica ao Submeter o Formulário ---
+        if btn_cadastrar:
+            # Pega Agência e Projeto (igual à sua versão)
+            projeto_nome_key = next((p for p in respostas_customizadas if p.lower().strip() in ['nome do projeto', 'projeto']), None)
+            agencia_key = next((p for p in respostas_customizadas if p.lower().strip() == 'agência'), None)
+            
+            novo_projeto_nome = respostas_customizadas.get(projeto_nome_key) if projeto_nome_key else "N/A"
+            nova_agencia = respostas_customizadas.get(agencia_key) if agencia_key else "N/A"
+            
+            # Validação básica (igual à sua versão, mas sem técnico)
+            if (not projeto_nome_key or novo_projeto_nome == "N/A") or \
+               (not agencia_key or nova_agencia == "N/A"):
+                 st.error("ERRO: 'Projeto' e 'Agência' são campos obrigatórios. Selecione uma opção válida.")
+                 st.stop() 
 
-# (Certifique-se de ter 'timedelta' importado no topo do seu app.py)
-from datetime import date, datetime, timedelta 
-# ... (outros imports) ...
+            # --- VERIFICAÇÃO DE DUPLICIDADE NO BACKLOG (Integrada aqui) ---
+            df_backlog = utils.carregar_projetos_sem_agendamento_db() 
+            
+            projeto_existente = pd.DataFrame() 
+            if not df_backlog.empty and "Agência" in df_backlog.columns and "Projeto" in df_backlog.columns:
+                 projeto_existente = df_backlog[
+                     (df_backlog["Agência"].astype(str).str.lower() == nova_agencia.lower()) &
+                     (df_backlog["Projeto"].astype(str).str.lower() == novo_projeto_nome.lower())
+                 ]
 
-# (Importe timedelta no início do seu app.py, junto com date e datetime)
-from datetime import date, datetime, timedelta 
-# ... (outros imports) ...
+            if not projeto_existente.empty:
+                # --- DUPLICADO ENCONTRADO ---
+                id_existente = projeto_existente.iloc[0]['ID'] 
+                # Guarda os dados e o ID no estado da sessão
+                st.session_state.dados_novo_projeto_pendente = respostas_customizadas # Salva TUDO do form
+                st.session_state.id_projeto_backlog_existente = id_existente
+                st.session_state.confirmar_duplicado_backlog = True
+                st.rerun() # Reroda para mostrar a confirmação
+            
+            else:
+                # --- SEM DUPLICADOS --- Salva diretamente (igual à sua versão) ---
+                dados_adicionar = {
+                    "Status": "NÃO INICIADA",
+                    "Data de Abertura": date.today(),
+                    "Analista": st.session_state.get('usuario', 'N/A'),
+                    # O "Projeto" já vem dentro de respostas_customizadas
+                }
+                dados_adicionar.update(respostas_customizadas) # Adiciona TUDO do form
 
-# (Certifique-se de ter 'timedelta' importado no topo do seu app.py)
-from datetime import date, datetime, timedelta 
-# ... (outros imports) ...
-
-# (Certifique-se de ter 'timedelta' importado no topo)
-from datetime import date, datetime, timedelta 
-# ... (outros imports) ...
-
-# (Imports e outras funções permanecem iguais)
-from datetime import date, datetime, timedelta 
-import streamlit as st
-import pandas as pd
-import html
-import utils # Certifique-se que utils está importado
+                if utils.adicionar_projeto_db(dados_adicionar):
+                    st.success(f"Projeto '{novo_projeto_nome}' cadastrado!")
+                    st.session_state["tela_cadastro_proj"] = False # Fecha a tela
+                    time.sleep(1) # Pausa
+                    st.rerun() # Volta para a lista
 
 # ⬇️ --- FUNÇÃO TELA_PROJETOS --- ⬇️
 
@@ -795,6 +812,7 @@ if __name__ == "__main__":
     # Adicionado para criar tabelas se não existirem (importante para novas instalações)
     utils.criar_tabelas_iniciais() 
     main()
+
 
 
 
