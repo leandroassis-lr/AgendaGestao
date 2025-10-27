@@ -310,8 +310,9 @@ def tela_boas_vindas():
     st.session_state.boas_vindas = False
     st.session_state.tela_principal = True
     st.rerun()
-    
-# --- Funções tela_cadastro_projeto e tela_projetos (sem alterações) ---
+  
+# ---- função tela_cadastro_projeto() --------
+
 def tela_cadastro_projeto():
     if st.button("⬅️ Voltar para Projetos"):
         st.session_state.tela_cadastro_proj = False
@@ -320,37 +321,108 @@ def tela_cadastro_projeto():
     
     perguntas_customizadas = utils.carregar_config_db("perguntas") 
     
+    agencias_cfg = utils.carregar_config_db("agencias")
+    tecnicos_cfg = utils.carregar_config_db("tecnicos")
+    
+    projetos_cfg = utils.carregar_config_db("projetos_nomes") 
+
+    agencia_options = ["N/A"] + (agencias_cfg.iloc[:, 0].tolist() if not agencias_cfg.empty and len(agencias_cfg.columns) > 0 else [])
+    tecnico_options = ["N/A"] + (tecnicos_cfg.iloc[:, 0].tolist() if not tecnicos_cfg.empty and len(tecnicos_cfg.columns) > 0 else [])
+    projeto_options = ["N/A"] + (projetos_cfg.iloc[:, 0].tolist() if not projetos_cfg.empty and len(projetos_cfg.columns) > 0 else [])
+        
     if perguntas_customizadas.empty or 'Pergunta' not in perguntas_customizadas.columns:
         st.info("🚨 Nenhuma pergunta customizada configurada. (Vá para Configurações > Gerenciar Listas)")
         return
 
     with st.form("form_cadastro_projeto"):
         respostas_customizadas = {}
+        
         for index, row in perguntas_customizadas.iterrows():
             pergunta = row['Pergunta']
             tipo = row.get('Tipo (texto, numero, data)', 'texto')
             key = utils.clean_key(pergunta)
-            if tipo == 'data': respostas_customizadas[pergunta] = st.date_input(pergunta, value=None, key=f"custom_{key}", format="DD/MM/YYYY")
-            elif tipo == 'numero': respostas_customizadas[pergunta] = st.number_input(pergunta, key=f"custom_{key}", step=1)
-            else: respostas_customizadas[pergunta] = st.text_input(pergunta, key=f"custom_{key}")
+            
+            # Normaliza o nome da pergunta para verificação
+            pergunta_norm = pergunta.lower().strip() 
+
+            # --- 2. LÓGICA DE INTERCEPTAÇÃO ---
+            
+            if pergunta_norm == 'agência':
+                respostas_customizadas[pergunta] = st.selectbox(
+                    pergunta, 
+                    options=agencia_options, 
+                    key=f"custom_{key}",
+                    help="Selecione a agência da lista."
+                )
+            
+            elif pergunta_norm == 'técnico':
+                respostas_customizadas[pergunta] = st.selectbox(
+                    pergunta, 
+                    options=tecnico_options, 
+                    key=f"custom_{key}",
+                    help="Selecione o técnico da lista."
+                )
+            
+            # Verifica por "projeto" ou "nome do projeto"
+            elif pergunta_norm == 'projeto' or pergunta_norm == 'nome do projeto':
+                respostas_customizadas[pergunta] = st.selectbox(
+                    pergunta, 
+                    options=projeto_options, 
+                    key=f"custom_{key}",
+                    help="Selecione o tipo de projeto da lista."
+                )
+            
+            # --- FIM DA LÓGICA ---
+            
+            # Lógica original para outros tipos de pergunta
+            elif tipo == 'data': 
+                respostas_customizadas[pergunta] = st.date_input(pergunta, value=None, key=f"custom_{key}", format="DD/MM/YYYY")
+            elif tipo == 'numero': 
+                respostas_customizadas[pergunta] = st.number_input(pergunta, key=f"custom_{key}", step=1)
+            else: 
+                # O padrão para qualquer outra pergunta de texto
+                respostas_customizadas[pergunta] = st.text_input(pergunta, key=f"custom_{key}")
+                
         btn_cadastrar = st.form_submit_button("Cadastrar Projeto")
     
     if btn_cadastrar:
-        projeto_nome = respostas_customizadas.get(perguntas_customizadas.iloc[0]['Pergunta'], 'Projeto Customizado')
+        
+        # --- 3. LÓGICA DE SALVAMENTO ATUALIZADA ---
+        
+        # Encontra a chave do "Nome do Projeto" nas respostas (para ser mais robusto)
+        # Isso funciona mesmo que a pergunta seja "Projeto" ou "Nome do Projeto"
+        projeto_nome_key = next((p for p in respostas_customizadas if p.lower().strip() in ['nome do projeto', 'projeto']), None)
+        agencia_key = next((p for p in respostas_customizadas if p.lower().strip() == 'agência'), None)
+        tecnico_key = next((p for p in respostas_customizadas if p.lower().strip() == 'técnico'), None)
+
+        # Validação
+        projeto_nome = respostas_customizadas.get(projeto_nome_key) if projeto_nome_key else "N/A"
+        agencia_nome = respostas_customizadas.get(agencia_key) if agencia_key else "N/A"
+        tecnico_nome = respostas_customizadas.get(tecnico_key) if tecnico_key else "N/A"
+        
+        if projeto_nome == "N/A" or agencia_nome == "N/A" or tecnico_nome == "N/A":
+             st.error("ERRO: 'Projeto', 'Agência' e 'Técnico' são campos obrigatórios. Selecione uma opção válida.")
+             st.stop() # Impede o cadastro
+        
+        if not projeto_nome_key:
+            st.error("ERRO CRÍTICO: Não foi encontrada uma pergunta 'Projeto' ou 'Nome do Projeto' na sua configuração de perguntas.")
+            st.stop()
+
+        # Se passou na validação, continua o cadastro
         nova_linha_data = {
             "Status": "NÃO INICIADA",
             "Data de Abertura": date.today(),
             "Analista": st.session_state.get('usuario', 'N/A'),
-            "Projeto": projeto_nome
+            "Projeto": projeto_nome  # Usa o nome do projeto selecionado
         }
         
+        # Adiciona todas as outras respostas do formulário
         nova_linha_data.update(respostas_customizadas)
 
         if utils.adicionar_projeto_db(nova_linha_data):
             st.success(f"Projeto '{projeto_nome}' cadastrado!")
             st.session_state["tela_cadastro_proj"] = False
             st.rerun()
-
 # ⬇️ ----------------- FUNÇÃO TELA_PROJETOS (ATUALIZADA) ----------------- ⬇️
 
 def tela_projetos():
@@ -718,3 +790,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
