@@ -62,8 +62,6 @@ def tela_login():
         height: 100vh;
     }
 
-    /* Estilo do formulário (IMPORTANTE: Mantenha esta regra sem o '.main' na frente, 
-       pois ela é específica para o CSS injetado aqui na tela_login) */
     div[data-testid="stForm"] {
         background-color: rgba(255, 255, 255, 0.95);
         padding: 2.5rem;
@@ -106,12 +104,12 @@ def tela_login():
         justify-content: center;
         align-items: center;
         height:0vh !important; 
-        width: 110%;
+        width: 500%;
         text-align: center;
     }
 
     .login-logo-container img {
-        max-width:100%; /* Mantido */
+        max-width:60%; /* Mantido */
         height: auto;
         border-radius: 100%;
         -webkit-mask-image: -webkit-radial-gradient(white, black);
@@ -867,6 +865,7 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
 
 
