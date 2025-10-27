@@ -592,7 +592,7 @@ def tela_projetos():
             st.markdown(
                 f"""<div style="height:100%; display:flex; flex-direction: column; align-items: flex-end; justify-content: center;">
                     <span style="background-color:{status_color_name}; color:black; padding:8px 15px; border-radius:5px; font-weight:bold; font-size:0.9em; margin-bottom: 5px;">{status_text}</span>
-                    <span style="font-size: 0.85em; color: var(--primary-dark); font-weight: 600; text-align: right;">{proxima_etapa_texto}</span>
+                    <span style="font-size: 1.15em; color: var(--primary-dark); font-weight: 600; text-align: right;">{}</span>
                 </div>""",
                 unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
@@ -800,6 +800,7 @@ if __name__ == "__main__":
     # Adicionado para criar tabelas se não existirem (importante para novas instalações)
     utils.criar_tabelas_iniciais() 
     main()
+
 
 
 
