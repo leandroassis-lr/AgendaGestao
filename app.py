@@ -765,7 +765,7 @@ def main():
             
         st.sidebar.title("Sistema")
         
-        if st.sidebar.button("➕ Usuários", use_container_width=True)
+        if st.sidebar.button("➕ Usuários", use_container_width=True):
             st.session_state.tela_configuracoes = True
             st.session_state.tela_cadastro_proj = False 
             st.rerun()
@@ -790,6 +790,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
