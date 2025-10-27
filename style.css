@@ -131,8 +131,8 @@ h4 {
   border-top: none; /* Remove a borda superior original para não duplicar */
 
   /* Linhas do Divisor */
-  margin-top: 30px; /* Espaço ACIMA da linha */
-  border-top: 3px solid var(--primary-light); /* Linha divisória (espessura e cor) */
+  margin-top: 10px; /* Espaço ACIMA da linha */
+  border-top: 1px solid var(--primary-light); /* Linha divisória (espessura e cor) */
   padding-top: 25px; /* Espaço ABAIXO da linha (substitui o padding-top original) */
 }
 
@@ -249,6 +249,7 @@ h4 {
     margin-right: auto;
     padding-top: 2rem;  /* Adiciona um espaço extra abaixo do topo */
 }
+
 
 
 
