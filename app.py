@@ -31,6 +31,7 @@ st.set_page_config(page_title="Projetos - GESTÃO", page_icon="📋", layout="wi
 utils.load_css() # Carrega o CSS do arquivo utils
 
 # ----------------- FUNÇÃO DE CALLBACK DO LOGIN (v5) -----------------
+# (Esta função PRECISA estar aqui, no topo)
 def _handle_login_submit():
     """Função de callback para o formulário de login."""
     # Pega os valores direto do session_state (onde o form os coloca)
@@ -40,7 +41,6 @@ def _handle_login_submit():
     if utils.validar_usuario(nome.strip(), email.strip()):
         # --- ATUALIZAÇÃO IMPORTANTE ---
         # O estado final é definido AQUI, DENTRO do callback.
-        # Isso garante que ele seja salvo antes do script recarregar.
         st.session_state.update(
             usuario=nome.strip(), 
             logado=True, 
@@ -764,6 +764,7 @@ def tela_projetos():
                 st.rerun()
                 
 # ----------------- FUNÇÃO MAIN (ATUALIZADA) -----------------
+# (Com roteamento corrigido e botão "Usuários")
 
 def main():
     # Inicializa os estados da sessão
@@ -834,4 +835,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
