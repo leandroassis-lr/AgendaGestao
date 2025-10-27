@@ -764,7 +764,6 @@ def tela_projetos():
                 st.rerun()
                 
 # ----------------- FUNÇÃO MAIN (ATUALIZADA) -----------------
-# (Com roteamento corrigido e botão "Usuários")
 
 def main():
     # Inicializa os estados da sessão
@@ -835,3 +834,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
