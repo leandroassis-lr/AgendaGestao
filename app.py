@@ -760,13 +760,13 @@ def main():
         if st.sidebar.button("➕ Novo Projeto", use_container_width=True):
             
             st.session_state.tela_cadastro_proj = True
-            st.session_state.tela_usuario = False 
+            st.session_state.tela_cadastro_usuario = False 
             st.rerun()
             
         st.sidebar.title("Sistema")
         
         if st.sidebar.button("➕ Usuario", use_container_width=True)
-            st.session_state.tela_usuario = True
+            st.session_state.tela_cadastro_usuario = True
             st.session_state.tela_cadastro_proj = False 
             st.rerun()
             
@@ -790,6 +790,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
