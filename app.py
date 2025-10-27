@@ -105,8 +105,8 @@ def tela_login():
         display: flex;
         justify-content: center;
         align-items: center;
-        height: 10vh !important; 
-        width: 100%;
+        height: 0vh !important; 
+        width: 50%;
         text-align: center;
     }
 
@@ -867,6 +867,7 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
 
 
