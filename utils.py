@@ -1,3 +1,4 @@
+# Atualizando o cache#
 import streamlit as st
 import pandas as pd
 from datetime import date, datetime
@@ -423,4 +424,5 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
 
