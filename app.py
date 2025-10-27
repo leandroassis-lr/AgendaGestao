@@ -440,7 +440,15 @@ from datetime import date, datetime, timedelta
 from datetime import date, datetime, timedelta 
 # ... (outros imports) ...
 
-# ⬇️ ----------------- FUNÇÃO TELA_PROJETOS (ATUALIZADA com Próxima Etapa e Validação) ----------------- ⬇️
+# (Importe timedelta no início do seu app.py, junto com date e datetime)
+from datetime import date, datetime, timedelta 
+# ... (outros imports) ...
+
+# (Certifique-se de ter 'timedelta' importado no topo do seu app.py)
+from datetime import date, datetime, timedelta 
+# ... (outros imports) ...
+
+# ----------------- FUNÇÃO TELA_PROJETOS ----------------- ⬇️
 
 def tela_projetos():
     st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True)
@@ -732,10 +740,10 @@ def tela_projetos():
         with col_prev_pag:
             if st.button("⬅️ Anterior", use_container_width=True, disabled=(st.session_state.page_number == 0)): st.session_state.page_number -= 1; st.rerun()
         with col_next_pag:
-            if st.button("Próxima ➡️", use_container_width=True, disabled=(st.session_state.page_number >= total_pages - 1)): st.session_state.page_number += 1; st.rerun()
-               st.session_state.page_number += 1
+            if st.button("Próxima ➡️", use_container_width=True, disabled=(st.session_state.page_number >= total_pages - 1)): 
+                st.session_state.page_number += 1; 
                 st.rerun()
-                
+
 # ----------------- FUNÇÃO MAIN (ATUALIZADA) -----------------
 # (Com roteamento corrigido e botão "Usuários")
 
@@ -803,8 +811,3 @@ if __name__ == "__main__":
     # Adicionado para criar tabelas se não existirem (importante para novas instalações)
     utils.criar_tabelas_iniciais() 
     main()
-
-
-
-
-
