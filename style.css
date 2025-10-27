@@ -107,8 +107,9 @@ h4 {
   font-size: 1.25rem;
 }
 
-/* --- CARDS E FORMULÁRIOS --- */
-.project-card, .metric-card, div[data-testid="stForm"] {
+/* --- CARDS E FORMULÁRIOS (Atualizado) --- */
+/* (Regra SEM o .project-card agora) */
+.main .metric-card, .main div[data-testid="stForm"] {
   background: var(--card-bg);
   border-radius: var(--std-radius);
   padding: 20px 28px;
@@ -117,6 +118,25 @@ h4 {
   transition: box-shadow 0.3s ease-in-out;
 }
 
+/* --- DIVISOR DE PROJETOS (CABEÇALHO) --- */
+/* (Regra NOVA e separada para o .project-card) */
+.project-card {
+  /* Estilos originais */
+  background: var(--card-bg);
+  border-radius: var(--std-radius);
+  padding: 20px 28px; /* Padding original */
+  box-shadow: var(--std-shadow);
+  border: 1px solid var(--gray-border); /* Borda original (exceto topo) */
+  transition: box-shadow 0.3s ease-in-out;
+  border-top: none; /* Remove a borda superior original para não duplicar */
+
+  /* Linhas do Divisor */
+  margin-top: 30px; /* Espaço ACIMA da linha */
+  border-top: 3px solid var(--primary-light); /* Linha divisória (espessura e cor) */
+  padding-top: 25px; /* Espaço ABAIXO da linha (substitui o padding-top original) */
+}
+
+/* Regras Hover e H5 (mantidas como estavam) */
 .project-card:hover, .metric-card:hover {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
@@ -229,6 +249,7 @@ h4 {
     margin-right: auto;
     padding-top: 2rem;  /* Adiciona um espaço extra abaixo do topo */
 }
+
 
 
 
