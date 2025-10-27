@@ -176,6 +176,21 @@ def tela_login():
         
         st.markdown('</div>', unsafe_allow_html=True) # Fecha o div
 
+        # Dentro da função tela_login()
+
+        # ... (código anterior do formulário) ...
+
+        with st.form("form_login"):
+            st.text_input("Nome", key="login_nome")
+            st.text_input("E-mail", key="login_email")
+
+            # ----> ADICIONE ESTA LINHA DE TESTE AQUI <----
+            st.write(f"Função _handle_login_submit existe? {'_handle_login_submit' in globals()}") 
+            # ----------------------------------------------
+            
+            # A linha original que dá erro:
+            st.form_submit_button("Entrar", on_submit=_handle_login_submit) 
+        
         # 4. LÓGICA DE FEEDBACK (FORA DO FORMULÁRIO)
         if st.session_state.login_tentativa == "sucesso":
             # O estado (logado=True) JÁ FOI DEFINIDO pelo callback.
@@ -837,3 +852,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
