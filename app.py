@@ -567,7 +567,7 @@ def tela_projetos():
         # --- >>> MUDANÇA NO CABEÇALHO DO CARD <<< ---
         st.markdown("<div class='project-card'>", unsafe_allow_html=True)
         # Ajuste nas colunas: Aumentei a última para caber o texto extra
-        col_info_card, col_analista_card, col_agencia_card, col_status_card = st.columns([2.5, 2, 1.5, **2.0**]) 
+        col_info_card, col_analista_card, col_agencia_card, col_status_card = st.columns([2.5, 2, 1.5, **2.0*]) 
         
         # Coluna 1 (Esquerda): Data e Nome do Projeto
         with col_info_card:
@@ -800,4 +800,5 @@ if __name__ == "__main__":
     # Adicionado para criar tabelas se não existirem (importante para novas instalações)
     utils.criar_tabelas_iniciais() 
     main()
+
 
