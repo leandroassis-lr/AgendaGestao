@@ -688,30 +688,29 @@ def main():
         # --- Sidebar (Atualizada) ---
         st.sidebar.title(f"Bem-vindo(a), {st.session_state.get('usuario', 'Visitante')}")
         st.sidebar.divider()
-        
+
         st.sidebar.title("Ações")
-        
-        if st.sidebar.button("➕ Novo Projeto", use_container_width=True):
-            st.session_state.tela_cadastro_proj = True
-            st.session_state.tela_configuracoes = False # Reseta o outro
-            st.rerun()
-            
-        st.sidebar.divider()
-        st.sidebar.title("Sistema")
-        
-        # ⬇️ BOTÃO CONFIGURAÇÕES (Adicionado) ⬇️
-        if st.sidebar.button("⚙️ Configurações", use_container_width=True):
-            st.session_state.tela_configuracoes = True
-            st.session_state.tela_cadastro_proj = False # Reseta o outro
-            st.rerun()
+      
+      if st.sidebar.button("➕ Novo Projeto", use_container_width=True):
+          st.session_state.tela_cadastro_proj = True
+          st.session_state.tela_configuracoes = False 
+          st.rerun()
+          
+      # st.sidebar.divider() # <--- LINHA REMOVIDA/COMENTADA
+      
+      st.sidebar.title("Sistema")
+      
+      if st.sidebar.button("⚙️ Configurações", use_container_width=True):
+          st.session_state.tela_configuracoes = True
+          st.session_state.tela_cadastro_proj = False 
+          st.rerun()
            
         if st.sidebar.button("Logout", use_container_width=True, type="primary"): 
             st.session_state.clear()
             st.rerun()
     
         # --- Lógica de Exibição da Página (Atualizada) ---
-        
-        # ⬇️ Roteamento principal atualizado ⬇️
+              
         if st.session_state.get("tela_configuracoes"):
             tela_configuracoes() # Mostra a nova tela de Configurações
         elif st.session_state.get("tela_cadastro_proj"):
@@ -724,9 +723,9 @@ def main():
         st.session_state.boas_vindas = True
         st.rerun()
 
-# --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
 
 
