@@ -675,29 +675,22 @@ def main():
 
     # --- LÓGICA PRINCIPAL DE ROTEAMENTO ---
     if not st.session_state.logado:
-        # Removi a lógica 'if st.session_state.cadastro:' pois
-        # sua tela de login atual não possui o botão "Novo usuário".
-        # O cadastro agora é feito *dentro* do app.
+      
         tela_login()
 
     elif st.session_state.tela_principal:
         
-        st.sidebar.title(f"Bem-vindo(a), {st.session_state.get('usuario', 'Visitante')}") # <--- NÍVEL 2
+        st.sidebar.title(f"Bem-vindo(a), {st.session_state.get('usuario', 'Visitante')}")
         st.sidebar.divider()
         
         st.sidebar.title("Ações")
         
-        # A LINHA ABAIXO (694) DEVE ESTAR ALINHADA COM A LINHA ACIMA
         if st.sidebar.button("➕ Novo Projeto", use_container_width=True):
             # ESTA LINHA TEM MAIS INDENTAÇÃO
             st.session_state.tela_cadastro_proj = True
             st.session_state.tela_configuracoes = False 
             st.rerun()
             
-        # SE VOCÊ REMOVEU O DIVIDER, O TÍTULO "SISTEMA" DEVE
-        # ESTAR ALINHADO COM O "if" E COM "st.sidebar.title('Ações')"
-        # st.sidebar.divider() # <--- Linha comentada ou removida
-
         st.sidebar.title("Sistema")
         
         if st.sidebar.button("⚙️ Configurações", use_container_width=True): # <--- NÍVEL 2
@@ -717,16 +710,7 @@ def main():
             tela_cadastro_projeto() 
         else:
             tela_projetos() 
-            
-        # --- Lógica de Exibição da Página (Atualizada) ---
-              
-        if st.session_state.get("tela_configuracoes"):
-            tela_configuracoes() # Mostra a nova tela de Configurações
-        elif st.session_state.get("tela_cadastro_proj"):
-            tela_cadastro_projeto() # Mostra o cadastro de projeto
-        else:
-            tela_projetos() # Tela padrão
-            
+                       
     else:
         # Rota padrão caso nenhum estado esteja definido
         st.session_state.boas_vindas = True
