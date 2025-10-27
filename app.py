@@ -808,7 +808,7 @@ def main():
             
         st.sidebar.title("Sistema")
         
-        if st.sidebar.button("➕ Usuários", use_container_width=True):
+        if st.sidebar.button("⚙️ Configurações", use_container_width=True):
             st.session_state.tela_configuracoes = True
             st.session_state.tela_cadastro_proj = False 
             st.rerun()
@@ -818,7 +818,7 @@ def main():
             st.rerun()
     
         # --- Lógica de Exibição da Página ---
-        if st.session_state.get("tela_configuracoes"):
+        if st.session_state.get("tela_configuracoes")
             tela_configuracoes() 
         elif st.session_state.get("tela_cadastro_proj"):
             tela_cadastro_projeto() 
@@ -833,3 +833,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
