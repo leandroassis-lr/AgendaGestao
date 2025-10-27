@@ -183,7 +183,6 @@ def atualizar_projeto_db(project_id, updates: dict):
         st.toast(f"Erro ao atualizar projeto: {e}", icon="🔥")
         return False
 
-
 def excluir_projeto_db(project_id):
     if not conn:
         return False
@@ -222,7 +221,6 @@ def carregar_config_db(tab_name):
         st.error(f"Erro detalhado ao carregar configuração '{tab_name}': {e}")
         return pd.DataFrame()
 
-
 def salvar_config_db(df, tab_name):
     if not conn:
         return False
@@ -240,7 +238,6 @@ def salvar_config_db(df, tab_name):
         st.error(f"Erro ao salvar configuração '{tab_name}': {e}")
         return False
 
-
 @st.cache_data(ttl=600)
 def carregar_usuarios_db():
     if not conn:
@@ -250,7 +247,6 @@ def carregar_usuarios_db():
     except Exception as e:
         st.error(f"Erro ao carregar usuários: {e}")
         return pd.DataFrame()
-
 
 def salvar_usuario_db(df):
     if not conn:
@@ -290,7 +286,6 @@ def generate_excel_template_bytes():
         df_template.to_excel(writer, index=False, sheet_name='Projetos')
     return output.getvalue()
 
-
 def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
     if not conn:
         return False, 0
@@ -326,7 +321,6 @@ def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
     except Exception as e:
         st.error(f"Erro ao inserir dados em lote: {e}")
         return False, 0
-
 
 def dataframe_to_excel_bytes(df):
     output = io.BytesIO()
@@ -368,7 +362,6 @@ def get_status_color(status):
         return "#FFEE58"
     else:
         return "#64B5F6"  # Em Andamento
-
 
 def calcular_sla(projeto_row, df_sla):
     data_agendamento = pd.to_datetime(projeto_row.get("Agendamento"), errors='coerce')
@@ -430,3 +423,4 @@ def calcular_sla(projeto_row, df_sla):
             return "SLA Vence Hoje!", "#FFA726"
         else:
             return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
