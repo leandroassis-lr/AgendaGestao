@@ -106,12 +106,12 @@ def tela_login():
         justify-content: center;
         align-items: center;
         height: 0vh !important; 
-        width: 120%;
+        width: 100%;
         text-align: center;
     }
 
     .login-logo-container img {
-        max-width:50%; /* Mantido */
+        max-width:150%; /* Mantido */
         height: auto;
         border-radius: 50%;
         -webkit-mask-image: -webkit-radial-gradient(white, black);
@@ -867,6 +867,7 @@ def main():
 # --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
+
 
 
 
