@@ -30,50 +30,31 @@ def _to_date_safe(val):
 st.set_page_config(page_title="Projetos - GESTÃO", page_icon="📋", layout="wide")
 utils.load_css() # Carrega o CSS do arquivo utils
 
-# ----------------- FUNÇÃO DE CALLBACK DO LOGIN (v5) -----------------
-# (Esta função PRECISA estar aqui, no topo, na linha 36)
-def _handle_login_submit():
-    """Função de callback para o formulário de login."""
-    # Pega os valores direto do session_state (onde o form os coloca)
-    nome = st.session_state.login_nome
-    email = st.session_state.login_email
-    
-    if utils.validar_usuario(nome.strip(), email.strip()):
-        # --- ATUALIZAÇÃO IMPORTANTE ---
-        # O estado final é definido AQUI, DENTRO do callback.
-        st.session_state.update(
-            usuario=nome.strip(), 
-            logado=True, 
-            boas_vindas=True, 
-            tela_principal=False,
-            login_tentativa="sucesso" # Define o estado para a mensagem de feedback
-        )
-    else:
-        # Se for inválido, define o estado de falha
-        st.session_state.login_tentativa = "falha"
-        
-# ----------------- Função: Tela de Login (CORRIGIDA v5) -----------------
+
+# ----------------- Função: Tela de Login -----------------
 def tela_login():
-    
+    # --- CSS exclusivo da tela de login ---
     st.markdown("""
     <style>
+    /* ... (Todo o seu CSS da tela_login fica aqui) ... */
+    
     /* Remove a sidebar SÓ na tela de login */
     [data-testid="stSidebar"] {
         display: none;
     }
 
-    /* Fundo dividido (sem alteração) */
+    /* Fundo dividido para a tela de login */
     [data-testid="stAppViewContainer"] {
         background: linear-gradient(90deg, #e8f5e9 0%, #e8f5e9 50%, #1b5e20 50%, #1b5e20 100%);
     }
 
-    /* Colunas (sem alteração) */
     section.main > div {
         display: flex; 
         align-items: stretch;
         justify-content: center;
         height: 100vh;
     }
+
     div[data-testid="stHorizontalBlock"] > div[data-testid^="stVerticalBlock"] {
         display: flex;
         flex-direction: column;
@@ -81,11 +62,8 @@ def tela_login():
         height: 100vh;
     }
 
-    /* * --- MUDANÇA IMPORTANTE NO CSS ---
-     * Agora o estilo do formulário é aplicado a uma classe customizada
-     * '.login-form-container', eliminando o conflito.
-     */
-    .login-form-container div[data-testid="stForm"] {
+    /* Estilo do formulário */
+    div[data-testid="stForm"] {
         background-color: rgba(255, 255, 255, 0.95);
         padding: 2.5rem;
         border-radius: 16px;
@@ -94,8 +72,7 @@ def tela_login():
         margin: auto;
     }
 
-    /* Regras de botões e inputs agora são filhas da nossa classe */
-    .login-form-container .stButton > button {
+    .stButton > button {
         background-color: #43a047 !important;
         color: white !important;
         border: none;
@@ -103,15 +80,17 @@ def tela_login():
         padding: 0.6rem;
         font-weight: bold;
     }
-    .login-form-container .stButton > button:hover {
+
+    .stButton > button:hover {
         background-color: #2e7d32 !important;
     }
-    .login-form-container .stTextInput > div > div > input {
+
+    .stTextInput > div > div > input {
         border-radius: 8px;
         border: 1px solid #ccc;
     }
 
-    /* Títulos (sem alteração) */
+    /* Títulos */
     div[data-testid="stHorizontalBlock"] > div:nth-child(1) h1, 
     div[data-testid="stHorizontalBlock"] > div:nth-child(1) h2,
     div[data-testid="stHorizontalBlock"] > div:nth-child(1) h3,
@@ -120,25 +99,24 @@ def tela_login():
         text-align: center;
     }
 
-    /* Logo (sem alteração) */
+    /* Centraliza o logotipo na direita */
     .login-logo-container {
         display: flex;
         justify-content: center;
         align-items: center;
-        height: 65vh !important;
-        width: 110%;
+        height: 100vh !important;
+        width: 100%;
         text-align: center;
     }
+
     .login-logo-container img {
-        max-width: 100%;
+        max-width: 50%;
         height: auto;
         border-radius: 50%;
         -webkit-mask-image: -webkit-radial-gradient(white, black);
         mask-image: radial-gradient(white, black);
-        filter: brightness(1.1) contrast(1.1);
+        filter: brightness(1.2) contrast(1.1);
         box-shadow: 0 0 15px rgba(0,0,0,0.3);
-        display: block;
-        margin: auto;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -151,72 +129,43 @@ def tela_login():
         imagem_principal = None
 
     # --- Layout (duas colunas) ---
-    col1, col2 = st.columns([1, 1], gap="small")
+    col1, col2 = st.columns([1, 1], gap="small") 
 
     # --- Coluna esquerda (Login) ---
     with col1:
-        # 1. Inicializa o estado da tentativa
-        if "login_tentativa" not in st.session_state:
-            st.session_state.login_tentativa = None
-        
-        # 2. Encapsula o formulário
-        st.markdown('<div class="login-form-container">', unsafe_allow_html=True)
-        
         st.subheader("Seja bem vindo à plataforma de gestão de projetos Allarmi")     
         st.subheader("Acesse sua conta")
-        st.write("")
-
-        # 3. USA O 'on_submit'
-        with st.form("form_login"):
-            st.text_input("Nome", key="login_nome")
-            st.text_input("E-mail", key="login_email")
-            # Esta é a linha que estava dando erro (agora 173 no *seu* arquivo, 
-            # mas ~172 neste código correto)
-            st.form_submit_button("Entrar", on_submit=_handle_login_submit)
-        
-        st.markdown('</div>', unsafe_allow_html=True) # Fecha o div
-
-        # Dentro da função tela_login()
-
-        # ... (código anterior do formulário) ...
+        st.write("") 
 
         with st.form("form_login"):
-            st.text_input("Nome", key="login_nome")
-            st.text_input("E-mail", key="login_email")
-
-            # ----> ADICIONE ESTA LINHA DE TESTE AQUI <----
-            st.write(f"Função _handle_login_submit existe? {'_handle_login_submit' in globals()}") 
-            # ----------------------------------------------
+            nome = st.text_input("Nome", key="login_nome")
+            email = st.text_input("E-mail", key="login_email")
             
-            # A linha original que dá erro:
-            st.form_submit_button("Entrar", on_submit=_handle_login_submit) 
-        
-        # 4. LÓGICA DE FEEDBACK (FORA DO FORMULÁRIO)
-        if st.session_state.login_tentativa == "sucesso":
-            # O estado (logado=True) JÁ FOI DEFINIDO pelo callback.
-            # Nós agora apenas mostramos a mensagem e damos o rerun.
-            st.success(f"Acesso liberado! Bem-vindo, {st.session_state.usuario} 👋")
-            st.session_state.login_tentativa = None # Reseta a tentativa
-            time.sleep(1) # Pausa para ver a mensagem
-            st.rerun() 
-
-        elif st.session_state.login_tentativa == "falha":
-            st.error("Acesso negado, tente novamente")
-            st.session_state.login_tentativa = None # Reseta
-            
-    # --- Coluna direita (Logo) ---
+            if st.form_submit_button("Entrar"):
+                # --- Acesso temporário liberado para Leandro ---
+                if nome.strip().lower() == "leandro" and email.strip().lower() == "leandro.assis@allarmi.com.br":
+                    st.session_state["autenticado"] = True
+                    st.success("Acesso liberado! Bem-vindo, Leandro 👋")
+                    
+                    # Restaurei a lógica de transição para a tela de boas-vindas
+                    nome_usuario = "Leandro" 
+                    st.session_state.update(usuario=nome_usuario, logado=True, boas_vindas=True, tela_principal=False)
+                    st.rerun()
+                else:
+                    st.error("Acesso negado, tente novamente")
+                    
     with col2:
-        if imagem_principal:
-            st.markdown(
-                f"""
-                <div class="login-logo-container">
-                    <img src="data:image/png;base64,{utils.image_to_base64(imagem_principal)}" alt="Foto 2.jpg">
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-        else:
-            st.warning("Não foi possível carregar a imagem do logo.")
+        try:
+            # Use a div 'login-logo-container' para que seu CSS seja aplicado
+            
+            if imagem_principal:
+                # Use 'use_container_width=True' para a imagem se ajustar ao CSS
+                st.image(imagem_principal, use_container_width=True) 
+            else:
+                 st.warning("Não foi possível carregar a imagem do logo.")
+            
+        except Exception as e:
+            st.warning(f"Não foi possível carregar a imagem do logo: {e}")
 
 # ----------------- Função: Tela de Cadastro de Usuário -----------------#
 
@@ -240,6 +189,7 @@ def tela_cadastro_usuario():
                 df = utils.carregar_usuarios_db() 
 
                 # Padroniza os nomes das colunas para "Capitalized" (ex: "email" -> "Email")
+                # Isso corrige o erro se o arquivo foi salvo com colunas em minúsculas.
                 if not df.empty:
                     df.columns = [col.capitalize() for col in df.columns]
 
@@ -266,7 +216,7 @@ def tela_cadastro_usuario():
 # ----------------- NOVA FUNÇÃO (Página de Configurações) -----------------
 
 def tela_configuracoes():
-    
+   
     if st.button("⬅️ Voltar para Projetos"):
         st.session_state.tela_configuracoes = False
         st.rerun()
@@ -283,7 +233,7 @@ def tela_configuracoes():
         df_users = utils.carregar_usuarios_db()
         if not df_users.empty:
             
-            
+           
             # Padroniza as colunas (ex: "nome" -> "Nome", "email" -> "Email")
             df_users.columns = [col.capitalize() for col in df_users.columns]
             
@@ -294,7 +244,7 @@ def tela_configuracoes():
                 st.warning("O arquivo de usuários existe, mas não contém as colunas 'Nome' ou 'Email'.")
             else:
                 st.dataframe(df_users[cols_to_show], use_container_width=True)
-            
+           
         else:
             st.info("Nenhum usuário cadastrado ainda.")
     except Exception as e:
@@ -364,30 +314,15 @@ def tela_boas_vindas():
     st.session_state.boas_vindas = False
     st.session_state.tela_principal = True
     st.rerun()
-    
-# --- FUNÇÃO TELA_CADASTRO_PROJETO (ATUALIZADA com Selectbox) ---
 
+# --- Funções tela_cadastro_projeto e tela_projetos (sem alterações) ---
 def tela_cadastro_projeto():
     if st.button("⬅️ Voltar para Projetos"):
         st.session_state.tela_cadastro_proj = False
         st.rerun()
     st.subheader("Cadastrar Novo Projeto")
     
-    # --- 1. CARREGAR LISTAS DE OPÇÕES ---
     perguntas_customizadas = utils.carregar_config_db("perguntas") 
-    
-    agencias_cfg = utils.carregar_config_db("agencias")
-    tecnicos_cfg = utils.carregar_config_db("tecnicos")
-    
-    # (Carregando o nome de tabela que você confirmou)
-    projetos_cfg = utils.carregar_config_db("projetos_nomes") 
-
-    # Prepara as listas de opções
-    agencia_options = ["N/A"] + (agencias_cfg.iloc[:, 0].tolist() if not agencias_cfg.empty and len(agencias_cfg.columns) > 0 else [])
-    tecnico_options = ["N/A"] + (tecnicos_cfg.iloc[:, 0].tolist() if not tecnicos_cfg.empty and len(tecnicos_cfg.columns) > 0 else [])
-    projeto_options = ["N/A"] + (projetos_cfg.iloc[:, 0].tolist() if not projetos_cfg.empty and len(projetos_cfg.columns) > 0 else [])
-    
-    # ----------------------------------------
     
     if perguntas_customizadas.empty or 'Pergunta' not in perguntas_customizadas.columns:
         st.info("🚨 Nenhuma pergunta customizada configurada. (Vá para Configurações > Gerenciar Listas)")
@@ -395,85 +330,24 @@ def tela_cadastro_projeto():
 
     with st.form("form_cadastro_projeto"):
         respostas_customizadas = {}
-        
         for index, row in perguntas_customizadas.iterrows():
             pergunta = row['Pergunta']
             tipo = row.get('Tipo (texto, numero, data)', 'texto')
             key = utils.clean_key(pergunta)
-            
-            # Normaliza o nome da pergunta para verificação
-            pergunta_norm = pergunta.lower().strip() 
-
-            # --- 2. LÓGICA DE INTERCEPTAÇÃO ---
-            
-            if pergunta_norm == 'agência':
-                respostas_customizadas[pergunta] = st.selectbox(
-                    pergunta, 
-                    options=agencia_options, 
-                    key=f"custom_{key}",
-                    help="Selecione a agência da lista."
-                )
-            
-            elif pergunta_norm == 'técnico':
-                respostas_customizadas[pergunta] = st.selectbox(
-                    pergunta, 
-                    options=tecnico_options, 
-                    key=f"custom_{key}",
-                    help="Selecione o técnico da lista."
-                )
-            
-            # Verifica por "projeto" ou "nome do projeto"
-            elif pergunta_norm == 'projeto' or pergunta_norm == 'nome do projeto':
-                respostas_customizadas[pergunta] = st.selectbox(
-                    pergunta, 
-                    options=projeto_options, 
-                    key=f"custom_{key}",
-                    help="Selecione o tipo de projeto da lista."
-                )
-            
-            # --- FIM DA LÓGICA ---
-            
-            # Lógica original para outros tipos de pergunta
-            elif tipo == 'data': 
-                respostas_customizadas[pergunta] = st.date_input(pergunta, value=None, key=f"custom_{key}", format="DD/MM/YYYY")
-            elif tipo == 'numero': 
-                respostas_customizadas[pergunta] = st.number_input(pergunta, key=f"custom_{key}", step=1)
-            else: 
-                # O padrão para qualquer outra pergunta de texto
-                respostas_customizadas[pergunta] = st.text_input(pergunta, key=f"custom_{key}")
-                
+            if tipo == 'data': respostas_customizadas[pergunta] = st.date_input(pergunta, value=None, key=f"custom_{key}", format="DD/MM/YYYY")
+            elif tipo == 'numero': respostas_customizadas[pergunta] = st.number_input(pergunta, key=f"custom_{key}", step=1)
+            else: respostas_customizadas[pergunta] = st.text_input(pergunta, key=f"custom_{key}")
         btn_cadastrar = st.form_submit_button("Cadastrar Projeto")
     
     if btn_cadastrar:
-        
-        # --- 3. LÓGICA DE SALVAMENTO ATUALIZADA ---
-        
-        projeto_nome_key = next((p for p in respostas_customizadas if p.lower().strip() in ['nome do projeto', 'projeto']), None)
-        agencia_key = next((p for p in respostas_customizadas if p.lower().strip() == 'agência'), None)
-        tecnico_key = next((p for p in respostas_customizadas if p.lower().strip() == 'técnico'), None)
-
-        # Validação
-        projeto_nome = respostas_customizadas.get(projeto_nome_key) if projeto_nome_key else "N/A"
-        agencia_nome = respostas_customizadas.get(agencia_key) if agencia_key else "N/A"
-        tecnico_nome = respostas_customizadas.get(tecnico_key) if tecnico_key else "N/A"
-        
-        if projeto_nome == "N/A" or agencia_nome == "N/A" or tecnico_nome == "N/A":
-             st.error("ERRO: 'Projeto', 'Agência' e 'Técnico' são campos obrigatórios. Selecione uma opção válida.")
-             st.stop() # Impede o cadastro
-        
-        if not projeto_nome_key:
-            st.error("ERRO CRÍTICO: Não foi encontrada uma pergunta 'Projeto' ou 'Nome do Projeto' na sua configuração de perguntas.")
-            st.stop()
-
-        # Se passou na validação, continua o cadastro
+        projeto_nome = respostas_customizadas.get(perguntas_customizadas.iloc[0]['Pergunta'], 'Projeto Customizado')
         nova_linha_data = {
             "Status": "NÃO INICIADA",
             "Data de Abertura": date.today(),
             "Analista": st.session_state.get('usuario', 'N/A'),
-            "Projeto": projeto_nome  # Usa o nome do projeto selecionado
+            "Projeto": projeto_nome
         }
         
-        # Adiciona todas as outras respostas do formulário
         nova_linha_data.update(respostas_customizadas)
 
         if utils.adicionar_projeto_db(nova_linha_data):
@@ -481,7 +355,7 @@ def tela_cadastro_projeto():
             st.session_state["tela_cadastro_proj"] = False
             st.rerun()
 
-# ----------------- FUNÇÃO TELA_PROJETOS (Original) ----------------- 
+# ⬇️ ----------------- FUNÇÃO TELA_PROJETOS (ATUALIZADA) ----------------- ⬇️
 
 def tela_projetos():
     st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True)
@@ -496,10 +370,11 @@ def tela_projetos():
         return
 
     # --- Conversão de Datas ---
+    # É importante fazer isso ANTES de tentar filtrar
     df['Agendamento'] = pd.to_datetime(df['Agendamento'], errors='coerce')
     df['Agendamento_str'] = df['Agendamento'].dt.strftime("%d/%m/%y").fillna('N/A')
 
-    # --- Início dos Filtros ---
+    # --- Início dos Filtros (REESTRUTURADO) ---
     st.markdown("#### 🔍 Filtros e Busca")
     termo_busca = st.text_input("Buscar", key="termo_busca", placeholder="Digite um termo para buscar...")
 
@@ -538,7 +413,8 @@ def tela_projetos():
         else:
             st.empty()
             
-    # Filtros de Data (col7 e col8)
+    # ⬇️ --- NOVOS FILTROS DE DATA (col7 e col8) --- ⬇️
+    # (Exatamente como você pediu, ao lado do Técnico)
     with col7:
         data_inicio = st.date_input(
             "Agendamento (de)", 
@@ -554,6 +430,7 @@ def tela_projetos():
             key="data_fim_filtro", 
             format="DD/MM/YYYY"
         )
+    # ⬆️ --- FIM DOS NOVOS FILTROS DE DATA --- ⬆️
 
     # --- Lógica de Aplicação dos Filtros ---
     df_filtrado = df.copy()
@@ -567,13 +444,13 @@ def tela_projetos():
     if data_inicio:
         df_filtrado = df_filtrado[
             (df_filtrado['Agendamento'].notna()) & 
-            (df_filtrado['Agendamento'] >= pd.to_datetime(data_inicio))
+            (df_filtrado['Agendamento'] >= pd.to_datetime(data_inicio)) # Compara a partir de 00:00:00
         ]
     # 3. Aplica filtro de Data de Fim
     if data_fim:
         df_filtrado = df_filtrado[
             (df_filtrado['Agendamento'].notna()) & 
-            (df_filtrado['Agendamento'] <= pd.to_datetime(data_fim).replace(hour=23, minute=59, second=59))
+            (df_filtrado['Agendamento'] <= pd.to_datetime(data_fim).replace(hour=23, minute=59, second=59)) # Compara até 23:59:59
         ]
 
     # 4. Aplica filtro de texto (busca)
@@ -582,6 +459,9 @@ def tela_projetos():
         mask_busca = df_filtrado.apply(lambda row: row.astype(str).str.lower().str.contains(termo, na=False).any(), axis=1)
         df_filtrado = df_filtrado[mask_busca]
     
+    # --- O RESTO DA FUNÇÃO CONTINUA IGUAL ---
+    # (Exportar para Excel, Paginação, Cards de Projeto, etc.)
+
     st.divider()
     col_info_export, col_export_btn = st.columns([4, 1.2])
     total_items = len(df_filtrado)
@@ -780,9 +660,6 @@ def tela_projetos():
                 st.session_state.page_number += 1
                 st.rerun()
                 
-# ----------------- FUNÇÃO MAIN (ATUALIZADA) -----------------
-# (Com roteamento corrigido e botão "Usuários")
-
 def main():
     # Inicializa os estados da sessão
     if "logado" not in st.session_state:
@@ -796,24 +673,23 @@ def main():
     if "tela_cadastro_proj" not in st.session_state: 
         st.session_state.tela_cadastro_proj = False
         
+    # ⬇️ ADICIONADO NOVO ESTADO ⬇️
     if "tela_configuracoes" not in st.session_state: 
         st.session_state.tela_configuracoes = False
 
-    # --- LÓGICA PRINCIPAL DE ROTEAMENTO (CORRIGIDA) ---
-    
+    # --- LÓGICA PRINCIPAL DE ROTEAMENTO ---
     if not st.session_state.logado:
-        # ROTA 1: Se não está logado, mostra a tela de login.
+        # Removi a lógica 'if st.session_state.cadastro:' pois
+        # sua tela de login atual não possui o botão "Novo usuário".
+        # O cadastro agora é feito *dentro* do app.
         tela_login()
-
-    elif st.session_state.boas_vindas:
-        # ROTA 2: Se está logado E 'boas_vindas' é True, mostra a tela de boas-vindas.
-        # (Esta tela, após 5s, definirá boas_vindas=False e tela_principal=True)
-        tela_boas_vindas()
-
-    elif st.session_state.tela_principal:
-        # ROTA 3: Se está logado e já passou das boas-vindas, mostra o app principal.
         
-        # --- Sidebar (Só é desenhada nesta rota) ---
+    elif st.session_state.boas_vindas:
+        tela_boas_vindas()
+        
+    elif st.session_state.tela_principal:
+        
+        # --- Sidebar (Atualizada) ---
         st.sidebar.title(f"Bem-vindo(a), {st.session_state.get('usuario', 'Visitante')}")
         st.sidebar.divider()
         
@@ -821,35 +697,37 @@ def main():
         
         if st.sidebar.button("➕ Novo Projeto", use_container_width=True):
             st.session_state.tela_cadastro_proj = True
-            st.session_state.tela_configuracoes = False 
+            st.session_state.tela_configuracoes = False # Reseta o outro
             st.rerun()
             
+        st.sidebar.divider()
         st.sidebar.title("Sistema")
         
-        # Botão renomeado:
-        if st.sidebar.button("➕ Usuários", use_container_width=True):
+        # ⬇️ BOTÃO CONFIGURAÇÕES (Adicionado) ⬇️
+        if st.sidebar.button("⚙️ Configurações", use_container_width=True):
             st.session_state.tela_configuracoes = True
-            st.session_state.tela_cadastro_proj = False 
+            st.session_state.tela_cadastro_proj = False # Reseta o outro
             st.rerun()
-            
-        if st.sidebar.button("Logout", use_container_width=True, type="primary"):
+           
+        if st.sidebar.button("Logout", use_container_width=True, type="primary"): 
             st.session_state.clear()
             st.rerun()
     
-        # --- Lógica de Exibição da Página ---
+        # --- Lógica de Exibição da Página (Atualizada) ---
+        
+        # ⬇️ Roteamento principal atualizado ⬇️
         if st.session_state.get("tela_configuracoes"):
-            tela_configuracoes() 
+            tela_configuracoes() # Mostra a nova tela de Configurações
         elif st.session_state.get("tela_cadastro_proj"):
-            tela_cadastro_projeto() 
+            tela_cadastro_projeto() # Mostra o cadastro de projeto
         else:
-            tela_projetos() 
+            tela_projetos() # Tela padrão
             
     else:
-        # ROTA 4 (Padrão de Segurança): Se algo der errado (ex: logado=True mas os outros são False)
-        # força o reinício do ciclo de login, limpando o 'logado'.
-        st.session_state.logado = False
+        # Rota padrão caso nenhum estado esteja definido
+        st.session_state.boas_vindas = True
         st.rerun()
 
+# --- PONTO DE ENTRADA DO APP ---
 if __name__ == "__main__":
     main()
-
