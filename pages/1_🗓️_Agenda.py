@@ -97,7 +97,7 @@ if "logado" not in st.session_state or not st.session_state.logado:
     st.warning("Por favor, faça o login na página principal.")
     st.stop()
 
-st.sidebar.title(f"Bem-vindo(a), {st.session_state.get('usuario', 'Visitante')}! 📋")
+st.sidebar.title(f"Bem-vindo(a), {st.session_state.get('usuario', 'Visitante')}")
 st.sidebar.divider()
 st.sidebar.divider()
 st.sidebar.title("Sistema")
@@ -105,3 +105,4 @@ if st.sidebar.button("Logout", use_container_width=True, key="logout_agenda"):
     st.session_state.clear(); st.rerun()
 
 tela_calendario()
+
