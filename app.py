@@ -459,7 +459,7 @@ import pandas as pd
 import html
 import utils # Certifique-se que utils está importado
 
-# ⬇️ --- FUNÇÃO TELA_PROJETOS (Ajustes Finais no Cabeçalho) --- ⬇️
+# ⬇️ --- FUNÇÃO TELA_PROJETOS --- ⬇️
 
 def tela_projetos():
     st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True)
@@ -546,12 +546,12 @@ def tela_projetos():
         agendamento_str = row.get('Agendamento_str', 'N/A') 
 
         # --- Lembrete Visual (sem alterações) ---
-        lembrete_ativo = False; icone_lembrete = ""; cor_lembrete_sla = "orange"; texto_lembrete_extra = ""
+        lembrete_ativo = False; icone_lembrete = ""; cor_lembrete_sla = "red"; texto_lembrete_extra = ""
         agendamento_date_obj = row.get('Agendamento').date() if pd.notna(row.get('Agendamento')) else None
         if agendamento_date_obj and hoje <= agendamento_date_obj <= limite_lembrete:
             if not ('finalizad' in status_raw.lower() or 'cancelad' in status_raw.lower()):
                  lembrete_ativo = True; icone_lembrete = "⚠️"; 
-                 texto_lembrete_extra = f"<p style='color:{cor_lembrete_sla}; font-weight:bold; margin-top: -5px;'>Lembrete: Próximo!</p>"
+                 texto_lembrete_extra = f"<p style='color:{cor_lembrete_sla}; font-weight:bold; margin-top: -5px;'>Atenção - Esta Próximo!</p>"
         sla_text, sla_color_original = utils.calcular_sla(row, df_sla)
         sla_color_final = cor_lembrete_sla if lembrete_ativo else sla_color_original
 
@@ -795,6 +795,7 @@ if __name__ == "__main__":
     # Adicionado para criar tabelas se não existirem (importante para novas instalações)
     utils.criar_tabelas_iniciais() 
     main()
+
 
 
 
