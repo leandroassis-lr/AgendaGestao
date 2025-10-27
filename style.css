@@ -108,29 +108,13 @@ h4 {
 }
 
 /* --- CARDS E FORMULÁRIOS --- */
-.main .metric-card, .main div[data-testid="stForm"] {
+.project-card, .metric-card, div[data-testid="stForm"] {
   background: var(--card-bg);
   border-radius: var(--std-radius);
   padding: 20px 28px;
   box-shadow: var(--std-shadow);
   border: 1px solid var(--gray-border);
   transition: box-shadow 0.3s ease-in-out;
-}
-
-/* --- DIVISOR DE PROJETOS (CABEÇALHO) --- */
-.project-card {
-  /* 1. Estilos originais que copiamos de cima: */
-  background: var(--card-bg);
-  border-radius: var(--std-radius);
-  padding: 20px 28px;
-  box-shadow: var(--std-shadow);
-  border: 1px solid var(--gray-border);
-  transition: box-shadow 0.3s ease-in-out;
-
-  /* 2. NOVAS LINHAS DO DIVISOR: */
-  margin-top: 30px; /* <-- Espaço ACIMA do cabeçalho */
-  border-top: 3px solid var(--primary-light); /* <-- Linha divisória (verde-clara) */
-  padding-top: 25px; /* <-- Espaço extra DENTRO do cabeçalho, abaixo da linha */
 }
 
 .project-card:hover, .metric-card:hover {
@@ -245,5 +229,6 @@ h4 {
     margin-right: auto;
     padding-top: 2rem;  /* Adiciona um espaço extra abaixo do topo */
 }
+
 
 
