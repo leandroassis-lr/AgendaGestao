@@ -205,98 +205,108 @@ def adicionar_projeto_db(data: dict):
         return False
 
 # (atualizar_projeto_db - ATUALIZADO com Log Aprimorado e Prioridade)
+# (No seu utils.py, substitua esta função)
+
 def atualizar_projeto_db(project_id, updates: dict):
     if not conn: return False
     
-    # Pega o usuário logado ANTES de qualquer coisa
     usuario_logado = st.session_state.get('usuario', 'Sistema') 
     
     try:
         with conn.cursor() as cur:
-            # 1. Buscar dados atuais do projeto
+            # 1. Buscar dados atuais
             cur.execute("""
                 SELECT status, analista, etapas_concluidas, agendamento, log_agendamento, prioridade 
                 FROM projetos WHERE id = %s
             """, (project_id,))
             current_data_tuple = cur.fetchone()
             if not current_data_tuple:
-                st.error(f"Erro: Projeto com ID {project_id} não encontrado.")
-                return False
+                st.error(f"Erro: Projeto com ID {project_id} não encontrado."); return False
 
             current_status, current_analista, current_etapas, current_agendamento, current_log, current_prioridade = current_data_tuple
             current_log = current_log or "" 
-            current_prioridade_db = current_prioridade or 'Média' # Prioridade atual no BD (trata None)
+            # --- GARANTE que current_agendamento é date ou None ---
+            current_agendamento_date = current_agendamento if isinstance(current_agendamento, date) else None
+            # ---------------------------------------------------
+            current_prioridade_db = current_prioridade or 'Média' 
 
-            # Prepara dados da atualização (normaliza chaves ANTES de comparar)
+            # Prepara dados da atualização
             db_updates_raw = _normalize_and_sanitize(updates)
             
             # --- Geração do Log ---
             log_entries = []
             hoje_str = date.today().strftime('%d/%m/%Y')
 
-            # Compara Status
-            new_status = db_updates_raw.get('status') # Já normalizado
+            # Compara Status (igual antes)
+            new_status = db_updates_raw.get('status')
             if new_status is not None and new_status != current_status:
                 log_entries.append(f"Em {hoje_str} por {usuario_logado}: Status de '{current_status or 'N/A'}' para '{new_status}'.")
 
-            # Compara Analista
+            # Compara Analista (igual antes)
             new_analista = db_updates_raw.get('analista')
             if new_analista is not None and new_analista != current_analista:
                  log_entries.append(f"Em {hoje_str} por {usuario_logado}: Analista de '{current_analista or 'N/A'}' para '{new_analista}'.")
 
-            # Compara Prioridade
-            new_prioridade_norm = db_updates_raw.get('prioridade') # Vem 'baixa', 'media', 'alta' ou None
-            # Para exibição no log, usamos os valores originais ou 'Média'
-            current_prioridade_display = current_prioridade or 'Média' 
-            new_prioridade_display = updates.get("Prioridade", 'Média') # Pega do dict original 'updates'
-
-            # Compara o valor normalizado (None vs 'media', etc.) com o valor do BD (None vs 'Média')
+            # Compara Prioridade (igual antes)
+            new_prioridade_norm = db_updates_raw.get('prioridade') 
+            current_prioridade_display = current_prioridade or 'Média'; new_prioridade_display = updates.get("Prioridade", 'Média')
+            # Ajuste na comparação para tratar None corretamente
             if new_prioridade_norm != (current_prioridade.lower() if current_prioridade else None): 
                  log_entries.append(f"Em {hoje_str} por {usuario_logado}: Prioridade de '{current_prioridade_display}' para '{new_prioridade_display}'.")
 
-            # Compara Agendamento
-            new_agendamento_str = db_updates_raw.get('agendamento') # Vem 'YYYY-MM-DD' ou None
-            new_agendamento_date = datetime.strptime(new_agendamento_str, '%Y-%m-%d').date() if new_agendamento_str else None
-            current_agendamento_date = current_agendamento # Já é date ou None
-            
-            if new_agendamento_date != current_agendamento_date:
-                data_antiga_str = current_agendamento_date.strftime('%d/%m/%Y') if current_agendamento_date else "N/A"
-                data_nova_str = new_agendamento_date.strftime('%d/%m/%Y') if new_agendamento_date else "N/A"
-                log_entries.append(f"Em {hoje_str} por {usuario_logado}: Agendamento de '{data_antiga_str}' para '{data_nova_str}'.")
+            # --- Compara Agendamento (COM CHECAGEM DE TIPO) ---
+            new_agendamento_str = db_updates_raw.get('agendamento') # 'YYYY-MM-DD' ou None
+            new_agendamento_date = None
+            if new_agendamento_str:
+                try:
+                    new_agendamento_date = datetime.strptime(new_agendamento_str, '%Y-%m-%d').date()
+                except ValueError: 
+                     st.warning(f"Formato inválido para Agendamento '{new_agendamento_str}'. Mantendo valor atual.")
+                     new_agendamento_date = current_agendamento_date # Mantém o antigo em caso de erro
 
-            # Compara Etapas Concluídas 
-            new_etapas = db_updates_raw.get('etapas_concluidas') # string separada por vírgula ou None
-            current_etapas_set = set(e.strip() for e in (current_etapas or "").split(',') if e.strip())
-            new_etapas_set = set(e.strip() for e in (new_etapas or "").split(',') if e.strip())
-            
+            # Compara os objetos date (ou None)
+            if new_agendamento_date != current_agendamento_date:
+                # Formata com segurança para o log
+                data_antiga_str = current_agendamento_date.strftime('%d/%m/%Y') if isinstance(current_agendamento_date, date) else "N/A"
+                data_nova_str = new_agendamento_date.strftime('%d/%m/%Y') if isinstance(new_agendamento_date, date) else "N/A"
+                
+                # Log apenas se a representação textual for diferente
+                if data_antiga_str != data_nova_str:
+                    log_entries.append(f"Em {hoje_str} por {usuario_logado}: Agendamento de '{data_antiga_str}' para '{data_nova_str}'.")
+            # --- FIM DA COMPARAÇÃO DE AGENDAMENTO ---
+
+            # Compara Etapas Concluídas (igual antes)
+            new_etapas = db_updates_raw.get('etapas_concluidas'); current_etapas_set = set(e.strip() for e in (current_etapas or "").split(',') if e.strip()); new_etapas_set = set(e.strip() for e in (new_etapas or "").split(',') if e.strip())
             if new_etapas_set != current_etapas_set:
-                 concluidas = new_etapas_set - current_etapas_set
-                 desmarcadas = current_etapas_set - new_etapas_set
+                 concluidas = new_etapas_set - current_etapas_set; desmarcadas = current_etapas_set - new_etapas_set
                  if concluidas: log_entries.append(f"Em {hoje_str} por {usuario_logado}: Etapa(s) concluída(s): {', '.join(sorted(list(concluidas)))}.")
                  if desmarcadas: log_entries.append(f"Em {hoje_str} por {usuario_logado}: Etapa(s) desmarcada(s): {', '.join(sorted(list(desmarcadas)))}.")
             
-            # --- Fim da Geração do Log ---
-
-            # Monta o log final
-            log_final = current_log
-            if log_entries:
-                log_final += ("\n" if current_log else "") + "\n".join(log_entries)
-            
-            # Adiciona o log atualizado ao dicionário de updates
-            # Usa a chave normalizada 'log_agendamento'
+            # Monta log final e adiciona aos updates
+            log_final = current_log; 
+            if log_entries: log_final += ("\n" if current_log else "") + "\n".join(log_entries)
             db_updates_raw['log_agendamento'] = log_final if log_final else None 
 
-            # Prepara a query SQL (remove chaves None, EXCETO o log que pode ser None)
+            # Prepara query (igual antes)
             updates_final = {k: v for k, v in db_updates_raw.items() if v is not None or k == 'log_agendamento'}
-            
-            if not updates_final or all(k == 'log_agendamento' for k in updates_final): # Se SÓ o log mudou ou nada mudou
-                 if log_entries: # Se só o log mudou, salva apenas o log
+            if not updates_final or all(k == 'log_agendamento' for k in updates_final): 
+                 if log_entries: # Salva só o log se só ele mudou
                       query_log = sql.SQL("UPDATE projetos SET log_agendamento = {} WHERE id = {}").format(sql.Placeholder(), sql.Placeholder())
                       cur.execute(query_log, (updates_final['log_agendamento'], project_id))
-                 else:
-                      st.toast("Nenhuma alteração detectada para salvar.", icon="ℹ️")
-                 st.cache_data.clear(); return True # Sucesso
+                 else: st.toast("Nenhuma alteração detectada.", icon="ℹ️")
+                 st.cache_data.clear(); return True 
+            set_clause = sql.SQL(', ').join(sql.SQL("{} = {}").format(sql.Identifier(k), sql.Placeholder()) for k in updates_final.keys())
+            query = sql.SQL("UPDATE projetos SET {} WHERE id = {}").format(set_clause, sql.Placeholder())
+            vals = list(updates_final.values()) + [project_id]
+            cur.execute(query, vals)
 
+        st.cache_data.clear() 
+        return True
+        
+    except Exception as e:
+        st.toast(f"Erro ao atualizar projeto ID {project_id}: {e}", icon="🔥")
+        # print(f"Erro detalhado: {e}") # Descomente para debug no console/log do servidor
+        return False
             # Se outros campos mudaram:
             set_clause = sql.SQL(', ').join(
                 sql.SQL("{} = {}").format(sql.Identifier(k), sql.Placeholder()) for k in updates_final.keys()
@@ -601,5 +611,6 @@ def calcular_sla(projeto_row, df_sla):
         if dias_restantes < 0: return f"Atrasado {-dias_restantes}d", "#EF5350" # Vermelho
         elif dias_restantes == 0: return "SLA Vence Hoje!", "#FFA726" # Laranja
         else: return f"SLA: {dias_restantes}d restantes", "#66BB6F" # Verde
+
 
 
