@@ -519,7 +519,6 @@ def tela_projetos():
     
     # Carrega dados (agora inclui Prioridade por padrão)
     df = utils.carregar_projetos_db()
-    st.write("Colunas recebidas em tela_projetos:", df.columns.tolist() if not df.empty else "DataFrame Vazio") # DEBUG
     df_sla = utils.carregar_config_db("sla") 
     df_etapas_config = utils.carregar_config_db("etapas_evolucao") 
     if df.empty: st.info("Nenhum projeto cadastrado ainda."); return
@@ -868,6 +867,7 @@ if __name__ == "__main__":
     # Adicionado para criar tabelas se não existirem (importante para novas instalações)
     utils.criar_tabelas_iniciais() 
     main()
+
 
 
 
