@@ -318,14 +318,16 @@ def tela_boas_vindas():
     st.session_state.tela_principal = True
     st.rerun()
 
-# --- FUNÇÃO TELA_CADASTRO_PROJETO ---
+# --- FUNÇÃO TELA_CADASTRO_PROJETO (Indentação Revisada) ---
 def tela_cadastro_projeto():
 
-    # Bloco de Confirmação (igual antes)
+    # --- Bloco de Confirmação ---
     if st.session_state.get("confirmar_duplicado_backlog", False):
         id_existente = st.session_state.get("id_projeto_backlog_existente")
         dados_pendentes = st.session_state.get("dados_novo_projeto_pendente", {})
+        
         st.warning(f"⚠️ **Atenção:** Já existe um projeto similar (mesma Agência e Projeto) no backlog com ID {id_existente}, ainda sem agendamento. O que deseja fazer?", icon="⚠️")
+        
         col1_conf, col2_conf = st.columns(2)
         with col1_conf:
             if st.button(f"🔄 Atualizar Projeto Existente (ID: {id_existente})", use_container_width=True):
@@ -335,22 +337,42 @@ def tela_cadastro_projeto():
                 if "Agendamento" in dados_atualizar: del dados_atualizar["Agendamento"]
                 if "agendamento" in dados_atualizar: del dados_atualizar["agendamento"]
                 if utils.atualizar_projeto_db(id_existente, dados_atualizar):
-                    st.success(f"Projeto ID {id_existente} atualizado!"); st.session_state.confirmar_duplicado_backlog = False; st.session_state.pop("id_projeto_backlog_existente", None); st.session_state.pop("dados_novo_projeto_pendente", None); st.session_state.tela_cadastro_proj = False; time.sleep(1); st.rerun()
+                    st.success(f"Projeto ID {id_existente} atualizado!")
+                    st.session_state.confirmar_duplicado_backlog = False
+                    st.session_state.pop("id_projeto_backlog_existente", None)
+                    st.session_state.pop("dados_novo_projeto_pendente", None)
+                    st.session_state.tela_cadastro_proj = False
+                    time.sleep(1); st.rerun()
+
         with col2_conf:
             if st.button("➕ Criar Novo Projeto Mesmo Assim", use_container_width=True, type="primary"):
                 dados_adicionar = {"Status": "NÃO INICIADA", "Data de Abertura": date.today(), "Analista": st.session_state.get('usuario', 'N/A'),}
                 dados_adicionar.update(dados_pendentes) 
                 if utils.adicionar_projeto_db(dados_adicionar):
-                    novo_projeto_nome = dados_adicionar.get("Projeto", "Novo Projeto"); st.success(f"Novo projeto '{novo_projeto_nome}' criado!")
-                    st.session_state.confirmar_duplicado_backlog = False; st.session_state.pop("id_projeto_backlog_existente", None); st.session_state.pop("dados_novo_projeto_pendente", None); st.session_state.tela_cadastro_proj = False; time.sleep(1); st.rerun()
+                    novo_projeto_nome = dados_adicionar.get("Projeto", "Novo Projeto")
+                    st.success(f"Novo projeto '{novo_projeto_nome}' criado!")
+                    st.session_state.confirmar_duplicado_backlog = False
+                    st.session_state.pop("id_projeto_backlog_existente", None)
+                    st.session_state.pop("dados_novo_projeto_pendente", None)
+                    st.session_state.tela_cadastro_proj = False
+                    time.sleep(1); st.rerun()
+        
         st.divider()
         if st.button("Cancelar Cadastro"):
-             st.session_state.confirmar_duplicado_backlog = False; st.session_state.pop("id_projeto_backlog_existente", None); st.session_state.pop("dados_novo_projeto_pendente", None); st.rerun()
+             st.session_state.confirmar_duplicado_backlog = False
+             st.session_state.pop("id_projeto_backlog_existente", None)
+             st.session_state.pop("dados_novo_projeto_pendente", None)
+             st.rerun()
 
-    # Formulário de Cadastro
-    else:
+    # --- Formulário de Cadastro ---
+    # Este 'else' está pareado com o 'if' do 'confirmar_duplicado_backlog'
+    else: 
         if st.button("⬅️ Voltar para Projetos"):
-            st.session_state.tela_cadastro_proj = False; st.session_state.pop("confirmar_duplicado_backlog", None); st.session_state.pop("id_projeto_backlog_existente", None); st.session_state.pop("dados_novo_projeto_pendente", None); st.rerun()
+            st.session_state.tela_cadastro_proj = False
+            st.session_state.pop("confirmar_duplicado_backlog", None)
+            st.session_state.pop("id_projeto_backlog_existente", None)
+            st.session_state.pop("dados_novo_projeto_pendente", None)
+            st.rerun()
             
         st.subheader("Cadastrar Novo Projeto")
         
@@ -392,36 +414,24 @@ def tela_cadastro_projeto():
                  projeto_existente = df_backlog[(df_backlog["Agência"].astype(str).str.lower() == nova_agencia.lower()) & (df_backlog["Projeto"].astype(str).str.lower() == novo_projeto_nome.lower())]
 
             if not projeto_existente.empty:
-                # Duplicado Encontrado -> APENAS define flags
+                # Duplicado Encontrado -> Define flags (SEM RERUN AQUI)
                 id_existente = projeto_existente.iloc[0]['ID'] 
                 st.session_state.dados_novo_projeto_pendente = respostas_customizadas
                 st.session_state.id_projeto_backlog_existente = id_existente
                 st.session_state.confirmar_duplicado_backlog = True
-                # --- st.rerun() REMOVIDO DAQUI --- 
-                # O script continuará até o fim, e o rerun implícito do Streamlit 
-                # fará com que o bloco de confirmação seja exibido na próxima execução.
+                # Rerun implícito ao final do script
             
-            else:
+            # Este 'else' está pareado com o 'if not projeto_existente.empty:'
+            else: 
                 # Sem Duplicados -> Salva e Reroda
                 dados_adicionar = {"Status": "NÃO INICIADA", "Data de Abertura": date.today(), "Analista": st.session_state.get('usuario', 'N/A'),}
                 dados_adicionar.update(respostas_customizadas) 
                 if utils.adicionar_projeto_db(dados_adicionar):
                     st.success(f"Projeto '{novo_projeto_nome}' cadastrado com prioridade {prioridade_selecionada}!")
                     st.session_state["tela_cadastro_proj"] = False 
-                    time.sleep(1) # Pausa para ver msg
+                    time.sleep(1) 
                     st.rerun() # Rerun aqui para voltar à lista principal
-                    
-    # --- Exibe o Formulário de Cadastro (SE não estiver na tela de confirmação) ---
-            else:
-                if st.button("⬅️ Voltar para Projetos"):
-                    st.session_state.tela_cadastro_proj = False
-                    # Limpa flags ao voltar
-                    st.session_state.pop("confirmar_duplicado_backlog", None)
-                    st.session_state.pop("id_projeto_backlog_existente", None)
-                    st.session_state.pop("dados_novo_projeto_pendente", None)
-                    st.rerun()
-            
-        st.subheader("Cadastrar Novo Projeto")
+                    st.subheader("Cadastrar Novo Projeto")
         
         # --- Carrega Listas (igual à sua versão) ---
         perguntas_customizadas = utils.carregar_config_db("perguntas") 
@@ -857,6 +867,7 @@ if __name__ == "__main__":
     # Adicionado para criar tabelas se não existirem (importante para novas instalações)
     utils.criar_tabelas_iniciais() 
     main()
+
 
 
 
