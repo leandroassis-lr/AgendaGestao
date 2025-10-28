@@ -318,70 +318,39 @@ def tela_boas_vindas():
     st.session_state.tela_principal = True
     st.rerun()
 
-# --- FUNÇÃO TELA_CADASTRO_PROJETO (Versão Final com Selectbox + Verificação Backlog + Prioridade) ---
+# --- FUNÇÃO TELA_CADASTRO_PROJETO ---
 def tela_cadastro_projeto():
 
-    # --- Bloco de Confirmação (Exibido SE duplicado encontrado) ---
+    # Bloco de Confirmação (igual antes)
     if st.session_state.get("confirmar_duplicado_backlog", False):
         id_existente = st.session_state.get("id_projeto_backlog_existente")
         dados_pendentes = st.session_state.get("dados_novo_projeto_pendente", {})
-        
         st.warning(f"⚠️ **Atenção:** Já existe um projeto similar (mesma Agência e Projeto) no backlog com ID {id_existente}, ainda sem agendamento. O que deseja fazer?", icon="⚠️")
-        
         col1_conf, col2_conf = st.columns(2)
         with col1_conf:
             if st.button(f"🔄 Atualizar Projeto Existente (ID: {id_existente})", use_container_width=True):
-                # Prepara dados para atualização (pega dados pendentes)
-                dados_atualizar = {}
-                dados_atualizar.update(dados_pendentes) # Inclui a Prioridade que foi salva
-                
-                # Garante dados padrão e remove campos indesejados
+                dados_atualizar = {}; dados_atualizar.update(dados_pendentes) 
                 if "Analista" not in dados_atualizar: dados_atualizar["Analista"] = st.session_state.get('usuario', 'N/A')
                 if "Status" in dados_atualizar: del dados_atualizar["Status"] 
                 if "Agendamento" in dados_atualizar: del dados_atualizar["Agendamento"]
                 if "agendamento" in dados_atualizar: del dados_atualizar["agendamento"]
-
                 if utils.atualizar_projeto_db(id_existente, dados_atualizar):
-                    st.success(f"Projeto ID {id_existente} atualizado no backlog!")
-                    # Limpa flags e volta
-                    st.session_state.confirmar_duplicado_backlog = False
-                    st.session_state.pop("id_projeto_backlog_existente", None)
-                    st.session_state.pop("dados_novo_projeto_pendente", None)
-                    st.session_state.tela_cadastro_proj = False
-                    time.sleep(1); st.rerun()
-
+                    st.success(f"Projeto ID {id_existente} atualizado!"); st.session_state.confirmar_duplicado_backlog = False; st.session_state.pop("id_projeto_backlog_existente", None); st.session_state.pop("dados_novo_projeto_pendente", None); st.session_state.tela_cadastro_proj = False; time.sleep(1); st.rerun()
         with col2_conf:
             if st.button("➕ Criar Novo Projeto Mesmo Assim", use_container_width=True, type="primary"):
-                # Prepara dados para adição (inclui campos padrão)
                 dados_adicionar = {"Status": "NÃO INICIADA", "Data de Abertura": date.today(), "Analista": st.session_state.get('usuario', 'N/A'),}
-                dados_adicionar.update(dados_pendentes) # Inclui Prioridade e outros dados do form
-
+                dados_adicionar.update(dados_pendentes) 
                 if utils.adicionar_projeto_db(dados_adicionar):
-                    novo_projeto_nome = dados_adicionar.get("Projeto", "Novo Projeto") 
-                    st.success(f"Novo projeto '{novo_projeto_nome}' criado!")
-                    # Limpa flags e volta
-                    st.session_state.confirmar_duplicado_backlog = False
-                    st.session_state.pop("id_projeto_backlog_existente", None)
-                    st.session_state.pop("dados_novo_projeto_pendente", None)
-                    st.session_state.tela_cadastro_proj = False
-                    time.sleep(1); st.rerun()
-        
+                    novo_projeto_nome = dados_adicionar.get("Projeto", "Novo Projeto"); st.success(f"Novo projeto '{novo_projeto_nome}' criado!")
+                    st.session_state.confirmar_duplicado_backlog = False; st.session_state.pop("id_projeto_backlog_existente", None); st.session_state.pop("dados_novo_projeto_pendente", None); st.session_state.tela_cadastro_proj = False; time.sleep(1); st.rerun()
         st.divider()
         if st.button("Cancelar Cadastro"):
-             st.session_state.confirmar_duplicado_backlog = False
-             st.session_state.pop("id_projeto_backlog_existente", None)
-             st.session_state.pop("dados_novo_projeto_pendente", None)
-             st.rerun()
+             st.session_state.confirmar_duplicado_backlog = False; st.session_state.pop("id_projeto_backlog_existente", None); st.session_state.pop("dados_novo_projeto_pendente", None); st.rerun()
 
-    # --- Exibe o Formulário de Cadastro (SE não estiver na tela de confirmação) ---
+    # Formulário de Cadastro
     else:
         if st.button("⬅️ Voltar para Projetos"):
-            st.session_state.tela_cadastro_proj = False
-            # Limpa flags ao voltar
-            st.session_state.pop("confirmar_duplicado_backlog", None)
-            st.session_state.pop("id_projeto_backlog_existente", None)
-            st.session_state.pop("dados_novo_projeto_pendente", None)
-            st.rerun()
+            st.session_state.tela_cadastro_proj = False; st.session_state.pop("confirmar_duplicado_backlog", None); st.session_state.pop("id_projeto_backlog_existente", None); st.session_state.pop("dados_novo_projeto_pendente", None); st.rerun()
             
         st.subheader("Cadastrar Novo Projeto")
         
@@ -390,78 +359,57 @@ def tela_cadastro_projeto():
         agencias_cfg = utils.carregar_config_db("agencias"); agencia_options = ["N/A"] + (agencias_cfg.iloc[:, 0].tolist() if not agencias_cfg.empty and len(agencias_cfg.columns) > 0 else [])
         tecnicos_cfg = utils.carregar_config_db("tecnicos"); tecnico_options = ["N/A"] + (tecnicos_cfg.iloc[:, 0].tolist() if not tecnicos_cfg.empty and len(tecnicos_cfg.columns) > 0 else [])
         projetos_cfg = utils.carregar_config_db("projetos_nomes"); projeto_options = ["N/A"] + (projetos_cfg.iloc[:, 0].tolist() if not projetos_cfg.empty and len(projetos_cfg.columns) > 0 else [])
-        
-        if perguntas_customizadas.empty or 'Pergunta' not in perguntas_customizadas.columns:
-            st.info("🚨 Nenhuma pergunta customizada configurada."); return
+        if perguntas_customizadas.empty or 'Pergunta' not in perguntas_customizadas.columns: st.info("🚨 Nenhuma pergunta customizada configurada."); return
 
-        # --- Formulário (COM PRIORIDADE ADICIONADA) ---
         with st.form("form_cadastro_projeto"):
             respostas_customizadas = {}
-            prioridade_selecionada = "Média" # Padrão
-            
-            # --- Adiciona campo Prioridade ANTES do loop ---
-            prioridade_selecionada = st.selectbox(
-                "Prioridade", 
-                options=["Baixa", "Média", "Alta"], 
-                index=1, # Default = Média
-                key="nova_prioridade_cadastro"
-            )
-            st.divider() # Separa a prioridade
-
-            # Loop das perguntas customizadas (igual antes)
+            prioridade_selecionada = st.selectbox("Prioridade", options=["Baixa", "Média", "Alta"], index=1, key="nova_prioridade_cadastro")
+            st.divider() 
             for index, row in perguntas_customizadas.iterrows():
                 pergunta = row['Pergunta']; tipo = row.get('Tipo (texto, numero, data)', 'texto'); key = utils.clean_key(pergunta)
                 pergunta_norm = pergunta.lower().strip() 
-                if pergunta_norm == 'agência':
-                    respostas_customizadas[pergunta] = st.selectbox(pergunta, options=agencia_options, key=f"custom_{key}", help="Selecione a agência.")
-                elif pergunta_norm == 'técnico':
-                    respostas_customizadas[pergunta] = st.selectbox(pergunta, options=tecnico_options, key=f"custom_{key}", help="Selecione o técnico.")
-                elif pergunta_norm == 'projeto' or pergunta_norm == 'nome do projeto':
-                    respostas_customizadas[pergunta] = st.selectbox(pergunta, options=projeto_options, key=f"custom_{key}", help="Selecione o projeto.")
+                if pergunta_norm == 'agência': respostas_customizadas[pergunta] = st.selectbox(pergunta, options=agencia_options, key=f"custom_{key}", help="Selecione a agência.")
+                elif pergunta_norm == 'técnico': respostas_customizadas[pergunta] = st.selectbox(pergunta, options=tecnico_options, key=f"custom_{key}", help="Selecione o técnico.")
+                elif pergunta_norm == 'projeto' or pergunta_norm == 'nome do projeto': respostas_customizadas[pergunta] = st.selectbox(pergunta, options=projeto_options, key=f"custom_{key}", help="Selecione o projeto.")
                 elif tipo == 'data': respostas_customizadas[pergunta] = st.date_input(pergunta, value=None, key=f"custom_{key}", format="DD/MM/YYYY")
                 elif tipo == 'numero': respostas_customizadas[pergunta] = st.number_input(pergunta, key=f"custom_{key}", step=1)
                 else: respostas_customizadas[pergunta] = st.text_input(pergunta, key=f"custom_{key}")
-            
             btn_cadastrar = st.form_submit_button("Cadastrar Projeto")
         
-        # --- Lógica ao Submeter (INCLUI PRIORIDADE) ---
+        # Lógica ao Submeter
         if btn_cadastrar:
-            # Pega Agência e Projeto
             projeto_nome_key = next((p for p in respostas_customizadas if p.lower().strip() in ['nome do projeto', 'projeto']), None)
             agencia_key = next((p for p in respostas_customizadas if p.lower().strip() == 'agência'), None)
             novo_projeto_nome = respostas_customizadas.get(projeto_nome_key) if projeto_nome_key else "N/A"
             nova_agencia = respostas_customizadas.get(agencia_key) if agencia_key else "N/A"
-            
-            # Validação básica
-            if (not projeto_nome_key or novo_projeto_nome == "N/A") or (not agencia_key or nova_agencia == "N/A"):
-                 st.error("ERRO: 'Projeto' e 'Agência' são campos obrigatórios."); st.stop() 
-
-            # --- ADICIONA PRIORIDADE AOS DADOS DO FORM ---
+            if (not projeto_nome_key or novo_projeto_nome == "N/A") or (not agencia_key or nova_agencia == "N/A"): st.error("ERRO: 'Projeto' e 'Agência' são campos obrigatórios."); st.stop() 
             respostas_customizadas["Prioridade"] = prioridade_selecionada 
-            # --------------------------------------------
-
-            # Verificação de Duplicidade no Backlog
+            
+            # Verificação de Duplicidade
             df_backlog = utils.carregar_projetos_sem_agendamento_db() 
             projeto_existente = pd.DataFrame() 
             if not df_backlog.empty and "Agência" in df_backlog.columns and "Projeto" in df_backlog.columns:
                  projeto_existente = df_backlog[(df_backlog["Agência"].astype(str).str.lower() == nova_agencia.lower()) & (df_backlog["Projeto"].astype(str).str.lower() == novo_projeto_nome.lower())]
 
             if not projeto_existente.empty:
-                # Duplicado Encontrado -> Guarda dados (incluindo prioridade) e reroda
+                # Duplicado Encontrado -> APENAS define flags
                 id_existente = projeto_existente.iloc[0]['ID'] 
-                st.session_state.dados_novo_projeto_pendente = respostas_customizadas # Salva TUDO
+                st.session_state.dados_novo_projeto_pendente = respostas_customizadas
                 st.session_state.id_projeto_backlog_existente = id_existente
                 st.session_state.confirmar_duplicado_backlog = True
-                st.rerun() 
+                # --- st.rerun() REMOVIDO DAQUI --- 
+                # O script continuará até o fim, e o rerun implícito do Streamlit 
+                # fará com que o bloco de confirmação seja exibido na próxima execução.
             
             else:
-                # Sem Duplicados -> Salva diretamente (dados já incluem prioridade)
+                # Sem Duplicados -> Salva e Reroda
                 dados_adicionar = {"Status": "NÃO INICIADA", "Data de Abertura": date.today(), "Analista": st.session_state.get('usuario', 'N/A'),}
-                dados_adicionar.update(respostas_customizadas) # Adiciona TUDO do form
+                dados_adicionar.update(respostas_customizadas) 
                 if utils.adicionar_projeto_db(dados_adicionar):
                     st.success(f"Projeto '{novo_projeto_nome}' cadastrado com prioridade {prioridade_selecionada}!")
                     st.session_state["tela_cadastro_proj"] = False 
-                    time.sleep(1); st.rerun()
+                    time.sleep(1) # Pausa para ver msg
+                    st.rerun() # Rerun aqui para voltar à lista principal
                     
     # --- Exibe o Formulário de Cadastro (SE não estiver na tela de confirmação) ---
             else:
@@ -909,6 +857,7 @@ if __name__ == "__main__":
     # Adicionado para criar tabelas se não existirem (importante para novas instalações)
     utils.criar_tabelas_iniciais() 
     main()
+
 
 
 
