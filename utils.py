@@ -101,16 +101,15 @@ def _normalize_and_sanitize(data_dict: dict):
         normalized[k] = sanitized_value
     return normalized
 
-# (carregar_projetos_db - ATUALIZADO para incluir Prioridade)
+# ---- (carregar_projetos_db ----- #
 
 @st.cache_data(ttl=60) 
 def carregar_projetos_db():
     if not conn: return pd.DataFrame()
     try:
-        # --- VERIFIQUE 1: A query SQL seleciona 'prioridade'? ---
-        df = pd.read_sql_query("SELECT *, prioridade FROM projetos ORDER BY id DESC", conn) 
-        # --------------------------------------------------------
-        
+       
+        df = pd.read_sql_query("SELECT * FROM projetos ORDER BY id DESC", conn) 
+           
         rename_map = {
             'id': 'ID', 'descricao': 'Descrição', 'agencia': 'Agência', 'tecnico': 'Técnico',
             'observacao': 'Observação', 'data_abertura': 'Data de Abertura',
@@ -118,38 +117,32 @@ def carregar_projetos_db():
             'etapas_concluidas': 'Etapas Concluidas', 'projeto': 'Projeto', 'status': 'Status',
             'agendamento': 'Agendamento', 'demanda': 'Demanda', 'analista': 'Analista', 
             'gestor': 'Gestor', 
-            # --- VERIFIQUE 2: O rename_map inclui 'Prioridade'? ---
-            'prioridade': 'Prioridade' 
-            # ----------------------------------------------------
+            'prioridade': 'Prioridade' # Renomeia a coluna que veio do SELECT *
         }
-        df = df.rename(columns=rename_map)
+        # Renomeia APENAS se a coluna existir (evita erro se 'prioridade' não estiver no BD)
+        df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
 
-        # Trata Agendamento_str (como antes)
         if 'Agendamento' in df.columns:
             df['Agendamento_str'] = pd.to_datetime(df['Agendamento'], errors='coerce').dt.strftime('%d/%m/%Y').fillna("N/A")
             
-        # --- VERIFIQUE 3: Este bloco está presente? (O que você me mostrou) ---
+        # Define 'Prioridade' padrão (continua igual)
         if 'Prioridade' in df.columns:
-             # Substitui None, NaN e strings vazias por 'Média'
              df['Prioridade'] = df['Prioridade'].fillna('Média').replace(['', None], 'Média')
         else:
-             # Cria a coluna se ela não existir no DataFrame (fallback)
              df['Prioridade'] = 'Média' 
-        # -------------------------------------------------------------------
 
         return df
     except Exception as e:
-        # Se der erro aqui (ex: coluna 'prioridade' não existe no BD), pode causar o KeyError depois
         st.error(f"Erro ao carregar projetos do DB: {e}") 
-        return pd.DataFrame() # Retorna DF vazio em caso de erro
+        return pd.DataFrame()
         
 # (carregar_projetos_sem_agendamento_db - ATUALIZADO para incluir Prioridade)
 @st.cache_data(ttl=60)
 def carregar_projetos_sem_agendamento_db():
     if not conn: return pd.DataFrame()
     try:
-        # --- Seleciona a coluna 'prioridade' ---
-        df = pd.read_sql_query("SELECT *, prioridade FROM projetos WHERE agendamento IS NULL ORDER BY id DESC", conn)
+       
+        df = pd.read_sql_query("SELECT * FROM projetos WHERE agendamento IS NULL ORDER BY id DESC", conn)
         
         rename_map = {
             'id': 'ID', 'descricao': 'Descrição', 'agencia': 'Agência', 'tecnico': 'Técnico',
@@ -158,15 +151,15 @@ def carregar_projetos_sem_agendamento_db():
             'etapas_concluidas': 'Etapas Concluidas', 'projeto': 'Projeto', 'status': 'Status',
             'agendamento': 'Agendamento', 'demanda': 'Demanda', 'analista': 'Analista', 
             'gestor': 'Gestor', 
-            'prioridade': 'Prioridade' # --- Renomeia ---
+            'prioridade': 'Prioridade' 
         }
-        df = df.rename(columns=rename_map)
+        # Renomeia APENAS se a coluna existir
+        df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
         
-        # Agendamento_str (como antes)
         if 'Agendamento' in df.columns:
             df['Agendamento_str'] = pd.to_datetime(df['Agendamento'], errors='coerce').dt.strftime('%d/%m/%Y').fillna("N/A")
 
-        # --- Define 'Prioridade' padrão ---
+        # Define 'Prioridade' padrão (continua igual)
         if 'Prioridade' in df.columns:
              df['Prioridade'] = df['Prioridade'].fillna('Média').replace(['', None], 'Média')
         else:
@@ -608,4 +601,5 @@ def calcular_sla(projeto_row, df_sla):
         if dias_restantes < 0: return f"Atrasado {-dias_restantes}d", "#EF5350" # Vermelho
         elif dias_restantes == 0: return "SLA Vence Hoje!", "#FFA726" # Laranja
         else: return f"SLA: {dias_restantes}d restantes", "#66BB6F" # Verde
+
 
