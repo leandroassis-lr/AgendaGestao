@@ -464,14 +464,14 @@ def tela_cadastro_projeto():
                     time.sleep(1); st.rerun()
                     
     # --- Exibe o Formulário de Cadastro (SE não estiver na tela de confirmação) ---
-    else:
-        if st.button("⬅️ Voltar para Projetos"):
-            st.session_state.tela_cadastro_proj = False
-            # Limpa flags ao voltar
-            st.session_state.pop("confirmar_duplicado_backlog", None)
-            st.session_state.pop("id_projeto_backlog_existente", None)
-            st.session_state.pop("dados_novo_projeto_pendente", None)
-            st.rerun()
+            else:
+                if st.button("⬅️ Voltar para Projetos"):
+                    st.session_state.tela_cadastro_proj = False
+                    # Limpa flags ao voltar
+                    st.session_state.pop("confirmar_duplicado_backlog", None)
+                    st.session_state.pop("id_projeto_backlog_existente", None)
+                    st.session_state.pop("dados_novo_projeto_pendente", None)
+                    st.rerun()
             
         st.subheader("Cadastrar Novo Projeto")
         
@@ -909,6 +909,7 @@ if __name__ == "__main__":
     # Adicionado para criar tabelas se não existirem (importante para novas instalações)
     utils.criar_tabelas_iniciais() 
     main()
+
 
 
 
