@@ -65,16 +65,24 @@ def criar_tabelas_iniciais():
 
 # --- Funções do Banco (Projetos) ---
 
-# (_normalize_and_sanitize - Com tratamento Prioridade 'N/A')
 def _normalize_and_sanitize(data_dict: dict):
     normalized = {}
     for key, value in data_dict.items():
-        k = str(key).lower()
-        k = re.sub(r'[çÇ]', 'c', k); k = re.sub(r'[êé]', 'e', k)
-        k = re.sub(r'[ãá]', 'a', k); k = re.sub(r'[í]', 'i', k)
-        k = re.sub(r'[ó]', 'o', k); k = re.sub(r'[ú]', 'u', k)
-        k = k.replace(' de ', ' ').replace(' ', '_')
-        
+        k = str(key).lower() # Converte para minúsculo
+
+        # --- CORREÇÃO: Substituição de acentos aprimorada ---
+        k = re.sub(r'[áàâãä]', 'a', k)
+        k = re.sub(r'[éèêë]', 'e', k)
+        k = re.sub(r'[íìîï]', 'i', k)
+        k = re.sub(r'[óòôõö]', 'o', k)
+        k = re.sub(r'[úùûü]', 'u', k)
+        k = re.sub(r'[ç]', 'c', k)
+
+        # Remove caracteres especiais restantes (exceto underline) e substitui espaços
+        k = re.sub(r'[^a-z0-9_ ]', '', k) # Remove outros caracteres não alfanuméricos
+        k = k.replace(' de ', ' ').replace(' ', '_') # Substitui espaços por underline
+
+        # Sanitiza o valor (como antes)
         if value is None or (isinstance(value, float) and pd.isna(value)):
             sanitized_value = None
         elif isinstance(value, (datetime, date)):
@@ -83,6 +91,7 @@ def _normalize_and_sanitize(data_dict: dict):
              sanitized_value = None 
         else:
             sanitized_value = str(value)
+            
         normalized[k] = sanitized_value
     return normalized
 
@@ -447,3 +456,4 @@ def calcular_sla(projeto_row, df_sla):
         if dias_restantes < 0: return f"Atrasado {-dias_restantes}d", "#EF5350" 
         elif dias_restantes == 0: return "SLA Vence Hoje!", "#FFA726" 
         else: return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
