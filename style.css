@@ -282,11 +282,27 @@ h4 {
     border-top: 1px solid var(--primary-light);
     padding-top: 15px;
 
-    /* Divisor Dourado (igual ao .project-card) */
-    margin-top: var(--divider-margin-top); 
-    border-top: var(--divider-border); 
-    padding-top: 15px; /* Um pouco menos de padding no kanban */
+  /* --- AJUSTE VISUAL DO DIVISOR ENTRE AS DEMANDAS --- */
+.project-card {
+  background: var(--card-bg);
+  border-radius: var(--std-radius);
+  box-shadow: var(--std-shadow);
+  border: 1px solid var(--gray-border);
+  transition: box-shadow 0.3s ease-in-out;
+
+  /* --- Espaçamento e aparência --- */
+  margin-top: 1px;              /* Espaço entre cada card */
+  padding-top: 1px;             /* Espaço entre a linha e o texto */
+  padding-bottom: 2px;          /* Espaço inferior */
+  border-top: 3px solid var(--accent-color);
+  background: linear-gradient(to bottom, #F8FBFA 0%, #FFFFFF 100%);
 }
+
+/* Deixa o segundo card e seguintes com um espaçamento menor */
+.project-card + .project-card {
+  margin-top: 10px;
+}
+
 .kanban-card:hover {
     box-shadow: var(--std-shadow); 
 }
@@ -348,4 +364,5 @@ h4 {
     font-size: 1.6rem;
   }
 }
+
 
