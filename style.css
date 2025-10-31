@@ -271,6 +271,59 @@ h4 {
   padding-top: 2rem;  
 }
 
+/* --- KANBAN VIEW --- */
+
+/* Estiliza as colunas do Kanban */
+/* (O seletor pode precisar de ajuste, mas este é o padrão) */
+[data-testid="stHorizontalBlock"] .st-emotion-cache-1f0d5x6 { 
+    background-color: #F0F2F5; /* Um cinza bem claro para o fundo da coluna */
+    border-radius: var(--std-radius);
+    padding: 10px 12px;
+    margin: 0 5px; /* Espaçamento entre as colunas */
+    height: 100%; /* Garante que as colunas tentem ter a mesma altura */
+}
+
+/* Título da coluna (ex: "EM ANDAMENTO (5)") */
+.kanban-column-header {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: var(--primary-dark); /* Verde escuro */
+    padding: 5px 8px;
+    border-bottom: 3px solid var(--primary-light); /* Linha verde clara */
+    margin-bottom: 12px;
+}
+
+/* Novo estilo de card, menor e vertical */
+.kanban-card {
+    background: var(--card-bg); /* Branco */
+    border-radius: 8px; 
+    padding: 12px 15px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    border: 1px solid var(--gray-border);
+    margin-bottom: 10px; /* Espaço entre os cards */
+    transition: box-shadow 0.2s ease;
+}
+.kanban-card:hover {
+    box-shadow: var(--std-shadow); /* Sombra padrão ao passar o mouse */
+}
+
+/* Título do card (Nome do Projeto) */
+.kanban-card strong { 
+    font-size: 0.95rem;
+    color: var(--gray-darkest);
+    display: block;
+    margin-bottom: 5px;
+}
+
+/* Detalhes do card (Agência, Analista, SLA) */
+.kanban-card small { 
+    font-size: 0.85rem;
+    color: #555;
+    display: block;
+    line-height: 1.4;
+    margin-bottom: 3px;
+}
+
 
 
 
