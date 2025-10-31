@@ -324,6 +324,26 @@ h4 {
     margin-bottom: 3px;
 }
 
+* --- Botão para abrir o Modal/Dialog no Kanban --- *
+
+div[data-testid="stVerticalBlock"] .stButton button[kind="secondary"] {
+    background-color: var(--card-bg); /* Fundo branco */
+    color: var(--gray-darkest);
+    border: 1px solid var(--gray-border);
+    font-size: 0.9rem;
+    padding: 5px 12px;
+    border-radius: 6px;
+    margin-top: -5px; /* Puxa o botão para perto do card */
+    margin-bottom: 10px; /* Espaço antes do próximo card */
+    width: 100%;
+}
+div[data-testid="stVerticalBlock"] .stButton button[kind="secondary"]:hover {
+    background-color: var(--primary-light); /* Fundo verde claro no hover */
+    color: var(--primary-dark);
+    border: 1px solid var(--primary-color);
+}
+
+
 
 
 
