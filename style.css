@@ -259,7 +259,6 @@ h4 {
     border-bottom: 3px solid var(--primary-light); 
     margin-bottom: 12px;
 }
-
 /* --- DIVISOR TELA KANBAN (Fino e Dourado) --- */
 .kanban-card {
     background: var(--card-bg);
@@ -271,10 +270,11 @@ h4 {
     border-top: none; 
     margin-bottom: 0px; 
 
-    /* Divisor Dourado (igual ao .project-card) */
-    margin-top: var(--divider-margin-top); 
-    border-top: var(--divider-border); 
-    padding-top: 15px; /* Um pouco menos de padding no kanban */
+    /* --- ESTILO DIVISOR "FILETE" --- */
+    margin-top: 12px;                          /* Espaço acima do card */
+    border-top: 1px solid var(--accent-color); /* Linha fina (1px) e Dourada */
+    padding-top: 15px;                         /* Espaço entre a linha e o texto */
+
 }
 .kanban-card:hover {
     box-shadow: var(--std-shadow); 
@@ -331,4 +331,5 @@ h4 {
   }
   .section-title-center { font-size: 1.6rem; }
 }
+
 
