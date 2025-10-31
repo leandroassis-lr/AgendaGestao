@@ -348,14 +348,13 @@ div[data-testid="stVerticalBlock"] .stButton button[kind="secondary"]:hover {
 
 [data-testid="stPopoverContent"] {
     /* Define uma largura ideal para o formulário */
-    width: 700px; 
+    width: 1000px; 
     
     /* Garante que não quebre em telas pequenas */
-    max-width: 90vw; 
+    max-width: 120vw; 
 }
 
 /* --- KANBAN - Adiciona scroll vertical nas colunas --- */
-/* (Esta regra também não estava funcionando) */
 .kanban-card-container {
     /* Define uma altura máxima para a lista de cards */
     max-height: 80vh; /* 80% da altura da tela */
@@ -367,3 +366,4 @@ div[data-testid="stVerticalBlock"] .stButton button[kind="secondary"]:hover {
     padding-right: 8px; 
     padding-left: 2px;
 }
+
