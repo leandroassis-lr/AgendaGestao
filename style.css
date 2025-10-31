@@ -279,8 +279,8 @@ h4 {
     background-color: #F0F2F5; /* Um cinza bem claro para o fundo da coluna */
     border-radius: var(--std-radius);
     padding: 10px 12px;
-    margin: 0 5px; /* Espaçamento entre as colunas */
-    height: 100%; /* Garante que as colunas tentem ter a mesma altura */
+    margin: 0 5px;
+    height: 100%;
 }
 
 /* Título da coluna (ex: "EM ANDAMENTO (5)") */
@@ -344,8 +344,9 @@ div[data-testid="stVerticalBlock"] .stButton button[kind="secondary"]:hover {
 }
 
 [data-testid="stPopoverContent"] {
-    min-width: 1000vw;  /* 50% da largura da tela (Viewport Width) */
-    max-width: 120px; /* Um limite máximo para telas muito grandes */
+    /* Define uma largura ideal para o formulário */
+    width: 700px; 
+    
+    /* Garante que não quebre em telas pequenas */
+    max-width: 90vw; 
 }
-
-
