@@ -117,7 +117,7 @@ h4 {
    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
-/* --- DIVISOR TELA DE LISTA (Fino e Dourado) --- */
+/* --- DIVISOR DE PROJETOS (CABEÇALHO) --- */
 .project-card {
   background: var(--card-bg);
   border-radius: var(--std-radius);
@@ -125,22 +125,48 @@ h4 {
   box-shadow: var(--std-shadow);
   border: 1px solid var(--gray-border);
   transition: box-shadow 0.3s ease-in-out;
-  border-top: none; /* Remove borda original */
+  border-top: none;
+  margin-top: 10px;
+  border-top: 1px solid var(--primary-light);
+  padding-top: 15px;
+}
 
-  /* Divisor Dourado */
-  margin-top: var(--divider-margin-top); 
-  border-top: var(--divider-border); 
-  padding-top: var(--divider-padding-top); 
+/* --- AJUSTE VISUAL DO DIVISOR ENTRE AS DEMANDAS --- */
+.project-card {
+  background: var(--card-bg);
+  border-radius: var(--std-radius);
+  box-shadow: var(--std-shadow);
+  border: 1px solid var(--gray-border);
+  transition: box-shadow 0.3s ease-in-out;
+
+  /* --- Espaçamento e aparência --- */
+  margin-top: 1px;              /* Espaço entre cada card */
+  padding-top: 1px;             /* Espaço entre a linha e o texto */
+  padding-bottom: 2px;          /* Espaço inferior */
+  border-top: 3px solid var(--accent-color);
+  background: linear-gradient(to bottom, #F8FBFA 0%, #FFFFFF 100%);
 }
+
+/* Deixa o segundo card e seguintes com um espaçamento menor */
+.project-card + .project-card {
+  margin-top: 10px;
+}
+
+/* Efeito hover */
 .project-card:hover {
-   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
 }
+
+/* --- HOVERS E TÍTULOS DOS CARDS --- */
+.project-card:hover, .metric-card:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
 .project-card h5 {
   font-weight: 700;
   color: var(--gray-darkest);
   font-size: 1.15rem;
 }
-
 
 /* --- BOTÕES PRINCIPAIS (Fora da Sidebar) --- */
 .stButton > button {
@@ -218,9 +244,6 @@ h4 {
     margin-right: auto;
     padding-top: 2rem; 
 }
-/* (Isso pode precisar ser removido ou ajustado se o Kanban ficar muito espremido) */
-/* Se o Kanban ficar ruim, comente o .main .block-container acima */
-
 
 /* * ======================================================
  * KANBAN VIEW
@@ -253,8 +276,11 @@ h4 {
     box-shadow: 0 2px 4px rgba(0,0,0,0.08);
     border: 1px solid var(--gray-border);
     transition: box-shadow 0.2s ease;
-    border-top: none; /* Remove borda original */
+    border-top: none;
     margin-bottom: 0px; /* Espaço agora é controlado pelo popover */
+    margin-top: 10px;
+    border-top: 1px solid var(--primary-light);
+    padding-top: 15px;
 
     /* Divisor Dourado (igual ao .project-card) */
     margin-top: var(--divider-margin-top); 
@@ -296,16 +322,11 @@ h4 {
     border: 1px solid var(--primary-color);
 }
 
-
 /* --- Tamanho do Pop-up (Popover) --- */
 [data-testid="stPopoverContent"] {
-    width: 700px; 
+    width: 900px; 
     max-width: 90vw; 
 }
-
-/* (O CSS .kanban-card-container de scroll foi REMOVIDO 
-   pois estamos usando paginação) */
-
 
 /* --- RESPONSIVIDADE (Mantida) --- */
 @media (max-width: 900px) {
@@ -327,3 +348,4 @@ h4 {
     font-size: 1.6rem;
   }
 }
+
