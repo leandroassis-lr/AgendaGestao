@@ -790,7 +790,7 @@ def tela_kanban():
 
     # --- 5. Loop das colunas ---
 
-    for i, col_nome in enumerate(colunas_kanban):
+for i, col_nome in enumerate(colunas_kanban):
     with cols_streamlit[i]:
         df_col = dfs_colunas[col_nome]
         count = len(df_col)
@@ -960,6 +960,7 @@ def main():
 if __name__ == "__main__":
     utils.criar_tabelas_iniciais() 
     main()
+
 
 
 
