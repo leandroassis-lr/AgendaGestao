@@ -713,71 +713,108 @@ def tela_projetos():
 # ---- Tela Kanban ---- #
 
 def tela_kanban():
+    # --- Helpers locais (seguro caso não existam globalmente) ---
+    def _to_date_safe(val):
+        if pd.isna(val) or val is None:
+            return None
+        if isinstance(val, (pd.Timestamp, pd.DatetimeIndex)):
+            return pd.to_datetime(val).date()
+        if isinstance(val, (pd.Timestamp,)):
+            return val.date()
+        try:
+            return pd.to_datetime(val).date()
+        except Exception:
+            return None
+
     st.markdown("<div class='section-title-center'>VISÃO KANBAN</div>", unsafe_allow_html=True)
 
     # --- 1. Carregar todos os dados ---
     df = utils.carregar_projetos_db()
-    df['Agendamento'] = pd.to_datetime(df['Agendamento'], errors='coerce') 
-    df_sla = utils.carregar_config_db("sla") 
-    df_etapas_config = utils.carregar_config_db("etapas_evolucao") 
-    
-    # Carrega opções para os formulários de edição
-    agencias_cfg = utils.carregar_config_db("agencias"); agencia_options = ["N/A"] + (agencias_cfg.iloc[:, 0].tolist() if not agencias_cfg.empty and len(agencias_cfg.columns) > 0 else [])
-    tecnicos_cfg = utils.carregar_config_db("tecnicos"); tecnico_options = ["N/A"] + (tecnicos_cfg.iloc[:, 0].tolist() if not tecnicos_cfg.empty and len(tecnicos_cfg.columns) > 0 else [])
-    status_options_df = utils.carregar_config_db("status"); status_options = status_options_df.iloc[:, 0].tolist() if not status_options_df.empty and len(status_options_df.columns) > 0 else []
-    projetos_cfg = utils.carregar_config_db("projetos_nomes"); projeto_options = ["N/A"] + (projetos_cfg.iloc[:, 0].tolist() if not projetos_cfg.empty and len(projetos_cfg.columns) > 0 else [])
+    # garante que exista coluna Agendamento e Status, evita KeyError
+    if 'Agendamento' in df.columns:
+        df['Agendamento'] = pd.to_datetime(df['Agendamento'], errors='coerce')
+    else:
+        df['Agendamento'] = pd.NaT
+    if 'Status' not in df.columns:
+        df['Status'] = ""
 
-    hoje = date.today(); limite_lembrete = hoje + timedelta(days=3)
+    df_sla = utils.carregar_config_db("sla")
+    df_etapas_config = utils.carregar_config_db("etapas_evolucao")
+
+    # Carrega opções para os formulários de edição (com fallback seguro)
+    agencias_cfg = utils.carregar_config_db("agencias")
+    agencia_options = ["N/A"] + (agencias_cfg.iloc[:, 0].tolist() if not agencias_cfg.empty and len(agencias_cfg.columns) > 0 else [])
+    tecnicos_cfg = utils.carregar_config_db("tecnicos")
+    tecnico_options = ["N/A"] + (tecnicos_cfg.iloc[:, 0].tolist() if not tecnicos_cfg.empty and len(tecnicos_cfg.columns) > 0 else [])
+    status_options_df = utils.carregar_config_db("status")
+    status_options = status_options_df.iloc[:, 0].tolist() if not status_options_df.empty and len(status_options_df.columns) > 0 else []
+    projetos_cfg = utils.carregar_config_db("projetos_nomes")
+    projeto_options = ["N/A"] + (projetos_cfg.iloc[:, 0].tolist() if not projetos_cfg.empty and len(projetos_cfg.columns) > 0 else [])
+
+    hoje = date.today()
+    limite_lembrete = hoje + timedelta(days=3)
 
     # --- 2. Filtros ---
     st.markdown("#### 🔍 Filtros e Busca")
     termo_busca = st.text_input("Buscar", key="kanban_termo_busca", placeholder="Digite um termo para buscar...")
-    filtros = {} 
-    col1, col2, col3, col4 = st.columns(4); campos_linha_1 = {"Status": col1, "Analista": col2, "Agência": col3, "Gestor": col4}
+    filtros = {}
+    col1, col2, col3, col4 = st.columns(4)
+    campos_linha_1 = {"Status": col1, "Analista": col2, "Agência": col3, "Gestor": col4}
     for campo, col in campos_linha_1.items():
         with col:
-            if campo in df.columns: 
-                unique_values = df[campo].dropna().astype(str).unique(); opcoes = ["Todos"] + sorted(unique_values.tolist())
+            if campo in df.columns:
+                unique_values = df[campo].dropna().astype(str).unique()
+                opcoes = ["Todos"] + sorted(unique_values.tolist())
                 filtros[campo] = st.selectbox(f"{campo}", opcoes, key=f"kanban_filtro_{utils.clean_key(campo)}")
-            else: st.empty()
+            else:
+                filtros[campo] = "Todos"
     col5, col6, col7, col8 = st.columns(4)
     with col5:
-        campo = "Projeto"; 
+        campo = "Projeto"
         if campo in df.columns:
-            unique_values = df[campo].dropna().astype(str).unique(); opcoes = ["Todos"] + sorted(unique_values.tolist())
+            unique_values = df[campo].dropna().astype(str).unique()
+            opcoes = ["Todos"] + sorted(unique_values.tolist())
             filtros[campo] = st.selectbox(f"{campo}", opcoes, key=f"kanban_filtro_{utils.clean_key(campo)}")
-        else: st.empty()
+        else:
+            filtros[campo] = "Todos"
     with col6:
-        campo = "Técnico"; 
+        campo = "Técnico"
         if campo in df.columns:
-            unique_values = df[campo].dropna().astype(str).unique(); opcoes = ["Todos"] + sorted(unique_values.tolist())
+            unique_values = df[campo].dropna().astype(str).unique()
+            opcoes = ["Todos"] + sorted(unique_values.tolist())
             filtros[campo] = st.selectbox(f"{campo}", opcoes, key=f"kanban_filtro_{utils.clean_key(campo)}")
-        else: st.empty()
-    with col7: data_inicio = st.date_input("Agendamento (de)", value=None, key="kanban_data_inicio_filtro", format="DD/MM/YYYY")
-    with col8: data_fim = st.date_input("Agendamento (até)", value=None, key="kanban_data_fim_filtro", format="DD/MM/YYYY")
+        else:
+            filtros[campo] = "Todos"
+    with col7:
+        data_inicio = st.date_input("Agendamento (de)", value=None, key="kanban_data_inicio_filtro", format="DD/MM/YYYY")
+    with col8:
+        data_fim = st.date_input("Agendamento (até)", value=None, key="kanban_data_fim_filtro", format="DD/MM/YYYY")
 
     st.divider()
 
-    # --- 3. Aplicar Filtros ---
+    # --- 3. Aplicar filtros ---
     df_filtrado = df.copy()
     for campo, valor in filtros.items():
-        if valor != "Todos" and campo in df_filtrado.columns:
+        if valor is not None and valor != "Todos" and campo in df_filtrado.columns:
             df_filtrado = df_filtrado[df_filtrado[campo].astype(str) == str(valor)]
-    if data_inicio:
+    if 'Agendamento' in df_filtrado.columns and data_inicio:
         df_filtrado = df_filtrado[(df_filtrado['Agendamento'].notna()) & (df_filtrado['Agendamento'] >= pd.to_datetime(data_inicio))]
-    if data_fim:
+    if 'Agendamento' in df_filtrado.columns and data_fim:
         df_filtrado = df_filtrado[(df_filtrado['Agendamento'].notna()) & (df_filtrado['Agendamento'] <= pd.to_datetime(data_fim).replace(hour=23, minute=59, second=59))]
     if termo_busca:
         termo = termo_busca.lower().strip()
         mask_busca = df_filtrado.apply(lambda row: row.astype(str).str.lower().str.contains(termo, na=False, regex=False).any(), axis=1)
         df_filtrado = df_filtrado[mask_busca]
 
-    # --- 4. Definir as colunas do Kanban ---
-    colunas_kanban = ["BACKLOG", "PENDÊNCIA", "NÃO INICIADA", "EM ANDAMENTO"] 
-    f_backlog = (df_filtrado['Agendamento'].isna()) & (~df_filtrado['Status'].str.lower().isin(['finalizado', 'cancelado', 'finalizada']))
-    f_pendencia = (df_filtrado['Agendamento'].notna()) & (df_filtrado['Status'].str.lower().str.contains('pendencia'))
-    f_nao_iniciada = (df_filtrado['Agendamento'].notna()) & (df_filtrado['Status'].str.lower().str.contains('não iniciad')) & (~f_pendencia)
-    f_em_andamento = (df_filtrado['Agendamento'].notna()) & (df_filtrado['Status'].str.lower().isin(['em andamento', 'pausado'])) & (~f_pendencia) & (~f_nao_iniciada)
+    # --- 4. Definir colunas Kanban (garante variável definida) ---
+    colunas_kanban = ["BACKLOG", "PENDÊNCIA", "NÃO INICIADA", "EM ANDAMENTO"]
+
+    # --- Filtros por coluna (manter lógica robusta) ---
+    status_lower = df_filtrado['Status'].astype(str).str.lower() if 'Status' in df_filtrado.columns else pd.Series([""] * len(df_filtrado))
+    f_backlog = (df_filtrado['Agendamento'].isna()) & (~status_lower.isin(['finalizado', 'cancelado', 'finalizada']))
+    f_pendencia = (df_filtrado['Agendamento'].notna()) & (status_lower.str.contains('pendencia', na=False))
+    f_nao_iniciada = (df_filtrado['Agendamento'].notna()) & (status_lower.str.contains('não iniciad', na=False)) & (~f_pendencia)
+    f_em_andamento = (df_filtrado['Agendamento'].notna()) & (status_lower.isin(['em andamento', 'pausado'])) & (~f_pendencia) & (~f_nao_iniciada)
 
     dfs_colunas = {
         "BACKLOG": df_filtrado[f_backlog],
@@ -786,102 +823,183 @@ def tela_kanban():
         "EM ANDAMENTO": df_filtrado[f_em_andamento]
     }
 
+    # --- Colunas Streamlit (layout) ---
     cols_streamlit = st.columns(len(colunas_kanban))
 
-    # --- 5. Loop das colunas ---
+    # --- 5. Loop das colunas (com paginação no rodapé) ---
+    for i, col_nome in enumerate(colunas_kanban):
+        with cols_streamlit[i]:
+            df_col = dfs_colunas.get(col_nome, pd.DataFrame()).reset_index(drop=True)
+            total_itens = len(df_col)
+            st.markdown(f"<div class='kanban-column-header'>{col_nome.upper()} ({total_itens})</div>", unsafe_allow_html=True)
 
-for i, col_nome in enumerate(colunas_kanban):
-    with cols_streamlit[i]:
-        df_col = dfs_colunas[col_nome]
-        count = len(df_col)
-        st.markdown(f"<div class='kanban-column-header'>{col_nome.upper()} ({count})</div>", unsafe_allow_html=True)
+            # Paginação
+            itens_por_pagina = 15
+            if total_itens == 0:
+                total_paginas = 1
+            else:
+                total_paginas = (total_itens - 1) // itens_por_pagina + 1
 
-        # --- Paginação por coluna ---
-        itens_por_pagina = 8  # Quantidade de cards por página
-        total_itens = len(df_col)
-        total_paginas = (total_itens - 1) // itens_por_pagina + 1
+            key_pagina = f"pagina_kanban_{col_nome}"
+            if key_pagina not in st.session_state:
+                st.session_state[key_pagina] = 1
+            # garante página válida
+            if st.session_state[key_pagina] < 1:
+                st.session_state[key_pagina] = 1
+            if st.session_state[key_pagina] > total_paginas:
+                st.session_state[key_pagina] = total_paginas
 
-        key_pagina = f"pagina_kanban_{col_nome}"
-        if key_pagina not in st.session_state:
-            st.session_state[key_pagina] = 1
+            inicio = (st.session_state[key_pagina] - 1) * itens_por_pagina
+            fim = min(inicio + itens_por_pagina, total_itens)
+            df_col_paginado = df_col.iloc[inicio:fim]
 
-        # --- Seleciona os itens da página atual ---
-        inicio = (st.session_state[key_pagina] - 1) * itens_por_pagina
-        fim = inicio + itens_por_pagina
-        df_col_paginado = df_col.iloc[inicio:fim]
+            # Renderiza cards
+            with st.container():
+                st.markdown("<div class='kanban-card-container'>", unsafe_allow_html=True)
 
-        with st.container():
-            st.markdown("<div class='kanban-card-container'>", unsafe_allow_html=True)
+                for _, row in df_col_paginado.iterrows():
+                    project_id = row.get("ID", None)
+                    status_raw = str(row.get('Status', 'N/A'))
+                    projeto_nome_text = html.escape(str(row.get("Projeto", "N/A")))
+                    agencia_text = html.escape(str(row.get("Agência", "N/A")))
+                    analista_text = html.escape(str(row.get('Analista', 'N/A')))
+                    sla_text, sla_color_real = utils.calcular_sla(row, df_sla) if hasattr(utils, "calcular_sla") else ("", "black")
 
-            # --- Loop e desenha os cards da página atual ---
-            for _, row in df_col_paginado.iterrows():
-                project_id = row['ID']
-                status_raw = row.get('Status', 'N/A')
-                projeto_nome_text = html.escape(str(row.get("Projeto", "N/A")))
-                agencia_text = html.escape(str(row.get("Agência", "N/A")))
-                analista_text = html.escape(str(row.get('Analista', 'N/A')))
-                sla_text, sla_color_real = utils.calcular_sla(row, df_sla)
+                    # lembretes
+                    texto_lembrete_html = ""
+                    icone_lembrete = ""
+                    try:
+                        agendamento_date_obj = row.get('Agendamento').date() if pd.notna(row.get('Agendamento')) else None
+                    except Exception:
+                        agendamento_date_obj = None
 
-                # --- Lembretes visuais ---
-                texto_lembrete_html = ""
-                icone_lembrete = ""
-                agendamento_date_obj = row.get('Agendamento').date() if pd.notna(row.get('Agendamento')) else None
+                    if not ('finalizad' in status_raw.lower() or 'cancelad' in status_raw.lower()):
+                        if agendamento_date_obj == hoje:
+                            icone_lembrete = "❗"; cor_lembrete = "red"; texto_lembrete_html = f"<small style='color:{cor_lembrete}; font-weight:bold;'>PARA HOJE</small>"
+                        elif agendamento_date_obj and hoje < agendamento_date_obj <= limite_lembrete:
+                            icone_lembrete = "⚠️"; cor_lembrete = "orange"; texto_lembrete_html = f"<small style='color:{cor_lembrete}; font-weight:bold;'>Próximo</small>"
 
-                if not ('finalizad' in status_raw.lower() or 'cancelad' in status_raw.lower()):
-                    if agendamento_date_obj == hoje:
-                        icone_lembrete = "❗"; cor_lembrete = "red"; texto_lembrete_html = f"<small style='color:{cor_lembrete}; font-weight:bold;'>PARA HOJE</small>"
-                    elif agendamento_date_obj and hoje < agendamento_date_obj <= limite_lembrete:
-                        icone_lembrete = "⚠️"; cor_lembrete = "orange"; texto_lembrete_html = f"<small style='color:{cor_lembrete}; font-weight:bold;'>Próximo</small>"
+                    st.markdown("<div class='kanban-card'>", unsafe_allow_html=True)
+                    st.markdown(f"<strong>{icone_lembrete} {projeto_nome_text.upper()} (ID: {project_id})</strong>", unsafe_allow_html=True)
+                    st.markdown(f"<small>Agência: {agencia_text}</small>", unsafe_allow_html=True)
+                    st.markdown(f"<small>Analista: {analista_text}</small>", unsafe_allow_html=True)
+                    st.markdown(f"<small style='color:{sla_color_real}; font-weight:bold;'>{sla_text}</small>", unsafe_allow_html=True)
+                    st.markdown(texto_lembrete_html, unsafe_allow_html=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
 
-                # --- Card visual ---
-                st.markdown(f"<div class='kanban-card'>", unsafe_allow_html=True)
-                st.markdown(f"<strong>{icone_lembrete} {projeto_nome_text.upper()} (ID: {project_id})</strong>", unsafe_allow_html=True)
-                st.markdown(f"<small>Agência: {agencia_text}</small>", unsafe_allow_html=True)
-                st.markdown(f"<small>Analista: {analista_text}</small>", unsafe_allow_html=True)
-                st.markdown(f"<small style='color:{sla_color_real}; font-weight:bold;'>{sla_text}</small>", unsafe_allow_html=True)
-                st.markdown(texto_lembrete_html, unsafe_allow_html=True)
+                    # Formulário com submit (mantive campos essenciais; adapte conforme seu original)
+                    with st.expander(f"✏️ Editar {projeto_nome_text} (ID: {project_id})"):
+                        with st.form(key=f"form_edicao_{project_id}"):
+                            # Campos editáveis principais
+                            status_selecionavel = row.get('Status', '')
+                            novo_status = st.selectbox("Status", options=status_options if status_options else [status_selecionavel], index=0 if not status_options else (status_options.index(status_selecionavel) if status_selecionavel in status_options else 0))
+                            abertura_default = _to_date_safe(row.get('Data de Abertura'))
+                            nova_abertura = st.date_input("Data Abertura", value=abertura_default, format="DD/MM/YYYY")
+                            agendamento_default = _to_date_safe(row.get('Agendamento'))
+                            novo_agendamento = st.date_input("Agendamento", value=agendamento_default, format="DD/MM/YYYY")
+                            final_default = _to_date_safe(row.get('Data de Finalização'))
+                            nova_final = st.date_input("Data de Finalização", value=final_default, format="DD/MM/YYYY")
+
+                            projeto_val = row.get('Projeto', '')
+                            idx_proj = projeto_options.index(projeto_val) if projeto_val in projeto_options else 0
+                            novo_projeto = st.selectbox("Projeto", options=projeto_options, index=idx_proj)
+
+                            novo_analista = st.text_input("Analista", value=row.get('Analista', ''))
+                            novo_gestor = st.text_input("Gestor", value=row.get('Gestor', ''))
+
+                            prioridade_atual = row.get('Prioridade', 'Média')
+                            prioridades = ["Baixa", "Média", "Alta"]
+                            idx_prio = prioridades.index(prioridade_atual) if prioridade_atual in prioridades else 1
+                            nova_prioridade = st.selectbox("Prioridade", options=prioridades, index=idx_prio)
+
+                            agencia_val = row.get('Agência', '')
+                            idx_ag = agencia_options.index(agencia_val) if agencia_val in agencia_options else 0
+                            nova_agencia = st.selectbox("Agência", options=agencia_options, index=idx_ag)
+
+                            tecnico_val = row.get('Técnico', '')
+                            idx_tec = tecnico_options.index(tecnico_val) if tecnico_val in tecnico_options else 0
+                            novo_tecnico = st.selectbox("Técnico", options=tecnico_options, index=idx_tec)
+
+                            nova_demanda = st.text_input("Demanda", value=row.get('Demanda', ''))
+                            nova_descricao = st.text_area("Descrição", value=row.get('Descrição', ''), height=120)
+                            nova_observacao = st.text_area("Observação / Pendências", value=row.get('Observação', ''), height=80)
+
+                            # Etapas (se existirem para este projeto)
+                            etapas_do_projeto = pd.DataFrame()
+                            if ("Nome do Projeto" in df_etapas_config.columns) and ("Etapa" in df_etapas_config.columns):
+                                etapas_do_projeto = df_etapas_config[df_etapas_config["Nome do Projeto"] == row.get("Projeto", "")]
+                            etapas_concluidas_str = row.get("Etapas Concluidas", "") if pd.notna(row.get("Etapas Concluidas")) else ""
+                            etapas_concluidas_lista = [e.strip() for e in etapas_concluidas_str.split(',') if e.strip()] if etapas_concluidas_str else []
+                            novas_etapas_marcadas = []
+                            if not etapas_do_projeto.empty:
+                                todas_etapas_possiveis = etapas_do_projeto["Etapa"].astype(str).str.strip().tolist()
+                                for etapa in todas_etapas_possiveis:
+                                    marcado = st.checkbox(etapa, value=(etapa in etapas_concluidas_lista), key=f"chk_kanban_{project_id}_{utils.clean_key(etapa)}")
+                                    if marcado:
+                                        novas_etapas_marcadas.append(etapa)
+
+                            # Botões do formulário (submit)
+                            submitted = st.form_submit_button("💾 Salvar")
+                            if submitted:
+                                # validações mínimas (ex.: projeto e agência)
+                                if novo_projeto == "N/A":
+                                    st.error("ERRO: 'Projeto' é obrigatório.", icon="🚨")
+                                elif nova_agencia == "N/A":
+                                    st.error("ERRO: 'Agência' é obrigatória.", icon="🚨")
+                                else:
+                                    # Prepara updates (conforme seu formato original)
+                                    updates = {
+                                        "Status": novo_status,
+                                        "Agendamento": pd.to_datetime(novo_agendamento) if novo_agendamento else None,
+                                        "Analista": novo_analista,
+                                        "Agência": nova_agencia if nova_agencia != "N/A" else None,
+                                        "Gestor": novo_gestor,
+                                        "Projeto": novo_projeto,
+                                        "Técnico": novo_tecnico if novo_tecnico != "N/A" else None,
+                                        "Demanda": nova_demanda,
+                                        "Descrição": nova_descricao,
+                                        "Observação": nova_observacao,
+                                        "Data de Abertura": pd.to_datetime(nova_abertura) if nova_abertura else None,
+                                        "Data de Finalização": pd.to_datetime(nova_final) if nova_final else None,
+                                        "Etapas Concluidas": ",".join(novas_etapas_marcadas) if novas_etapas_marcadas else None,
+                                        "Prioridade": nova_prioridade
+                                    }
+                                    try:
+                                        ok = utils.atualizar_projeto_db(project_id, updates)
+                                        if ok:
+                                            st.success(f"Projeto '{novo_projeto}' (ID: {project_id}) atualizado.")
+                                            time.sleep(0.7)
+                                            st.experimental_rerun()
+                                        else:
+                                            st.error("Falha ao salvar. Verifique os logs do servidor.", icon="⚠️")
+                                    except Exception as e:
+                                        st.error(f"Erro ao salvar: {e}", icon="⚠️")
+
                 st.markdown("</div>", unsafe_allow_html=True)
 
-                # --- Formulário de edição do projeto (com botão de submit corrigido) ---
-                with st.expander(f"✏️ Editar {projeto_nome_text}"):
-                    with st.form(key=f"form_edicao_{project_id}"):
-                        st.text_input("Projeto", value=row.get("Projeto", ""))
-                        st.text_input("Agência", value=row.get("Agência", ""))
-                        st.text_input("Analista", value=row.get("Analista", ""))
-                        st.text_input("Status", value=row.get("Status", ""))
-                        st.date_input("Agendamento", value=row.get("Agendamento") if pd.notna(row.get("Agendamento")) else None)
-                        # ✅ Botão obrigatório para enviar o formulário
-                        submitted = st.form_submit_button("Salvar alterações")
-                        if submitted:
-                            st.success("Alterações salvas com sucesso!")
-                            st.rerun()
+            # Rodapé da coluna: contador + navegação
+            st.markdown("<hr style='margin-top:10px; margin-bottom:6px;'>", unsafe_allow_html=True)
 
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        # --- Contador e botões de navegação no final da coluna ---
-        st.markdown("---")
-        exibindo_ate = min(fim, total_itens)
-        st.markdown(
-            f"<div style='text-align:center; font-size:0.9rem;'>Exibindo {inicio + 1}–{exibindo_ate} de {total_itens} projetos</div>",
-            unsafe_allow_html=True
-        )
-
-        col_btn1, col_txt, col_btn2 = st.columns([1, 2, 1])
-        with col_btn1:
-            if st.button("⬅️", key=f"prev_{col_nome}", use_container_width=True):
-                if st.session_state[key_pagina] > 1:
-                    st.session_state[key_pagina] -= 1
-                    st.rerun()
-        with col_txt:
+            exibindo_desde = inicio + 1 if total_itens > 0 else 0
+            exibindo_ate = fim if total_itens > 0 else 0
             st.markdown(
-                f"<div style='text-align:center; font-size:0.9rem;'>Página {st.session_state[key_pagina]} de {total_paginas}</div>",
+                f"<div style='text-align:center; font-size:0.9rem; margin-bottom:6px;'>Exibindo {exibindo_desde}–{exibindo_ate} de {total_itens} projetos</div>",
                 unsafe_allow_html=True
             )
-        with col_btn2:
-            if st.button("➡️", key=f"next_{col_nome}", use_container_width=True):
-                if st.session_state[key_pagina] < total_paginas:
-                    st.session_state[key_pagina] += 1
-                    st.rerun()
+
+            col_btn1, col_txt, col_btn2 = st.columns([1, 2, 1])
+            with col_btn1:
+                if st.button("⬅️", key=f"prev_{col_nome}", use_container_width=True):
+                    if st.session_state[key_pagina] > 1:
+                        st.session_state[key_pagina] -= 1
+                        st.experimental_rerun()
+            with col_txt:
+                st.markdown(f"<div style='text-align:center; font-size:0.9rem;'>Página {st.session_state[key_pagina]} de {total_paginas}</div>", unsafe_allow_html=True)
+            with col_btn2:
+                if st.button("➡️", key=f"next_{col_nome}", use_container_width=True):
+                    if st.session_state[key_pagina] < total_paginas:
+                        st.session_state[key_pagina] += 1
+                        st.experimental_rerun()
                 
 # ----------------- FUNÇÃO MAIN ----------------- #
 
@@ -960,6 +1078,7 @@ def main():
 if __name__ == "__main__":
     utils.criar_tabelas_iniciais() 
     main()
+
 
 
 
