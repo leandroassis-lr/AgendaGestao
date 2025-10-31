@@ -271,9 +271,9 @@ h4 {
     margin-bottom: 0px; 
 
     /* --- ESTILO DIVISOR "FILETE" --- */
-    margin-top: 12px;                          /* Espaço acima do card */
-    border-top: 1px solid var(--accent-color); /* Linha fina (1px) e Dourada */
-    padding-top: 15px;                         /* Espaço entre a linha e o texto */
+    margin-top: 1px;                          /* Espaço acima do card */
+    border-top: 3px solid var(--accent-color); /* Linha fina (1px) e Dourada */
+    padding-top: 1px;                         /* Espaço entre a linha e o texto */
 
 }
 .kanban-card:hover {
@@ -331,5 +331,6 @@ h4 {
   }
   .section-title-center { font-size: 1.6rem; }
 }
+
 
 
