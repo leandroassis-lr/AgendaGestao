@@ -344,7 +344,8 @@ div[data-testid="stVerticalBlock"] .stButton button[kind="secondary"]:hover {
 }
 
 [data-testid="stPopoverContent"] {
-    min-width: 500vw;  /* 50% da largura da tela (Viewport Width) */
-    max-width: 90px; /* Um limite máximo para telas muito grandes */
+    min-width: 1000vw;  /* 50% da largura da tela (Viewport Width) */
+    max-width: 120px; /* Um limite máximo para telas muito grandes */
 }
+
 
