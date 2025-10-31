@@ -915,7 +915,7 @@ def tela_kanban():
                 with col_next:
                     if st.button(f"➡️", key=f"next_{page_key}", use_container_width=True, disabled=(st.session_state[page_key] >= total_pages_col - 1)):
                         st.session_state[page_key] += 1
-                        st.
+                        st.rerun()
                         
 # ----------------- FUNÇÃO MAIN ----------------- #
 
@@ -994,6 +994,7 @@ def main():
 if __name__ == "__main__":
     utils.criar_tabelas_iniciais() 
     main()
+
 
 
 
