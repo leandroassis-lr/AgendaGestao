@@ -324,8 +324,9 @@ h4 {
     margin-bottom: 3px;
 }
 
-* --- Botão para abrir o Modal/Dialog no Kanban --- *
-
+/* --- Botão para abrir o Modal/Dialog no Kanban --- */
+/* (Esta regra abaixo não é mais usada, pois trocamos para st.popover, 
+   mas o importante é que o comentário acima está corrigido) */
 div[data-testid="stVerticalBlock"] .stButton button[kind="secondary"] {
     background-color: var(--card-bg); /* Fundo branco */
     color: var(--gray-darkest);
@@ -333,15 +334,17 @@ div[data-testid="stVerticalBlock"] .stButton button[kind="secondary"] {
     font-size: 0.9rem;
     padding: 5px 12px;
     border-radius: 6px;
-    margin-top: -5px; /* Puxa o botão para perto do card */
-    margin-bottom: 10px; /* Espaço antes do próximo card */
+    margin-top: -5px; 
+    margin-bottom: 10px; 
     width: 100%;
 }
 div[data-testid="stVerticalBlock"] .stButton button[kind="secondary"]:hover {
-    background-color: var(--primary-light); /* Fundo verde claro no hover */
+    background-color: var(--primary-light); 
     color: var(--primary-dark);
     border: 1px solid var(--primary-color);
 }
+
+/* --- KANBAN - Ajusta o tamanho do Pop-up (Popover) --- */
 
 [data-testid="stPopoverContent"] {
     /* Define uma largura ideal para o formulário */
@@ -349,4 +352,18 @@ div[data-testid="stVerticalBlock"] .stButton button[kind="secondary"]:hover {
     
     /* Garante que não quebre em telas pequenas */
     max-width: 90vw; 
+}
+
+/* --- KANBAN - Adiciona scroll vertical nas colunas --- */
+/* (Esta regra também não estava funcionando) */
+.kanban-card-container {
+    /* Define uma altura máxima para a lista de cards */
+    max-height: 80vh; /* 80% da altura da tela */
+    
+    /* Adiciona a barra de rolagem QUANDO necessário */
+    overflow-y: auto; 
+    
+    /* Espaçamento para a barra de rolagem não cobrir os cards */
+    padding-right: 8px; 
+    padding-left: 2px;
 }
