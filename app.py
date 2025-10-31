@@ -721,7 +721,7 @@ def tela_kanban():
     df_sla = utils.carregar_config_db("sla") 
     df_etapas_config = utils.carregar_config_db("etapas_evolucao") 
     
-    # Carrega opções
+    # Carrega opções (para os popovers)
     agencias_cfg = utils.carregar_config_db("agencias"); agencia_options = ["N/A"] + (agencias_cfg.iloc[:, 0].tolist() if not agencias_cfg.empty and len(agencias_cfg.columns) > 0 else [])
     tecnicos_cfg = utils.carregar_config_db("tecnicos"); tecnico_options = ["N/A"] + (tecnicos_cfg.iloc[:, 0].tolist() if not tecnicos_cfg.empty and len(tecnicos_cfg.columns) > 0 else [])
     status_options_df = utils.carregar_config_db("status"); status_options = status_options_df.iloc[:, 0].tolist() if not status_options_df.empty and len(status_options_df.columns) > 0 else []
@@ -759,68 +759,69 @@ def tela_kanban():
 
     # --- 3. Aplicar Filtros ---
     df_filtrado = df.copy()
+    # (Lógica de filtragem, sem alterações)
     for campo, valor in filtros.items():
         if valor != "Todos" and campo in df_filtrado.columns: df_filtrado = df_filtrado[df_filtrado[campo].astype(str) == str(valor)]
     if data_inicio: df_filtrado = df_filtrado[(df_filtrado['Agendamento'].notna()) & (df_filtrado['Agendamento'] >= pd.to_datetime(data_inicio))]
     if data_fim: df_filtrado = df_filtrado[(df_filtrado['Agendamento'].notna()) & (df_filtrado['Agendamento'] <= pd.to_datetime(data_fim).replace(hour=23, minute=59, second=59))]
     if termo_busca:
-        termo = termo_busca.lower().strip()
-        mask_busca = df_filtrado.apply(lambda row: row.astype(str).str.lower().str.contains(termo, na=False, regex=False).any(), axis=1)
+        termo = termo_busca.lower().strip(); mask_busca = df_filtrado.apply(lambda row: row.astype(str).str.lower().str.contains(termo, na=False, regex=False).any(), axis=1)
         df_filtrado = df_filtrado[mask_busca]
 
-    # --- 4. Definir as colunas e filtros (LÓGICA CORRIGIDA) ---
+    # --- 4. Definir as colunas e filtros (Lógica de Status) ---
     colunas_kanban = ["BACKLOG", "PENDÊNCIA", "NÃO INICIADA", "EM ANDAMENTO"] 
     f_backlog = (df_filtrado['Agendamento'].isna()) & (~df_filtrado['Status'].str.lower().isin(['finalizado', 'cancelado', 'finalizada']))
     f_pendencia = (df_filtrado['Agendamento'].notna()) & (df_filtrado['Status'].str.lower().str.contains('pendencia'))
     f_nao_iniciada = (df_filtrado['Agendamento'].notna()) & (df_filtrado['Status'].str.lower().str.contains('não iniciad')) & (~f_pendencia)
     f_em_andamento = (df_filtrado['Agendamento'].notna()) & (df_filtrado['Status'].str.lower().isin(['em andamento', 'pausado'])) & (~f_pendencia) & (~f_nao_iniciada)
     dfs_colunas = {
-        "BACKLOG": df_filtrado[f_backlog].sort_values(by="Prioridade", key=lambda p: p.map({"Alta":1, "Média":2, "Baixa":3}).fillna(2)), # Ordena por prioridade
-        "PENDÊNCIA": df_filtrado[f_pendencia].sort_values(by="Agendamento", ascending=True, na_position='last'), # Ordena por data
-        "NÃO INICIADA": df_filtrado[f_nao_iniciada].sort_values(by="Agendamento", ascending=True, na_position='last'), # Ordena por data
-        "EM ANDAMENTO": df_filtrado[f_em_andamento].sort_values(by="Agendamento", ascending=True, na_position='last') # Ordena por data
+        "BACKLOG": df_filtrado[f_backlog].sort_values(by="Prioridade", key=lambda p: p.map({"Alta":1, "Média":2, "Baixa":3}).fillna(2)), 
+        "PENDÊNCIA": df_filtrado[f_pendencia].sort_values(by="Agendamento", ascending=True, na_position='last'), 
+        "NÃO INICIADA": df_filtrado[f_nao_iniciada].sort_values(by="Agendamento", ascending=True, na_position='last'), 
+        "EM ANDAMENTO": df_filtrado[f_em_andamento].sort_values(by="Agendamento", ascending=True, na_position='last') 
     }
 
+    # --- 5. LOOP 1: Desenhar os CARDS ---
     cols_streamlit = st.columns(len(colunas_kanban))
-
-    # --- 5. Loop por cada coluna ---
+    
+    # Dicionário para guardar dados da paginação para o próximo loop
+    pagination_details = {} 
+    
     for i, col_nome in enumerate(colunas_kanban):
         with cols_streamlit[i]:
             df_col = dfs_colunas[col_nome]
             count = len(df_col)
             st.markdown(f"<div class='kanban-column-header'>{col_nome.upper()} ({count})</div>", unsafe_allow_html=True)
 
-            # --- 6. ADICIONADO: Lógica de Paginação (do seu código) ---
+            # Lógica de Paginação (do seu código)
             itens_por_pagina = 15 # Como você pediu
             total_itens = len(df_col)
             total_paginas = (total_itens + itens_por_pagina - 1) // itens_por_pagina if total_itens > 0 else 1
-            
             key_pagina = f"pagina_kanban_{col_nome}"
-            if key_pagina not in st.session_state:
-                st.session_state[key_pagina] = 1
+            if key_pagina not in st.session_state: st.session_state[key_pagina] = 1
+            if st.session_state[key_pagina] > total_paginas: st.session_state[key_pagina] = total_paginas
+            if st.session_state[key_pagina] < 1: st.session_state[key_pagina] = 1
             
-            # Garante que a página atual é válida
-            if st.session_state[key_pagina] > total_paginas:
-                 st.session_state[key_pagina] = total_paginas
-            if st.session_state[key_pagina] < 1:
-                 st.session_state[key_pagina] = 1
-
-            # Slice dos itens da página atual
+            # Slice dos itens
             inicio = (st.session_state[key_pagina] - 1) * itens_por_pagina
             fim = inicio + itens_por_pagina
             df_col_paginado = df_col.iloc[inicio:fim] if not df_col.empty else pd.DataFrame()
-            # --- FIM LÓGICA DE PAGINAÇÃO ---
 
-            # --- 7. Renderização dos cards (sem o container de scroll) ---
-            
+            # Salva os detalhes para o Loop 2
+            pagination_details[col_nome] = {
+                "key": key_pagina,
+                "total_itens": total_itens,
+                "total_paginas": total_paginas,
+                "inicio": inicio,
+                "fim": fim
+            }
+
+            # Renderização dos cards
             if df_col_paginado.empty:
                 st.markdown("<div style='text-align:center; color:gray; font-size:0.85rem; padding: 10px;'>Nenhum projeto aqui</div>", unsafe_allow_html=True)
-                # (O 'st.write("")' para preencher espaço não é mais necessário se usarmos st.empty() para altura fixa)
-                # Vamos tentar sem ele primeiro.
-
+            
             for _, row in df_col_paginado.iterrows():
                 project_id = row['ID']
-                
                 status_raw = row.get('Status', 'N/A'); projeto_nome_text = html.escape(str(row.get("Projeto", "N/A"))) 
                 agencia_text = html.escape(str(row.get("Agência", "N/A"))); analista_text = html.escape(str(row.get('Analista', 'N/A')))
                 sla_text, sla_color_real = utils.calcular_sla(row, df_sla); texto_lembrete_html = ""; icone_lembrete = ""
@@ -839,12 +840,12 @@ def tela_kanban():
                 st.markdown(texto_lembrete_html, unsafe_allow_html=True)
                 st.markdown("</div>", unsafe_allow_html=True)
 
-                # --- 8. Lógica do st.popover (a nossa versão, que funciona) ---
+                # st.popover (com o formulário de edição)
                 with st.popover(f"Ver/Editar Detalhes 📝 (ID: {project_id})", use_container_width=True):
-                    
                     with st.form(f"form_edicao_card_kanban_{project_id}"): 
                         st.markdown(f"**Editando: {projeto_nome_text.upper()}**") 
-                        
+                        # (O código do formulário de edição permanece o MESMO)
+                        # ... (copie e cole o código 'with st.form(...)' da sua versão anterior aqui) ...
                         st.markdown("#### Evolução da Demanda")
                         etapas_do_projeto = df_etapas_config[df_etapas_config["Nome do Projeto"] == row.get("Projeto", "")] if "Nome do Projeto" in df_etapas_config.columns else pd.DataFrame()
                         etapas_concluidas_str = row.get("Etapas Concluidas", ""); etapas_concluidas_lista = []
@@ -858,14 +859,12 @@ def tela_kanban():
                                 marcado = st.checkbox(etapa, value=(etapa in etapas_concluidas_lista), key=f"chk_kanban_{project_id}_{utils.clean_key(etapa)}")
                                 if marcado: novas_etapas_marcadas.append(etapa)
                         else: st.caption("Nenhuma etapa de evolução configurada."); todas_etapas_possiveis = []; total_etapas = 0
-                        
                         st.markdown("#### Informações e Prazos")
                         c1,c2,c3,c4 = st.columns(4)
                         with c1: status_selecionaveis = status_options[:]; status_atual = row.get('Status'); idx_status = status_selecionaveis.index(status_atual) if status_atual in status_selecionaveis else 0; novo_status_selecionado = st.selectbox("Status", status_selecionaveis, index=idx_status, key=f"status_kanban_{project_id}")
                         with c2: abertura_default = _to_date_safe(row.get('Data de Abertura')); nova_data_abertura = st.date_input("Data Abertura", value=abertura_default, key=f"abertura_kanban_{project_id}", format="DD/MM/YYYY")
                         with c3: agendamento_default = _to_date_safe(row.get('Agendamento')); novo_agendamento = st.date_input("Agendamento", value=agendamento_default, key=f"agend_kanban_{project_id}", format="DD/MM/YYYY")
                         with c4: finalizacao_default = _to_date_safe(row.get('Data de Finalização')); nova_data_finalizacao = st.date_input("Data Finalização", value=finalizacao_default, key=f"final_kanban_{project_id}", format="DD/MM/YYYY")
-                        
                         st.markdown("#### Detalhes do Projeto")
                         c5,c6,c7, c_prio = st.columns(4) 
                         with c5: projeto_val = row.get('Projeto', ''); idx_proj = projeto_options.index(projeto_val) if projeto_val in projeto_options else 0; novo_projeto = st.selectbox("Projeto", options=projeto_options, index=idx_proj, key=f"proj_kanban_{project_id}")
@@ -878,19 +877,15 @@ def tela_kanban():
                         c8,c9 = st.columns(2)
                         with c8: agencia_val = row.get('Agência', ''); idx_ag = agencia_options.index(agencia_val) if agencia_val in agencia_options else 0; nova_agencia = st.selectbox("Agência", agencia_options, index=idx_ag, key=f"agencia_kanban_{project_id}")
                         with c9: tecnico_val = row.get('Técnico', ''); idx_tec = tecnico_options.index(tecnico_val) if tecnico_val in tecnico_options else 0; novo_tecnico = st.selectbox("Técnico", tecnico_options, index=idx_tec, key=f"tecnico_kanban_{project_id}")
-                        
                         nova_demanda = st.text_input("Demanda", value=row.get('Demanda', ''), key=f"demanda_kanban_{project_id}")
                         nova_descricao = st.text_area("Descrição", value=row.get('Descrição', ''), key=f"desc_kanban_{project_id}")
                         nova_observacao = st.text_area("Observação / Pendências", value=row.get('Observação', ''), key=f"obs_kanban_{project_id}")
                         log_agendamento_existente = row.get("Log Agendamento", "") if pd.notna(row.get("Log Agendamento")) else ""; st.text_area("Histórico de Alterações", value=log_agendamento_existente, height=100, disabled=True, key=f"log_kanban_{project_id}")
-                        
                         _, col_save, col_delete = st.columns([3, 1.5, 1]) 
                         with col_save: btn_salvar_card = st.form_submit_button("💾 Salvar", use_container_width=True)
                         with col_delete: btn_excluir_card = st.form_submit_button("🗑️ Excluir", use_container_width=True, type="primary")
-                        
                         if btn_excluir_card:
                             if utils.excluir_projeto_db(project_id): st.success(f"Projeto ID {project_id} excluído."); time.sleep(1); st.rerun() 
-                        
                         if btn_salvar_card:
                             status_final = novo_status_selecionado 
                             if novo_projeto == "N/A": st.error("ERRO: 'Projeto' é obrigatório.", icon="🚨"); st.stop()
@@ -902,14 +897,27 @@ def tela_kanban():
                             nova_data_abertura_date = _to_date_safe(nova_data_abertura); nova_data_finalizacao_date = _to_date_safe(nova_data_finalizacao); novo_agendamento_date = _to_date_safe(novo_agendamento)
                             updates = {"Status": status_final, "Agendamento": novo_agendamento_date, "Analista": novo_analista,"Agência": nova_agencia if nova_agencia != "N/A" else None, "Gestor": novo_gestor, "Projeto": novo_projeto, "Técnico": novo_tecnico if novo_tecnico != "N/A" else None, "Demanda": nova_demanda, "Descrição": nova_descricao, "Observação": nova_observacao, "Data de Abertura": nova_data_abertura_date, "Data de Finalização": nova_data_finalizacao_date, "Etapas Concluidas": ",".join(novas_etapas_marcadas) if novas_etapas_marcadas else None, "Prioridade": nova_prioridade }
                             if utils.atualizar_projeto_db(project_id, updates): st.success(f"Projeto '{novo_projeto}' (ID: {project_id}) atualizado."); time.sleep(1); st.rerun() 
+            
+            # --- Fim do Loop de Cards ---
+            # Adiciona um espaço vazio para preenchimento, para ajudar a alinhar
+            # A altura '1px' é apenas para ocupar o slot, o flex-grow do Streamlit fará o resto
+            st.markdown("<div style='flex-grow: 1; min-height: 1px;'></div>", unsafe_allow_html=True) 
 
-            # --- 9. ADICIONADO: Controles de Paginação (do seu código) ---
-            # (Adicionado no final do loop 'with cols_streamlit[i]')
-            
-            # Adiciona espaço em branco para alinhar os rodapés (opcional, mas ajuda)
-            # st.empty() # Isso pode ajudar a alinhar verticalmente
-            
-            st.markdown("<hr style='margin-top:5px; margin-bottom:8px;'>", unsafe_allow_html=True)
+    # --- 9. LOOP 2: Desenhar a PAGINAÇÃO (em novas colunas alinhadas) ---
+    st.divider() # Uma linha divisória acima da paginação
+    pagination_cols = st.columns(len(colunas_kanban))
+
+    for i, col_nome in enumerate(colunas_kanban):
+        with pagination_cols[i]:
+            # Pega os detalhes da paginação que salvamos
+            details = pagination_details[col_nome]
+            key_pagina = details["key"]
+            total_paginas = details["total_paginas"]
+            total_itens = details["total_itens"]
+            inicio = details["inicio"]
+            fim = details["fim"]
+
+            # --- Rodapé com paginação (do seu código) ---
             exibindo_ate = min(fim, total_itens)
             st.markdown(
                 f"<div style='text-align:center; font-size:0.85rem;'>Exibindo {inicio + 1 if total_itens>0 else 0}–{exibindo_ate} de {total_itens}</div>",
@@ -1008,6 +1016,7 @@ def main():
 if __name__ == "__main__":
     utils.criar_tabelas_iniciais() 
     main()
+
 
 
 
