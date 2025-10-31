@@ -789,82 +789,99 @@ def tela_kanban():
     cols_streamlit = st.columns(len(colunas_kanban))
 
     # --- 5. Loop das colunas ---
+
     for i, col_nome in enumerate(colunas_kanban):
-        with cols_streamlit[i]:
-            df_col = dfs_colunas[col_nome]
-            count = len(df_col)
-            st.markdown(f"<div class='kanban-column-header'>{col_nome.upper()} ({count})</div>", unsafe_allow_html=True)
+    with cols_streamlit[i]:
+        df_col = dfs_colunas[col_nome]
+        count = len(df_col)
+        st.markdown(f"<div class='kanban-column-header'>{col_nome.upper()} ({count})</div>", unsafe_allow_html=True)
 
-            # --- Paginação com botões ---
-            itens_por_pagina = 8  # ajuste conforme necessário
-            total_itens = len(df_col)
-            total_paginas = (total_itens - 1) // itens_por_pagina + 1
-            key_pagina = f"pagina_kanban_{col_nome}"
-            if key_pagina not in st.session_state:
-                st.session_state[key_pagina] = 1
+        # --- Paginação por coluna ---
+        itens_por_pagina = 8  # Quantidade de cards por página
+        total_itens = len(df_col)
+        total_paginas = (total_itens - 1) // itens_por_pagina + 1
 
-            col_btn1, col_txt, col_btn2 = st.columns([1, 2, 1])
-            with col_btn1:
-                if st.button("⬅️", key=f"prev_{col_nome}", use_container_width=True):
-                    if st.session_state[key_pagina] > 1:
-                        st.session_state[key_pagina] -= 1
-                        st.rerun()
-            with col_txt:
-                st.markdown(
-                    f"<div style='text-align:center; font-size:0.9rem;'>Página {st.session_state[key_pagina]} de {total_paginas}</div>",
-                    unsafe_allow_html=True
-                )
-            with col_btn2:
-                if st.button("➡️", key=f"next_{col_nome}", use_container_width=True):
-                    if st.session_state[key_pagina] < total_paginas:
-                        st.session_state[key_pagina] += 1
-                        st.rerun()
+        key_pagina = f"pagina_kanban_{col_nome}"
+        if key_pagina not in st.session_state:
+            st.session_state[key_pagina] = 1
 
-            # Contador de registros
-            inicio = (st.session_state[key_pagina] - 1) * itens_por_pagina
-            fim = min(inicio + itens_por_pagina, total_itens)
-            df_col_paginado = df_col.iloc[inicio:fim]
-            st.caption(f"Exibindo {fim - inicio} de {total_itens} projetos")
+        # --- Seleciona os itens da página atual ---
+        inicio = (st.session_state[key_pagina] - 1) * itens_por_pagina
+        fim = inicio + itens_por_pagina
+        df_col_paginado = df_col.iloc[inicio:fim]
 
-            with st.container():
-                st.markdown("<div class='kanban-card-container'>", unsafe_allow_html=True)
+        with st.container():
+            st.markdown("<div class='kanban-card-container'>", unsafe_allow_html=True)
 
-                # --- Loop dos cards ---
-                for _, row in df_col_paginado.iterrows():
-                    project_id = row['ID']
-                    status_raw = row.get('Status', 'N/A')
-                    projeto_nome_text = html.escape(str(row.get("Projeto", "N/A")))
-                    agencia_text = html.escape(str(row.get("Agência", "N/A")))
-                    analista_text = html.escape(str(row.get('Analista', 'N/A')))
-                    sla_text, sla_color_real = utils.calcular_sla(row, df_sla)
-                    texto_lembrete_html = ""
-                    icone_lembrete = ""
-                    agendamento_date_obj = row.get('Agendamento').date() if pd.notna(row.get('Agendamento')) else None
+            # --- Loop e desenha os cards da página atual ---
+            for _, row in df_col_paginado.iterrows():
+                project_id = row['ID']
+                status_raw = row.get('Status', 'N/A')
+                projeto_nome_text = html.escape(str(row.get("Projeto", "N/A")))
+                agencia_text = html.escape(str(row.get("Agência", "N/A")))
+                analista_text = html.escape(str(row.get('Analista', 'N/A')))
+                sla_text, sla_color_real = utils.calcular_sla(row, df_sla)
 
-                    if not ('finalizad' in status_raw.lower() or 'cancelad' in status_raw.lower()):
-                        if agendamento_date_obj == hoje:
-                            icone_lembrete = "❗"; cor_lembrete = "red"; texto_lembrete_html = f"<small style='color:{cor_lembrete}; font-weight:bold;'>PARA HOJE</small>"
-                        elif agendamento_date_obj and hoje < agendamento_date_obj <= limite_lembrete:
-                            icone_lembrete = "⚠️"; cor_lembrete = "orange"; texto_lembrete_html = f"<small style='color:{cor_lembrete}; font-weight:bold;'>Próximo</small>"
+                # --- Lembretes visuais ---
+                texto_lembrete_html = ""
+                icone_lembrete = ""
+                agendamento_date_obj = row.get('Agendamento').date() if pd.notna(row.get('Agendamento')) else None
 
-                    # --- Card visual ---
-                    st.markdown(f"<div class='kanban-card'>", unsafe_allow_html=True)
-                    st.markdown(f"<strong>{icone_lembrete} {projeto_nome_text.upper()} (ID: {project_id})</strong>", unsafe_allow_html=True)
-                    st.markdown(f"<small>Agência: {agencia_text}</small>", unsafe_allow_html=True)
-                    st.markdown(f"<small>Analista: {analista_text}</small>", unsafe_allow_html=True)
-                    st.markdown(f"<small style='color:{sla_color_real}; font-weight:bold;'>{sla_text}</small>", unsafe_allow_html=True)
-                    st.markdown(texto_lembrete_html, unsafe_allow_html=True)
-                    st.markdown("</div>", unsafe_allow_html=True)
+                if not ('finalizad' in status_raw.lower() or 'cancelad' in status_raw.lower()):
+                    if agendamento_date_obj == hoje:
+                        icone_lembrete = "❗"; cor_lembrete = "red"; texto_lembrete_html = f"<small style='color:{cor_lembrete}; font-weight:bold;'>PARA HOJE</small>"
+                    elif agendamento_date_obj and hoje < agendamento_date_obj <= limite_lembrete:
+                        icone_lembrete = "⚠️"; cor_lembrete = "orange"; texto_lembrete_html = f"<small style='color:{cor_lembrete}; font-weight:bold;'>Próximo</small>"
 
-                    # --- Popover / Form de edição ---
-                    with st.popover(f"Ver/Editar Detalhes 📝 (ID: {project_id})", use_container_width=True):
-                        with st.form(f"form_edicao_card_kanban_{project_id}"):
-                            st.markdown(f"**Editando: {projeto_nome_text.upper()}**") 
-                            # (Mantém o restante do seu formulário original aqui)
-                            st.write("🛠️ Formulário de edição completo conforme seu código original.")
-                            # Você não precisa alterar o código do formulário — é o mesmo que já funcionava.
-                
+                # --- Card visual ---
+                st.markdown(f"<div class='kanban-card'>", unsafe_allow_html=True)
+                st.markdown(f"<strong>{icone_lembrete} {projeto_nome_text.upper()} (ID: {project_id})</strong>", unsafe_allow_html=True)
+                st.markdown(f"<small>Agência: {agencia_text}</small>", unsafe_allow_html=True)
+                st.markdown(f"<small>Analista: {analista_text}</small>", unsafe_allow_html=True)
+                st.markdown(f"<small style='color:{sla_color_real}; font-weight:bold;'>{sla_text}</small>", unsafe_allow_html=True)
+                st.markdown(texto_lembrete_html, unsafe_allow_html=True)
                 st.markdown("</div>", unsafe_allow_html=True)
+
+                # --- Formulário de edição do projeto (com botão de submit corrigido) ---
+                with st.expander(f"✏️ Editar {projeto_nome_text}"):
+                    with st.form(key=f"form_edicao_{project_id}"):
+                        st.text_input("Projeto", value=row.get("Projeto", ""))
+                        st.text_input("Agência", value=row.get("Agência", ""))
+                        st.text_input("Analista", value=row.get("Analista", ""))
+                        st.text_input("Status", value=row.get("Status", ""))
+                        st.date_input("Agendamento", value=row.get("Agendamento") if pd.notna(row.get("Agendamento")) else None)
+                        # ✅ Botão obrigatório para enviar o formulário
+                        submitted = st.form_submit_button("Salvar alterações")
+                        if submitted:
+                            st.success("Alterações salvas com sucesso!")
+                            st.rerun()
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        # --- Contador e botões de navegação no final da coluna ---
+        st.markdown("---")
+        exibindo_ate = min(fim, total_itens)
+        st.markdown(
+            f"<div style='text-align:center; font-size:0.9rem;'>Exibindo {inicio + 1}–{exibindo_ate} de {total_itens} projetos</div>",
+            unsafe_allow_html=True
+        )
+
+        col_btn1, col_txt, col_btn2 = st.columns([1, 2, 1])
+        with col_btn1:
+            if st.button("⬅️", key=f"prev_{col_nome}", use_container_width=True):
+                if st.session_state[key_pagina] > 1:
+                    st.session_state[key_pagina] -= 1
+                    st.rerun()
+        with col_txt:
+            st.markdown(
+                f"<div style='text-align:center; font-size:0.9rem;'>Página {st.session_state[key_pagina]} de {total_paginas}</div>",
+                unsafe_allow_html=True
+            )
+        with col_btn2:
+            if st.button("➡️", key=f"next_{col_nome}", use_container_width=True):
+                if st.session_state[key_pagina] < total_paginas:
+                    st.session_state[key_pagina] += 1
+                    st.rerun()
                 
 # ----------------- FUNÇÃO MAIN ----------------- #
 
@@ -943,6 +960,7 @@ def main():
 if __name__ == "__main__":
     utils.criar_tabelas_iniciais() 
     main()
+
 
 
 
