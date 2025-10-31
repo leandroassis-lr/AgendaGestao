@@ -711,7 +711,6 @@ def tela_projetos():
                 st.rerun()
 
 # ---- Tela Kanban ---- #
-# (No app.py, substitua toda a função tela_kanban)
 
 def tela_kanban():
     st.markdown("<div class='section-title-center'>VISÃO KANBAN</div>", unsafe_allow_html=True)
@@ -771,76 +770,82 @@ def tela_kanban():
                 st.markdown(texto_lembrete_html, unsafe_allow_html=True)
                 st.markdown("</div>", unsafe_allow_html=True)
 
-                # --- >>> MUDANÇA: Substitui st.expander por st.button + st.dialog <<< ---
-                
-                if st.button(f"Ver/Editar Detalhes 📝", key=f"btn_kanban_edit_{project_id}", type="secondary"):
+                # --- >>> MUDANÇA: Substituído por st.popover <<< ---
+                # O texto do popover vira o botão de acionamento.
+                # O CSS que você adicionou para 'secondary' não se aplica aqui, 
+                # mas o 'use_container_width' o fará ocupar 100% da largura.
+                with st.popover(f"Ver/Editar Detalhes 📝", use_container_width=True):
                     
-                    # --- >>> CORREÇÃO: Removido 'expanded=True' <<< ---
-                    with st.dialog(f"Resumo da Atividade: {projeto_nome_text.upper()} (ID: {project_id})"):
+                    # O formulário e TODA a sua lógica vão DENTRO do popover
+                    with st.form(f"form_edicao_card_kanban_{project_id}"): 
+                        st.markdown(f"**Editando: {projeto_nome_text.upper()}**") # Título interno
                         
-                        # (O código do formulário é IDÊNTICO ao que estava no expander antes)
-                        with st.form(f"form_edicao_card_kanban_{project_id}"):
-                            st.markdown("#### Evolução da Demanda")
-                            # ... (código da evolução) ...
-                            etapas_do_projeto = df_etapas_config[df_etapas_config["Nome do Projeto"] == row.get("Projeto", "")] if "Nome do Projeto" in df_etapas_config.columns else pd.DataFrame()
-                            etapas_concluidas_str = row.get("Etapas Concluidas", ""); etapas_concluidas_lista = []
-                            if pd.notna(etapas_concluidas_str) and isinstance(etapas_concluidas_str, str) and etapas_concluidas_str.strip(): etapas_concluidas_lista = [e.strip() for e in etapas_concluidas_str.split(',') if e.strip()]
-                            novas_etapas_marcadas = [] 
-                            if not etapas_do_projeto.empty and "Etapa" in etapas_do_projeto.columns:
-                                todas_etapas_possiveis = etapas_do_projeto["Etapa"].astype(str).str.strip().tolist(); total_etapas = len(todas_etapas_possiveis) 
-                                num_etapas_concluidas = len(etapas_concluidas_lista); progresso = num_etapas_concluidas / total_etapas if total_etapas > 0 else 0
-                                st.progress(progresso); st.caption(f"{num_etapas_concluidas} de {total_etapas} etapas concluídas ({progresso:.0%})")
-                                for etapa in todas_etapas_possiveis:
-                                    marcado = st.checkbox(etapa, value=(etapa in etapas_concluidas_lista), key=f"chk_kanban_{project_id}_{utils.clean_key(etapa)}")
-                                    if marcado: novas_etapas_marcadas.append(etapa)
-                            else: st.caption("Nenhuma etapa de evolução configurada."); todas_etapas_possiveis = []; total_etapas = 0
-                            
-                            st.markdown("#### Informações e Prazos")
-                            # ... (código dos prazos c1-c4) ...
-                            c1,c2,c3,c4 = st.columns(4)
-                            with c1: status_selecionaveis = status_options[:]; status_atual = row.get('Status'); idx_status = status_selecionaveis.index(status_atual) if status_atual in status_selecionaveis else 0; novo_status_selecionado = st.selectbox("Status", status_selecionaveis, index=idx_status, key=f"status_kanban_{project_id}")
-                            with c2: abertura_default = _to_date_safe(row.get('Data de Abertura')); nova_data_abertura = st.date_input("Data Abertura", value=abertura_default, key=f"abertura_kanban_{project_id}", format="DD/MM/YYYY")
-                            with c3: agendamento_default = _to_date_safe(row.get('Agendamento')); novo_agendamento = st.date_input("Agendamento", value=agendamento_default, key=f"agend_kanban_{project_id}", format="DD/MM/YYYY")
-                            with c4: finalizacao_default = _to_date_safe(row.get('Data de Finalização')); nova_data_finalizacao = st.date_input("Data Finalização", value=finalizacao_default, key=f"final_kanban_{project_id}", format="DD/MM/YYYY")
-
-                            st.markdown("#### Detalhes do Projeto")
-                            # ... (código dos detalhes c5-c9 e prioridade) ...
-                            c5,c6,c7, c_prio = st.columns(4) 
-                            with c5: projeto_val = row.get('Projeto', ''); idx_proj = projeto_options.index(projeto_val) if projeto_val in projeto_options else 0; novo_projeto = st.selectbox("Projeto", options=projeto_options, index=idx_proj, key=f"proj_kanban_{project_id}")
-                            with c6: novo_analista = st.text_input("Analista", value=row.get('Analista', ''), key=f"analista_kanban_{project_id}")
-                            with c7: novo_gestor = st.text_input("Gestor", value=row.get('Gestor', ''), key=f"gestor_kanban_{project_id}")
-                            with c_prio:
-                                 prioridade_atual = row.get('Prioridade', 'Média'); prioridades = ["Baixa", "Média", "Alta"]
-                                 idx_prio = prioridades.index(prioridade_atual) if prioridade_atual in prioridades else 1
-                                 nova_prioridade = st.selectbox("Prioridade", options=prioridades, index=idx_prio, key=f"prio_kanban_{project_id}")
-                            c8,c9 = st.columns(2)
-                            with c8: agencia_val = row.get('Agência', ''); idx_ag = agencia_options.index(agencia_val) if agencia_val in agencia_options else 0; nova_agencia = st.selectbox("Agência", agencia_options, index=idx_ag, key=f"agencia_kanban_{project_id}")
-                            with c9: tecnico_val = row.get('Técnico', ''); idx_tec = tecnico_options.index(tecnico_val) if tecnico_val in tecnico_options else 0; novo_tecnico = st.selectbox("Técnico", tecnico_options, index=idx_tec, key=f"tecnico_kanban_{project_id}")
-                            
-                            # ... (código dos text_area e botões) ...
-                            nova_demanda = st.text_input("Demanda", value=row.get('Demanda', ''), key=f"demanda_kanban_{project_id}")
-                            nova_descricao = st.text_area("Descrição", value=row.get('Descrição', ''), key=f"desc_kanban_{project_id}")
-                            nova_observacao = st.text_area("Observação / Pendências", value=row.get('Observação', ''), key=f"obs_kanban_{project_id}")
-                            log_agendamento_existente = row.get("Log Agendamento", "") if pd.notna(row.get("Log Agendamento")) else ""; st.text_area("Histórico de Alterações", value=log_agendamento_existente, height=100, disabled=True, key=f"log_kanban_{project_id}")
-                            _, col_save, col_delete = st.columns([3, 1.5, 1]) 
-                            with col_save: btn_salvar_card = st.form_submit_button("💾 Salvar", use_container_width=True)
-                            with col_delete: btn_excluir_card = st.form_submit_button("🗑️ Excluir", use_container_width=True, type="primary")
-                            
-                            if btn_excluir_card:
-                                if utils.excluir_projeto_db(project_id): st.success(f"Projeto ID {project_id} excluído."); st.rerun() 
-                            if btn_salvar_card:
-                                status_final = novo_status_selecionado 
-                                if novo_projeto == "N/A": st.error("ERRO: 'Projeto' é obrigatório.", icon="🚨"); st.stop()
-                                if nova_agencia == "N/A": st.error("ERRO: 'Agência' é obrigatória.", icon="🚨"); st.stop()
-                                if 'finalizad' in status_final.lower():
-                                    if total_etapas > 0 and len(novas_etapas_marcadas) < total_etapas: st.error(f"ERRO: Para 'Finalizado', todas as {total_etapas} etapas devem ser selecionadas.", icon="🚨"); st.stop() 
-                                    if not _to_date_safe(nova_data_finalizacao): st.error("ERRO: Se 'Finalizada', Data de Finalização é obrigatória.", icon="🚨"); st.stop() 
-                                if row.get('Status') == 'NÃO INICIADA' and len(novas_etapas_marcadas) > 0 and status_final == 'NÃO INICIADA': status_final = 'EM ANDAMENTO'; st.info("Status alterado para 'EM ANDAMENTO'.")
-                                nova_data_abertura_date = _to_date_safe(nova_data_abertura); nova_data_finalizacao_date = _to_date_safe(nova_data_finalizacao); novo_agendamento_date = _to_date_safe(novo_agendamento)
-                                updates = {"Status": status_final, "Agendamento": novo_agendamento_date, "Analista": novo_analista,"Agência": nova_agencia if nova_agencia != "N/A" else None, "Gestor": novo_gestor, "Projeto": novo_projeto, "Técnico": novo_tecnico if novo_tecnico != "N/A" else None, "Demanda": nova_demanda, "Descrição": nova_descricao, "Observação": nova_observacao, "Data de Abertura": nova_data_abertura_date, "Data de Finalização": nova_data_finalizacao_date, "Etapas Concluidas": ",".join(novas_etapas_marcadas) if novas_etapas_marcadas else None, "Prioridade": nova_prioridade }
-                                if utils.atualizar_projeto_db(project_id, updates): 
-                                    st.success(f"Projeto '{novo_projeto}' (ID: {project_id}) atualizado."); 
-                                    st.rerun()                                    
+                        st.markdown("#### Evolução da Demanda")
+                        etapas_do_projeto = df_etapas_config[df_etapas_config["Nome do Projeto"] == row.get("Projeto", "")] if "Nome do Projeto" in df_etapas_config.columns else pd.DataFrame()
+                        etapas_concluidas_str = row.get("Etapas Concluidas", ""); etapas_concluidas_lista = []
+                        if pd.notna(etapas_concluidas_str) and isinstance(etapas_concluidas_str, str) and etapas_concluidas_str.strip(): etapas_concluidas_lista = [e.strip() for e in etapas_concluidas_str.split(',') if e.strip()]
+                        novas_etapas_marcadas = [] 
+                        if not etapas_do_projeto.empty and "Etapa" in etapas_do_projeto.columns:
+                            todas_etapas_possiveis = etapas_do_projeto["Etapa"].astype(str).str.strip().tolist(); total_etapas = len(todas_etapas_possiveis) 
+                            num_etapas_concluidas = len(etapas_concluidas_lista); progresso = num_etapas_concluidas / total_etapas if total_etapas > 0 else 0
+                            st.progress(progresso); st.caption(f"{num_etapas_concluidas} de {total_etapas} etapas concluídas ({progresso:.0%})")
+                            for etapa in todas_etapas_possiveis:
+                                marcado = st.checkbox(etapa, value=(etapa in etapas_concluidas_lista), key=f"chk_kanban_{project_id}_{utils.clean_key(etapa)}")
+                                if marcado: novas_etapas_marcadas.append(etapa)
+                        else: st.caption("Nenhuma etapa de evolução configurada."); todas_etapas_possiveis = []; total_etapas = 0
+                        
+                        st.markdown("#### Informações e Prazos")
+                        c1,c2,c3,c4 = st.columns(4)
+                        with c1: status_selecionaveis = status_options[:]; status_atual = row.get('Status'); idx_status = status_selecionaveis.index(status_atual) if status_atual in status_selecionaveis else 0; novo_status_selecionado = st.selectbox("Status", status_selecionaveis, index=idx_status, key=f"status_kanban_{project_id}")
+                        with c2: abertura_default = _to_date_safe(row.get('Data de Abertura')); nova_data_abertura = st.date_input("Data Abertura", value=abertura_default, key=f"abertura_kanban_{project_id}", format="DD/MM/YYYY")
+                        with c3: agendamento_default = _to_date_safe(row.get('Agendamento')); novo_agendamento = st.date_input("Agendamento", value=agendamento_default, key=f"agend_kanban_{project_id}", format="DD/MM/YYYY")
+                        with c4: finalizacao_default = _to_date_safe(row.get('Data de Finalização')); nova_data_finalizacao = st.date_input("Data Finalização", value=finalizacao_default, key=f"final_kanban_{project_id}", format="DD/MM/YYYY")
+                        
+                        st.markdown("#### Detalhes do Projeto")
+                        c5,c6,c7, c_prio = st.columns(4) 
+                        with c5: projeto_val = row.get('Projeto', ''); idx_proj = projeto_options.index(projeto_val) if projeto_val in projeto_options else 0; novo_projeto = st.selectbox("Projeto", options=projeto_options, index=idx_proj, key=f"proj_kanban_{project_id}")
+                        with c6: novo_analista = st.text_input("Analista", value=row.get('Analista', ''), key=f"analista_kanban_{project_id}")
+                        with c7: novo_gestor = st.text_input("Gestor", value=row.get('Gestor', ''), key=f"gestor_kanban_{project_id}")
+                        with c_prio:
+                             prioridade_atual = row.get('Prioridade', 'Média'); prioridades = ["Baixa", "Média", "Alta"]
+                             idx_prio = prioridades.index(prioridade_atual) if prioridade_atual in prioridades else 1
+                             nova_prioridade = st.selectbox("Prioridade", options=prioridades, index=idx_prio, key=f"prio_kanban_{project_id}")
+                        c8,c9 = st.columns(2)
+                        with c8: agencia_val = row.get('Agência', ''); idx_ag = agencia_options.index(agencia_val) if agencia_val in agencia_options else 0; nova_agencia = st.selectbox("Agência", agencia_options, index=idx_ag, key=f"agencia_kanban_{project_id}")
+                        with c9: tecnico_val = row.get('Técnico', ''); idx_tec = tecnico_options.index(tecnico_val) if tecnico_val in tecnico_options else 0; novo_tecnico = st.selectbox("Técnico", tecnico_options, index=idx_tec, key=f"tecnico_kanban_{project_id}")
+                        
+                        nova_demanda = st.text_input("Demanda", value=row.get('Demanda', ''), key=f"demanda_kanban_{project_id}")
+                        nova_descricao = st.text_area("Descrição", value=row.get('Descrição', ''), key=f"desc_kanban_{project_id}")
+                        nova_observacao = st.text_area("Observação / Pendências", value=row.get('Observação', ''), key=f"obs_kanban_{project_id}")
+                        log_agendamento_existente = row.get("Log Agendamento", "") if pd.notna(row.get("Log Agendamento")) else ""; st.text_area("Histórico de Alterações", value=log_agendamento_existente, height=100, disabled=True, key=f"log_kanban_{project_id}")
+                        
+                        # Botões DENTRO do form
+                        _, col_save, col_delete = st.columns([3, 1.5, 1]) 
+                        with col_save: btn_salvar_card = st.form_submit_button("💾 Salvar", use_container_width=True)
+                        with col_delete: btn_excluir_card = st.form_submit_button("🗑️ Excluir", use_container_width=True, type="primary")
+                        
+                        # Lógica de submit DENTRO do form
+                        if btn_excluir_card:
+                            if utils.excluir_projeto_db(project_id): 
+                                st.success(f"Projeto ID {project_id} excluído.")
+                                time.sleep(1) # Pausa para ver a msg
+                                st.rerun() # O rerun vai fechar o popover
+                        
+                        if btn_salvar_card:
+                            status_final = novo_status_selecionado 
+                            if novo_projeto == "N/A": st.error("ERRO: 'Projeto' é obrigatório.", icon="🚨"); st.stop()
+                            if nova_agencia == "N/A": st.error("ERRO: 'Agência' é obrigatória.", icon="🚨"); st.stop()
+                            if 'finalizad' in status_final.lower():
+                                if total_etapas > 0 and len(novas_etapas_marcadas) < total_etapas: st.error(f"ERRO: Para 'Finalizado', todas as {total_etapas} etapas devem ser selecionadas.", icon="🚨"); st.stop() 
+                                if not _to_date_safe(nova_data_finalizacao): st.error("ERRO: Se 'Finalizada', Data de Finalização é obrigatória.", icon="🚨"); st.stop() 
+                            if row.get('Status') == 'NÃO INICIADA' and len(novas_etapas_marcadas) > 0 and status_final == 'NÃO INICIADA': status_final = 'EM ANDAMENTO'; st.info("Status alterado para 'EM ANDAMENTO'.")
+                            nova_data_abertura_date = _to_date_safe(nova_data_abertura); nova_data_finalizacao_date = _to_date_safe(nova_data_finalizacao); novo_agendamento_date = _to_date_safe(novo_agendamento)
+                            updates = {"Status": status_final, "Agendamento": novo_agendamento_date, "Analista": novo_analista,"Agência": nova_agencia if nova_agencia != "N/A" else None, "Gestor": novo_gestor, "Projeto": novo_projeto, "Técnico": novo_tecnico if novo_tecnico != "N/A" else None, "Demanda": nova_demanda, "Descrição": nova_descricao, "Observação": nova_observacao, "Data de Abertura": nova_data_abertura_date, "Data de Finalização": nova_data_finalizacao_date, "Etapas Concluidas": ",".join(novas_etapas_marcadas) if novas_etapas_marcadas else None, "Prioridade": nova_prioridade }
+                            if utils.atualizar_projeto_db(project_id, updates): 
+                                st.success(f"Projeto '{novo_projeto}' (ID: {project_id}) atualizado.")
+                                time.sleep(1) # Pausa para ver a msg
+                                st.rerun() # O rerun vai fechar o popover
+                                
 # ----------------- FUNÇÃO MAIN ----------------- #
 
 def main():
@@ -918,5 +923,6 @@ def main():
 if __name__ == "__main__":
     utils.criar_tabelas_iniciais() 
     main()
+
 
 
