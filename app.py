@@ -712,8 +712,6 @@ def tela_projetos():
 
 # ---- Tela Kanban ---- #
 
-# (No app.py, substitua toda a função tela_kanban)
-
 def tela_kanban():
     st.markdown("<div class='section-title-center'>VISÃO KANBAN</div>", unsafe_allow_html=True)
 
@@ -915,7 +913,7 @@ def main():
         # Se estiver na tela principal de projetos, mostra o seletor de visão
         else:
             # --- SELETOR DE VISÃO (LISTA / KANBAN) ---
-            st.markdown("#### 👁️ Modo de Visualização")
+            st.markdown("#### Visualização")
             # Usa um radio button como seletor
             st.session_state.visao_atual = st.radio(
                 "Escolha a visão:",
@@ -940,6 +938,7 @@ def main():
 if __name__ == "__main__":
     utils.criar_tabelas_iniciais() 
     main()
+
 
 
 
