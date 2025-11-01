@@ -263,7 +263,7 @@ h4 {
 .kanban-card {
     background: var(--card-bg);
     border-radius: 8px; 
-    padding: 12px 15px;
+    padding: 10px 15px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.08);
     border: 1px solid var(--gray-border);
     transition: box-shadow 0.2s ease;
@@ -273,7 +273,7 @@ h4 {
     /* --- ESTILO DIVISOR "FILETE" --- */
     margin-top: 1px;                          /* Espaço acima do card */
     border-top: 1px solid var(--accent-color); /* Linha fina (1px) e Dourada */
-    padding-top: 2px;                         /* Espaço entre a linha e o texto */
+    padding-top: 1px;                         /* Espaço entre a linha e o texto */
 
 }
 .kanban-card:hover {
@@ -331,6 +331,7 @@ h4 {
   }
   .section-title-center { font-size: 1.6rem; }
 }
+
 
 
 
