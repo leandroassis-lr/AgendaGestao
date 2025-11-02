@@ -105,7 +105,7 @@ def tela_login():
         justify-content: center;
         align-items: center;
         height:0vh !important; 
-        width: 500%;
+        width: 300%;
         text-align: center;
     }
 
@@ -1016,6 +1016,7 @@ def main():
 if __name__ == "__main__":
     utils.criar_tabelas_iniciais() 
     main()
+
 
 
 
