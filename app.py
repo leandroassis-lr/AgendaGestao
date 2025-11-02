@@ -112,7 +112,7 @@ def tela_login():
     .login-logo-container img {
         max-width:15%; /* Mantido */
         height: auto;
-        border-radius: 50%;
+        border-radius: 30%;
         -webkit-mask-image: -webkit-radial-gradient(white, black);
         mask-image: radial-gradient(white, black);
         filter: brightness(1.2) contrast(1.1);
@@ -1016,6 +1016,7 @@ def main():
 if __name__ == "__main__":
     utils.criar_tabelas_iniciais() 
     main()
+
 
 
 
