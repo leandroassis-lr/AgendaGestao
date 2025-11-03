@@ -77,7 +77,6 @@ def formatar_df_para_html(df, titulo):
     """
     return html
 
-
 def tela_relatorios():
     st.markdown("<div class='section-title-center'>RELATÓRIOS POR EMAIL</div>", unsafe_allow_html=True)
     st.info("Gere e envie um relatório com os projetos vencidos e os agendados para a próxima semana (de hoje até a próxima segunda-feira).")
@@ -96,7 +95,8 @@ def tela_relatorios():
             df['Agendamento'] = pd.to_datetime(df['Agendamento'], errors='coerce').dt.date
 
             hoje = date.today()
-            proxima_segunda = hoje + timedelta(days=(7 - hoje.weekday())) # Próxima segunda-feira real
+            # O nome correto da variável
+            proxima_segunda = hoje + timedelta(days=(7 - hoje.weekday())) 
             
             # 1. Projetos Vencidos
             df_vencidos = df[
@@ -107,7 +107,9 @@ def tela_relatorios():
             # 2. Projetos da Próxima Semana
             df_proxima_semana = df[
                 (df['Agendamento'] >= hoje) &
-                (df['Agendamento'] <= proxima_semana)
+                # --- CORREÇÃO AQUI ---
+                (df['Agendamento'] <= proxima_segunda) 
+                # ---------------------
             ].copy()
 
             # Seleciona e formata colunas para o email
@@ -139,6 +141,7 @@ def tela_relatorios():
                 st.error(mensagem)
 
 # --- Controle Principal ---
+# (O seu código de verificação de login permanece o mesmo)
 if "logado" not in st.session_state or not st.session_state.logado:
     st.warning("Por favor, faça o login na página principal.")
     st.stop()
