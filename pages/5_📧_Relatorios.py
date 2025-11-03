@@ -39,52 +39,67 @@ def enviar_email(destinatario, assunto, corpo_html):
         return False, f"Erro ao enviar email: {e}"
 
 # --- 1. FUNÇÃO DE ESTILO ATUALIZADA ---
+# (No seu arquivo pages/5_📧_Relatorios.py, substitua esta função)
+
 def formatar_df_para_html(df, titulo):
-    """Formata um DataFrame como uma tabela HTML estilizada (Estilo Verde/Ardósia)."""
+    """
+    Formata um DataFrame como uma tabela HTML estilizada com CSS INLINE
+    para máxima compatibilidade com clientes de email (Gmail, Outlook).
+    """
     if df.empty:
-        # Retorna o título, mas sem tabela vazia
-        return f"<h4 style='color:#34495E;'>{titulo}</h4><p style='font-family:sans-serif; color: #555;'>Nenhum projeto encontrado.</p>"
+        return f"<h4 style='color:#34495E; font-family: Arial, sans-serif;'>{titulo}</h4><p style='font-family:Arial, sans-serif; color: #555;'>Nenhum projeto encontrado.</p>"
+
+    # --- Estilos Inline (A única forma 100% garantida) ---
+    # Cores do seu tema
+    cor_header_bg = "#004D38"  # Verde Escuro
+    cor_header_texto = "#FFFFFF"
+    cor_borda_header = "#006A4E" # Verde Principal
+    cor_linha_par = "#f3f3f3"
+    cor_linha_impar = "#ffffff"
+    cor_borda_linha = "#dddddd"
+    cor_titulo_h4 = "#34495E"     # Cinza-ardósia
+    familia_fonte = "'Arial', sans-serif" # Fonte segura para email
     
-    # Converte o DF para HTML, escapando caracteres especiais
-    html_table = df.to_html(index=False, border=0, classes="styled-table", escape=True)
+    # --- Título ---
+    html_output = f"<h4 style='color:{cor_titulo_h4}; font-family: {familia_fonte};'>{titulo}</h4>"
     
-    # Estilo CSS embutido (Email não lê CSS externo)
-    # Usando as cores do nosso tema (com fallback)
-    css_style = """
-    <style>
-        .styled-table {
-            border-collapse: collapse;
-            margin: 15px 0;
-            font-size: 0.9em;
-            font-family: 'Helvetica', 'Arial', sans-serif;
-            min-width: 400px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            border-radius: 5px;
-            overflow: hidden; /* Para o border-radius funcionar no header */
-        }
-        .styled-table thead tr {
-            background-color: var(--primary-dark, #004D38); /* Nosso Verde Escuro */
-            color: #ffffff;
-            text-align: left;
-            font-weight: bold;
-        }
-        .styled-table th, .styled-table td {
-            padding: 10px 12px;
-            text-align: left;
-        }
-        .styled-table tbody tr {
-            border-bottom: 1px solid #dddddd;
-        }
-        .styled-table tbody tr:nth-of-type(even) {
-            background-color: #f3f3f3;
-        }
-        .styled-table tbody tr:last-of-type {
-            border-bottom: 2px solid var(--primary-color, #006A4E); /* Nosso Verde Principal */
-        }
-    </style>
+    # --- Tabela ---
+    html_output += f"""
+    <table style='border-collapse: collapse; width: 100%; font-family: {familia_fonte}; font-size: 0.9em; min-width: 400px; box-shadow: 0 0 10px rgba(0,0,0,0.1);'>
     """
     
-    # Retorna o CSS, o Título e a Tabela
+    # --- Cabeçalho (th) ---
+    html_output += "<thead><tr>"
+    for col in df.columns:
+        col_escapada = html.escape(str(col))
+        html_output += f"<th style='background-color: {cor_header_bg}; color: {cor_header_texto}; text-align: left; padding: 12px 15px; border-bottom: 2px solid {cor_borda_header};'>{col_escapada}</th>"
+    html_output += "</tr></thead>"
+    
+    # --- Corpo (td) ---
+    html_output += "<tbody>"
+    # Itera por cada linha para aplicar o estilo de fundo alternado
+    for i, row in df.iterrows():
+        # Define a cor da linha (par ou ímpar)
+        current_row_style = cor_linha_par if i % 2 == 0 else cor_linha_impar
+        html_output += f"<tr style='background-color: {current_row_style};'>"
+        
+        for col in df.columns:
+            val = row[col]
+            # Trata valores Nulos/NaN/NaT
+            if pd.isna(val) or val is None:
+                display_val = "N/A"
+            else:
+                # Escapa o valor para segurança
+                display_val = html.escape(str(val))
+                
+            html_output += f"<td style='padding: 12px 15px; text-align: left; border-bottom: 1px solid {cor_borda_linha};'>{display_val}</td>"
+        html_output += "</tr>"
+    
+    html_output += "</tbody></table><br>" # Adiciona espaço após a tabela
+    
+    return html_output
+    
+# Retorna o CSS, o Título e a Tabela
     return f"{css_style}<h4 style='color:#34495E;'>{titulo}</h4>{html_table}"
 
 
@@ -216,3 +231,4 @@ if not st.session_state.get("logado", False):
 
 # Chama a tela principal
 tela_relatorios()
+
