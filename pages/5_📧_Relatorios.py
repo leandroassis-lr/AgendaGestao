@@ -39,7 +39,6 @@ def enviar_email(destinatario, assunto, corpo_html):
         return False, f"Erro ao enviar email: {e}"
 
 # --- 1. FUNÇÃO DE ESTILO ATUALIZADA ---
-# (No seu arquivo pages/5_📧_Relatorios.py, substitua esta função)
 
 def formatar_df_para_html(df, titulo):
     """
@@ -77,7 +76,7 @@ def formatar_df_para_html(df, titulo):
     
     # --- Corpo (td) ---
     html_output += "<tbody>"
-    # Itera por cada linha para aplicar o estilo de fundo alternado
+    
     for i, row in df.iterrows():
         # Define a cor da linha (par ou ímpar)
         current_row_style = cor_linha_par if i % 2 == 0 else cor_linha_impar
@@ -95,7 +94,7 @@ def formatar_df_para_html(df, titulo):
             html_output += f"<td style='padding: 12px 15px; text-align: left; border-bottom: 1px solid {cor_borda_linha};'>{display_val}</td>"
         html_output += "</tr>"
     
-    html_output += "</tbody></table><br>" # Adiciona espaço após a tabela
+    html_output += "</tbody></table><br>" 
     
     return html_output
     
@@ -111,7 +110,7 @@ def tela_relatorios():
     destinatario_default = st.session_state.get('usuario_email', 'exemplo@dominio.com') # Tenta pegar o email do usuário logado
     destinatario = st.text_input("Enviar para o email:", value=destinatario_default)
 
-    if st.button("🚀 Gerar e Enviar Relatório Semanal", use_container_width=True):
+    if st.button("🚀 Gerar e Enviar Relatório Diario", use_container_width=True):
         if not destinatario or '@' not in destinatario:
             st.error("Por favor, insira um email de destinatário válido.")
             return
@@ -171,9 +170,9 @@ def tela_relatorios():
                 </head>
                 <body style="font-family: 'Arial', sans-serif; line-height: 1.6;">
                     <h2 style="color: #004D38; border-bottom: 2px solid #006A4E; padding-bottom: 10px;">
-                        Relatório Semanal de Projetos - {hoje.strftime('%d/%m/%Y')}
+                        Relatório Diario de Projetos - {hoje.strftime('%d/%m/%Y')}
                     </h2>
-                    <p style="color: #34495E;">Este é um resumo automático dos projetos com pendências e agendamentos futuros, agrupados por analista.</p>
+                    <p style="color: #34495E;">Este é um resumo automático dos projetos com pendências e agendamentos futuros. </p>
             """
 
             # Loop por cada analista
@@ -231,4 +230,5 @@ if not st.session_state.get("logado", False):
 
 # Chama a tela principal
 tela_relatorios()
+
 
