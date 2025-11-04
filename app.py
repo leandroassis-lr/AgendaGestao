@@ -424,8 +424,6 @@ def tela_cadastro_projeto():
      
 # --- TELA_PROJETOS --- #
 
-# (No app.py, substitua toda a função tela_projetos)
-
 def tela_projetos():
     st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True)
     
@@ -488,14 +486,23 @@ def tela_projetos():
         priority_map = {"Alta": 1, "Média": 2, "Baixa": 3}; df_filtrado['prioridade_num'] = df_filtrado['Prioridade'].map(priority_map).fillna(2)
         df_filtrado = df_filtrado.sort_values(by="prioridade_num", ascending=True); df_filtrado = df_filtrado.drop(columns=['prioridade_num']) 
     elif ordem_selecionada == "SLA Restante (Menor > Maior)":
+        
+        # --- Bloco com a correção de indentação ---
         def calculate_remaining_days(row):
             agendamento = row['Agendamento']; status = row['Status']; finalizacao = row.get('Data de Finalização')
             if pd.isna(agendamento) or pd.notna(finalizacao) or ('finalizad' in str(status).lower()) or ('cancelad' in str(status).lower()): return float('inf') 
             prazo_dias = 30 
-            try: rule = df_sla[df_sla["Nome do Projeto"].astype(str).str.upper() == str(row.get("Projeto","")).upper()]; 
-            if not rule.empty: prazo_dias = int(rule.iloc[0]["Prazo (dias)"])
-            except: pass
-            dias_corridos = (hoje - agendamento.date()).days; return prazo_dias - dias_corridos
+            try: 
+                 rule = df_sla[df_sla["Nome do Projeto"].astype(str).str.upper() == str(row.get("Projeto","")).upper()]
+                 # --- CORREÇÃO: Esta linha DEVE estar indentada ---
+                 if not rule.empty: prazo_dias = int(rule.iloc[0]["Prazo (dias)"])
+            except: 
+                pass # Ignora erros de busca de SLA
+            
+            dias_corridos = (hoje - agendamento.date()).days
+            return prazo_dias - dias_corridos
+        # --- Fim do bloco corrigido ---
+
         df_filtrado['sla_dias_restantes'] = df_filtrado.apply(calculate_remaining_days, axis=1)
         df_filtrado = df_filtrado.sort_values(by="sla_dias_restantes", ascending=True)
     
@@ -533,10 +540,8 @@ def tela_projetos():
         agencia_text = html.escape(str(row.get("Agência", "N/A")))
         projeto_nome_text = html.escape(str(row.get("Projeto", "N/A"))) 
         agendamento_str = row.get('Agendamento_str', 'N/A') 
-        # --- >>> NOVO: Pega Gestor e Cor <<< ---
         gestor_text = html.escape(str(row.get('Gestor', 'N/A')))
-        gestor_color = utils.get_color_for_name(gestor_text) # Chama a nova função
-        # --- >>> FIM <<< ---
+        gestor_color = utils.get_color_for_name(gestor_text) 
         
         # Lógica Lembrete/SLA
         lembrete_ativo = False; icone_lembrete = ""; cor_lembrete = ""; texto_lembrete_html = ""
@@ -557,7 +562,7 @@ def tela_projetos():
             if proxima_etapa: proxima_etapa_texto = proxima_etapa
             elif len(todas_etapas_lista) > 0: proxima_etapa_texto = "✔️ Todas concluídas"
 
-        # --- Cabeçalho do Card (COM GESTOR) ---
+        # Cabeçalho do Card (COM GESTOR)
         st.markdown("<div class='project-card'>", unsafe_allow_html=True)
         col_info_card, col_analista_card, col_agencia_card, col_status_card = st.columns([2.5, 2, 1.5, 2.0]) 
         
@@ -567,10 +572,8 @@ def tela_projetos():
             
         with col_analista_card:
             st.markdown(f"**Analista:** {analista_text}")
-            # --- >>> NOVO: Exibe o Gestor com a cor <<< ---
             st.markdown(f"<span style='color:{gestor_color}; font-weight: bold;'>Gestor: {gestor_text}</span>", unsafe_allow_html=True)
-            # --- >>> FIM <<< ---
-            st.markdown(f"<p style='color:{sla_color_real}; font-weight:bold; margin-top: 5px;'>{sla_text}</p>", unsafe_allow_html=True) # Adicionado margin-top
+            st.markdown(f"<p style='color:{sla_color_real}; font-weight:bold; margin-top: 5px;'>{sla_text}</p>", unsafe_allow_html=True) 
             st.markdown(texto_lembrete_html, unsafe_allow_html=True) 
             
         with col_agencia_card:
@@ -587,8 +590,6 @@ def tela_projetos():
         st.markdown("</div>", unsafe_allow_html=True)
 
         # --- Expander com Formulário de Edição ---
-        # (O código do formulário de edição permanece o mesmo, 
-        #  ele já inclui o campo 'Gestor' e 'Prioridade' na edição)
         with st.expander(f"Ver/Editar Detalhes - ID: {project_id}"):
             with st.form(f"form_edicao_card_{project_id}"):
                 # ... (código do formulário de edição) ...
@@ -960,6 +961,7 @@ def main():
 if __name__ == "__main__":
     utils.criar_tabelas_iniciais() 
     main()
+
 
 
 
