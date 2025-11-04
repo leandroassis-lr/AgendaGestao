@@ -482,13 +482,21 @@ def calcular_sla(projeto_row, df_sla):
         elif dias_restantes == 0: return "SLA Vence Hoje!", "#FFA726" 
         else: return f"SLA: {dias_restantes}d restantes", "#66BB6F"
 
+# Dicionário global para cache de cores
+_COLOR_CACHE = {}
+
 def get_color_for_name(name_str):
     """
-    Gera uma cor automática e consistente (HEX) baseada no nome.
-    Ignora diferenças de maiúsculas/minúsculas, acentos e sobrenomes.
+    Retorna uma cor consistente (HEX) para cada nome, com cache.
+    - Ignora maiúsculas/minúsculas
+    - Ignora acentos
+    - Considera apenas o primeiro nome (ex: "Giovana Siqueira" = "Giovana")
+    - Gera cor automática (sem lista fixa)
+    - Usa cache para evitar recomputar
     """
+
     if not name_str or name_str == "N/A":
-        return "#555555"  # Cor padrão (cinza)
+        return "#555555"  # Cor padrão (cinza neutro)
 
     # --- Normalização do nome ---
     name_normalized = str(name_str).strip().upper()
@@ -497,24 +505,33 @@ def get_color_for_name(name_str):
         c for c in unicodedata.normalize('NFKD', name_normalized)
         if not unicodedata.combining(c)
     )
-    # Pega apenas o primeiro nome
+    # Considera apenas o primeiro nome
     first_name = name_normalized.split()[0]
+
+    # --- Usa cache para acelerar ---
+    if first_name in _COLOR_CACHE:
+        return _COLOR_CACHE[first_name]
 
     # --- Geração de hash estável ---
     hash_bytes = hashlib.md5(first_name.encode('utf-8')).hexdigest()
-    hash_int = int(hash_bytes[:6], 16)  # usa os 6 primeiros caracteres
+    hash_int = int(hash_bytes[:6], 16)  # usa os 6 primeiros caracteres do hash
 
-    # --- Geração da cor ---
-    # Converte o hash em componentes RGB (0–255)
+    # --- Converte em componentes RGB ---
     r = (hash_int & 0xFF0000) >> 16
     g = (hash_int & 0x00FF00) >> 8
     b = (hash_int & 0x0000FF)
 
-    # Evita cores muito escuras
+    # --- Evita cores muito escuras ou muito claras ---
     min_brightness = 80
-    r = max(r, min_brightness)
-    g = max(g, min_brightness)
-    b = max(b, min_brightness)
+    max_brightness = 220
+    r = min(max(r, min_brightness), max_brightness)
+    g = min(max(g, min_brightness), max_brightness)
+    b = min(max(b, min_brightness), max_brightness)
 
-    # Retorna no formato HEX
-    return f"#{r:02X}{g:02X}{b:02X}"
+    # --- Converte para HEX ---
+    color_hex = f"#{r:02X}{g:02X}{b:02X}"
+
+    # --- Salva no cache ---
+    _COLOR_CACHE[first_name] = color_hex
+
+    return color_hex
