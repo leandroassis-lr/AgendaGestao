@@ -112,31 +112,65 @@ def formatar_df_para_html(df, titulo, hoje):
     
     return html_output
 
-# --- 2. TELA DE RELATÓRIOS (Atualizada com KPIs, Prioridade e Título) ---
-# (No seu arquivo pages/5_📧_Relatorios.py, substitua esta função)
-# (As funções enviar_email e formatar_df_para_html permanecem iguais)
+# --- 2. TELA DE RELATÓRIOS --- #
 
 def tela_relatorios():
     st.markdown("<div class='section-title-center'>RELATÓRIOS POR EMAIL</div>", unsafe_allow_html=True)
     st.info("Gere e envie um relatório por analista, com os projetos vencidos e os agendados para a próxima semana.")
 
-    destinatario_default = st.session_state.get('usuario_email', 'exemplo@dominio.com') 
-    destinatario = st.text_input("Enviar para o email:", value=destinatario_default)
+    destinatario_default = st.session_state.get('usuario_email', '') # 
+    
+    # --- MUDANÇA 1: st.text_input -> st.text_area ---
+    destinatarios_input = st.text_area(
+        "Enviar para o(s) email(s):", 
+        value=destinatario_default,
+        placeholder="Separe múltiplos emails por vírgula (,) ou ponto e vírgula (;)",
+        height=100
+    )
 
     if st.button("🚀 Gerar e Enviar Relatório Diário", use_container_width=True):
-        if not destinatario or '@' not in destinatario:
-            st.error("Por favor, insira um email de destinatário válido.")
+        
+        # --- MUDANÇA 2: Lógica de Validação e Limpeza ---
+        if not destinatarios_input:
+            st.error("Por favor, insira pelo menos um email de destinatário.")
             return
+
+        # Limpa a entrada: substitui ';' por ',', remove espaços extras
+        emails_sujos = destinatarios_input.replace(';', ',').split(',')
+        
+        emails_limpos = []
+        emails_invalidos = []
+        
+        for email in emails_sujos:
+            email_limpo = email.strip() # Remove espaços em branco
+            if email_limpo and '@' in email_limpo: # Validação simples
+                emails_limpos.append(email_limpo)
+            elif email_limpo: # Se não estava em branco mas não tinha @
+                emails_invalidos.append(email_limpo)
+        
+        if not emails_limpos:
+            st.error("Nenhum email válido foi inserido.")
+            if emails_invalidos:
+                st.warning(f"Emails com formato inválido: {', '.join(emails_invalidos)}")
+            return
+        
+        if emails_invalidos:
+             st.warning(f"Emails com formato inválido ignorados: {', '.join(emails_invalidos)}")
+        
+        # Converte a lista de emails limpos em uma única string separada por vírgula
+        destinatarios_finais = ", ".join(emails_limpos)
+        
+        st.info(f"Enviando relatório para: {destinatarios_finais}") # Feedback
+        # --- FIM DA MUDANÇA 2 ---
 
         with st.spinner("Gerando relatório e enviando email..."):
             df = utils.carregar_projetos_db()
             df_backlog = utils.carregar_projetos_sem_agendamento_db() 
             
             if df.empty and df_backlog.empty:
-                st.error("Não há dados de projetos para gerar o relatório.")
-                return
+                st.error("Não há dados de projetos para gerar o relatório."); return
 
-            # --- Cálculo do Aging ---
+            # Cálculo do Aging
             hoje = date.today()
             df['Agendamento'] = pd.to_datetime(df['Agendamento'], errors='coerce').dt.date
             df['Data de Abertura'] = pd.to_datetime(df['Data de Abertura'], errors='coerce').dt.date
@@ -148,53 +182,32 @@ def tela_relatorios():
             # Filtros
             df_vencidos = df[(df['Agendamento'] < hoje) & (~df['Status'].str.contains("Finalizada|Cancelada", na=False, case=False))].copy()
             df_proxima_semana = df[(df['Agendamento'] >= hoje) & (df['Agendamento'] <= proxima_segunda)].copy()
-
             lista_analistas = sorted(pd.concat([df_vencidos['Analista'], df_proxima_semana['Analista']]).unique())
-
-            # Colunas (ADICIONADA "Prioridade")
             colunas_relatorio = ['Projeto', 'Agência', 'Agendamento', 'Status', 'Prioridade', 'Aging (Dias)']
 
-            # --- >>> CORREÇÃO AQUI <<< ---
-            # Define a fonte segura manualmente
             familia_fonte_segura = "'Arial', sans-serif" 
-
-            # --- HTML para o Resumo de KPIs (CORRIGIDO) ---
+            
+            # HTML para o Resumo de KPIs
             kpi_html = f"""
             <h3 style="color: #2C3E50; font-family: {familia_fonte_segura};">Resumo Geral da Operação</h3>
             <table style="font-family: {familia_fonte_segura}; width: 100%; border-collapse: collapse;">
-                <tr style="background-color: #f3f3f3;">
-                    <td style="padding: 10px; border-bottom: 1px solid #ddd;">🚨 Projetos Vencidos (Total):</td>
-                    <td style="padding: 10px; border-bottom: 1px solid #ddd; font-weight: bold; color: #D32F2F; text-align: right;">{len(df_vencidos)}</td>
-                </tr>
-                <tr>
-                    <td style="padding: 10px; border-bottom: 1px solid #ddd;">🗓️ Agendados para Próxima Semana:</td>
-                    <td style="padding: 10px; border-bottom: 1px solid #ddd; font-weight: bold; text-align: right;">{len(df_proxima_semana)}</td>
-                </tr>
-                <tr style="background-color: #f3f3f3;">
-                    <td style="padding: 10px; border-bottom: 1px solid #ddd;">🗃️ Ativos no Backlog (Sem Data):</td>
-                    <td style="padding: 10px; border-bottom: 1px solid #ddd; font-weight: bold; text-align: right;">{len(df_backlog)}</td>
-                </tr>
-            </table>
-            <br>
+                <tr style="background-color: #f3f3f3;"><td style="padding: 10px; border-bottom: 1px solid #ddd;">🚨 Projetos Vencidos (Total):</td><td style="padding: 10px; border-bottom: 1px solid #ddd; font-weight: bold; color: #D32F2F; text-align: right;">{len(df_vencidos)}</td></tr>
+                <tr><td style="padding: 10px; border-bottom: 1px solid #ddd;">🗓️ Agendados para Próxima Semana:</td><td style="padding: 10px; border-bottom: 1px solid #ddd; font-weight: bold; text-align: right;">{len(df_proxima_semana)}</td></tr>
+                <tr style="background-color: #f3f3f3;"><td style="padding: 10px; border-bottom: 1px solid #ddd;">🗃️ Ativos no Backlog (Sem Data):</td><td style="padding: 10px; border-bottom: 1px solid #ddd; font-weight: bold; text-align: right;">{len(df_backlog)}</td></tr>
+            </table><br>
             """
-            # --- >>> FIM DA CORREÇÃO <<< ---
             
-            # --- Corpo do Email (Atualizado) ---
+            # Corpo do Email
             corpo_html = f"""
-            <html>
-                <head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head>
-                <body style="font-family: {familia_fonte_segura}; line-height: 1.6;">
-                    <h2 style="color: #004D38; border-bottom: 2px solid #006A4E; padding-bottom: 10px;">
-                        Relatório diário de Projetos - {hoje.strftime('%d/%m/%Y')}
-                    </h2>
-                    
-                    {kpi_html} 
+            <html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head>
+            <body style="font-family: {familia_fonte_segura}; line-height: 1.6;">
+                <h2 style="color: #004D38; border-bottom: 2px solid #006A4E; padding-bottom: 10px;">
+                    Relatório diário de Projetos - {hoje.strftime('%d/%m/%Y')}
+                </h2>{kpi_html} 
             """
             
             # Loop por cada analista
-            if not lista_analistas:
-                 corpo_html += "<p>Nenhum projeto vencido ou agendado para a próxima semana encontrado.</p>"
-            
+            if not lista_analistas: corpo_html += "<p>Nenhum projeto vencido ou agendado para a próxima semana encontrado.</p>"
             for analista in lista_analistas:
                 analista_html = html.escape(analista)
                 corpo_html += f"<hr><h3 style='background-color: #F0F2F5; padding: 10px; border-radius: 5px; color: #2C3E50;'>Analista: {analista_html}</h3>"
@@ -204,24 +217,19 @@ def tela_relatorios():
                 
                 df_vencidos_html = df_vencidos_analista[colunas_relatorio].copy()
                 df_vencidos_html['Agendamento'] = df_vencidos_html['Agendamento'].apply(lambda x: x.strftime('%d/%m/%Y') if x else 'N/D')
-                
                 df_proxima_semana_html = df_proxima_semana_analista[colunas_relatorio].copy()
                 df_proxima_semana_html['Agendamento'] = df_proxima_semana_html['Agendamento'].apply(lambda x: x.strftime('%d/%m/%Y') if x else 'N/D')
 
-                # Passa a data 'hoje' para a função de formatação
                 corpo_html += formatar_df_para_html(df_vencidos_html, f"🚨 Projetos Vencidos ({len(df_vencidos_html)})", hoje)
                 corpo_html += formatar_df_para_html(df_proxima_semana_html, f"🗓️ Projetos Agendados até {proxima_segunda.strftime('%d/%m/%Y')} ({len(df_proxima_semana_html)})", hoje)
             
-            # Fecha o corpo do email
             corpo_html += """
-                    <br>
-                    <p style="color: #777; font-size: 0.8em;"><em>Relatório gerado pelo Sistema de Gestão de Projetos.</em></p>
-                </body>
-            </html>
+                    <br><p style="color: #777; font-size: 0.8em;"><em>Relatório gerado pelo Sistema de Gestão de Projetos.</em></p>
+                </body></html>
             """
 
-            # Envia o email
-            sucesso, mensagem = enviar_email(destinatario, f"Relatório diário de Projetos - {hoje.strftime('%d/%m/%Y')}", corpo_html)
+            # --- MUDANÇA 3: Passa a string final de emails ---
+            sucesso, mensagem = enviar_email(destinatarios_finais, f"Relatório diário de Projetos - {hoje.strftime('%d/%m/%Y')}", corpo_html)
 
             if sucesso:
                 st.success(mensagem); st.balloons()
@@ -240,5 +248,4 @@ if not st.session_state.get("logado", False):
     st.warning("Por favor, faça o login na página principal.")
     st.stop()
 
-# Chama a tela principal
 tela_relatorios()
