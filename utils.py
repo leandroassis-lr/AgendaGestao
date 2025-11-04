@@ -480,7 +480,6 @@ def calcular_sla(projeto_row, df_sla):
         elif dias_restantes == 0: return "SLA Vence Hoje!", "#FFA726" 
         else: return f"SLA: {dias_restantes}d restantes", "#66BB6F"
 
-
 def get_color_for_name(name_str):
     """
     Gera uma cor consistente de uma lista com base em um nome.
@@ -509,4 +508,5 @@ def get_color_for_name(name_str):
         return COLORS_LIST[color_index]
     except Exception:
         return "#555" # Cor padrão em caso de erro
+
 
