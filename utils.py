@@ -348,25 +348,42 @@ def validar_usuario(nome, email):
     if df.empty or 'nome' not in df.columns or 'email' not in df.columns: return False
     cond = (df["nome"].astype(str).str.lower().eq(nome.lower()) & df["email"].astype(str).str.lower().eq(email.lower())); return cond.any()
 
-# --- Funções de Importação/Exportação ---
-# (generate_excel_template_bytes - Com Prioridade)
+# --- Funções de Importação/Exportação ---#
 def generate_excel_template_bytes():
-    template_columns = ["Projeto", "Descrição", "Agência", "Técnico", "Demanda", "Observação", "Analista", "Gestor", "Prioridade"] 
+
+    template_columns = ["Projeto", "Descrição", "Agência", "Técnico", "Agendamento", 
+                        "Demanda", "Observação", "Analista", "Gestor", "Prioridade"] 
     df_template = pd.DataFrame(columns=template_columns)
+    
+    df_template.loc[0] = ['Ex: Projeto Exemplo', 'Descrição...', 'AG 0001', 'Nome do Técnico', 'AAAA-MM-DD', 
+                          'Instalação', 'Observações...', 'Nome Analista', 'Nome Gestor', 'Média']
+    
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df_template.to_excel(writer, index=False, sheet_name='Projetos')
     return output.getvalue()
 
-# (bulk_insert_projetos_db - Com Prioridade)
 def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
-    # ... (código original com prioridade) ...
     if not conn: return False, 0
-    column_map = {'Projeto': 'projeto', 'Descrição': 'descricao', 'Agência': 'agencia', 'Técnico': 'tecnico','Demanda': 'demanda', 'Observação': 'observacao', 'Analista': 'analista', 'Gestor': 'gestor','Prioridade': 'prioridade'}
+    
+    column_map = {
+        'Projeto': 'projeto', 'Descrição': 'descricao', 'Agência': 'agencia', 'Técnico': 'tecnico',
+        'Demanda': 'demanda', 'Observação': 'observacao', 'Analista': 'analista', 'Gestor': 'gestor',
+        'Prioridade': 'prioridade', 'Agendamento': 'agendamento' 
+    }
+    
     if 'Projeto' not in df.columns or 'Agência' not in df.columns: st.error("Erro: Planilha deve conter 'Projeto' e 'Agência'."); return False, 0
     if df[['Projeto', 'Agência']].isnull().any().any(): st.error("Erro: 'Projeto' e 'Agência' não podem ser vazios."); return False, 0
+
     df_to_insert = df.rename(columns=column_map)
-    df_to_insert['status'] = 'NÃO INICIADA'; df_to_insert['data_abertura'] = date.today()
+    
+    if 'agendamento' in df_to_insert.columns:
+        df_to_insert['agendamento'] = pd.to_datetime(df_to_insert['agendamento'], errors='coerce')
+    else:
+        df_to_insert['agendamento'] = None # Garante que a coluna exista
+
+    df_to_insert['status'] = 'NÃO INICIADA'
+    df_to_insert['data_abertura'] = date.today()
     if 'analista' not in df_to_insert or df_to_insert['analista'].isnull().all(): df_to_insert['analista'] = usuario_logado
     else: df_to_insert['analista'] = df_to_insert['analista'].fillna(usuario_logado)
     if 'prioridade' not in df_to_insert: df_to_insert['prioridade'] = 'Média'
@@ -376,17 +393,24 @@ def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
         invalid_priorities = df_to_insert[~df_to_insert['prioridade'].isin(allowed_priorities)]
         if not invalid_priorities.empty: st.warning(f"Prioridades inválidas (linhas: {invalid_priorities.index.tolist()}) substituídas por 'Média'."); df_to_insert.loc[invalid_priorities.index, 'prioridade'] = 'média'
         df_to_insert['prioridade'] = df_to_insert['prioridade'].str.capitalize()
-    cols_to_insert = ['projeto', 'descricao', 'agencia', 'tecnico', 'status','data_abertura', 'observacao', 'demanda', 'analista', 'gestor','prioridade'] 
+
+    cols_to_insert = ['projeto', 'descricao', 'agencia', 'tecnico', 'status',
+                      'data_abertura', 'observacao', 'demanda', 'analista', 'gestor',
+                      'prioridade', 'agendamento'] 
+                      
     df_final = df_to_insert[[col for col in cols_to_insert if col in df_to_insert.columns]]
+    
+    # Converte para tuplas, tratando NaNs/NaTs como None
     values = [tuple(None if pd.isna(x) else x for x in record) for record in df_final.to_records(index=False)]
+    
     cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns)); placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
     query = sql.SQL("INSERT INTO projetos ({}) VALUES ({})").format(cols_sql, placeholders)
+
     try:
         with conn.cursor() as cur: cur.executemany(query, values) 
         st.cache_data.clear(); return True, len(values)
     except Exception as e: st.error(f"Erro bulk insert: {e}"); conn.rollback(); return False, 0
-
-
+        
 # (dataframe_to_excel_bytes - Com Prioridade)
 def dataframe_to_excel_bytes(df):
     output = io.BytesIO()
@@ -397,7 +421,6 @@ def dataframe_to_excel_bytes(df):
         if 'Prioridade' not in df_to_export.columns: df_to_export['Prioridade'] = 'Média' 
         df_to_export.to_excel(writer, index=False, sheet_name='Projetos')
     return output.getvalue()
-
 
 # --- Funções Utilitárias ---
 # (load_css - Sem alterações)
@@ -456,4 +479,3 @@ def calcular_sla(projeto_row, df_sla):
         if dias_restantes < 0: return f"Atrasado {-dias_restantes}d", "#EF5350" 
         elif dias_restantes == 0: return "SLA Vence Hoje!", "#FFA726" 
         else: return f"SLA: {dias_restantes}d restantes", "#66BB6F"
-
