@@ -483,7 +483,7 @@ def calcular_sla(projeto_row, df_sla):
 def get_color_for_name(name_str):
     """
     Gera uma cor consistente de uma lista com base em um nome.
-    CORRIGIDO: Usa um hash melhor para evitar colisões.
+    CORRIGIDO: Usa um hash melhor (hash() nativo) para evitar colisões.
     """
     # Lista de cores profissionais e distintas (para texto)
     COLORS_LIST = [
@@ -495,7 +495,7 @@ def get_color_for_name(name_str):
         "#00796B",  # Teal
         "#C2185B",  # Rosa Escuro
         "#5D4037",  # Marrom
-        "#BDB76B"   # Cinza Azulado
+        "#455A64"   # Cinza Azulado
     ]
     
     if name_str is None or name_str == "N/A":
@@ -508,11 +508,9 @@ def get_color_for_name(name_str):
         return "#555"
 
     try:
-        # --- CORREÇÃO: Hash melhorado ---
-        # Multiplica o valor da letra pelo seu índice para diferenciar nomes
-        hash_val = 0
-        for i, char in enumerate(name_normalized):
-            hash_val += (ord(char) * (i + 1))
+        # --- CORREÇÃO: Usa o hash() nativo do Python ---
+        # Isso distribui os nomes de forma muito mais uniforme
+        hash_val = hash(name_normalized)
         # --- FIM DA CORREÇÃO ---
         
         color_index = hash_val % len(COLORS_LIST)
