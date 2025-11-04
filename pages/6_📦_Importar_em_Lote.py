@@ -7,15 +7,20 @@ utils.load_css()
 
 def tela_importacao():
     st.markdown("<div class='section-title-center'>IMPORTAR PROJETOS EM LOTE</div>", unsafe_allow_html=True)
+    
+    # --- ALTERAÇÃO: Texto do st.info atualizado ---
     st.info("""
         Esta ferramenta permite cadastrar múltiplos projetos de uma vez a partir de uma planilha Excel.
-        Todos os projetos importados serão adicionados à tela de **Backlog** (não agendados).
+        - Preencha a coluna **'Agendamento'** (formato AAAA-MM-DD) para agendar o projeto.
+        - Deixe o **'Agendamento'** em branco para enviar o projeto ao **Backlog**.
     """)
+    # --- FIM DA ALTERAÇÃO ---
+    
     st.divider()
 
     # --- Passo 1: Baixar o Modelo ---
     st.subheader("Passo 1: Baixe a planilha modelo")
-    st.markdown("Preencha a planilha com os dados dos seus projetos. Apenas a coluna 'Projeto' é obrigatória.")
+    st.markdown("Preencha a planilha com os dados dos seus projetos. 'Projeto' e 'Agência' são obrigatórios.")
     
     template_bytes = utils.generate_excel_template_bytes()
     st.download_button(
@@ -36,8 +41,8 @@ def tela_importacao():
             df = pd.read_excel(uploaded_file)
             st.success("Arquivo carregado com sucesso! Verifique a pré-visualização abaixo.")
             
-            # Remove linhas onde a coluna 'Projeto' está vazia
-            df.dropna(subset=['Projeto'], inplace=True)
+            # Remove linhas onde 'Projeto' ou 'Agência' estão vazios
+            df.dropna(subset=['Projeto', 'Agência'], inplace=True)
             
             st.dataframe(df, use_container_width=True)
 
@@ -47,7 +52,7 @@ def tela_importacao():
                     sucesso, num_importados = utils.bulk_insert_projetos_db(df, usuario_logado)
                 
                 if sucesso:
-                    st.success(f"🎉 {num_importados} projetos importados com sucesso para o Backlog!")
+                    st.success(f"🎉 {num_importados} projetos importados com sucesso!")
                     st.balloons()
                 else:
                     st.error("A importação falhou. Verifique os erros acima e o formato da sua planilha.")
@@ -62,3 +67,4 @@ if "logado" not in st.session_state or not st.session_state.logado:
     st.stop()
 
 tela_importacao()
+
