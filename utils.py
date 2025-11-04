@@ -495,7 +495,7 @@ def get_color_for_name(name_str):
         "#00796B",  # Teal
         "#C2185B",  # Rosa Escuro
         "#5D4037",  # Marrom
-        "#455A64"   # Cinza Azulado
+        "#FF1F3D"   # Vermelho
     ]
     
     if name_str is None or name_str == "N/A":
@@ -517,3 +517,4 @@ def get_color_for_name(name_str):
         return COLORS_LIST[color_index]
     except Exception:
         return "#555" # Cor padrão em caso de erro
+
