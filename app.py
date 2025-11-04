@@ -486,23 +486,15 @@ def tela_projetos():
         priority_map = {"Alta": 1, "Média": 2, "Baixa": 3}; df_filtrado['prioridade_num'] = df_filtrado['Prioridade'].map(priority_map).fillna(2)
         df_filtrado = df_filtrado.sort_values(by="prioridade_num", ascending=True); df_filtrado = df_filtrado.drop(columns=['prioridade_num']) 
     elif ordem_selecionada == "SLA Restante (Menor > Maior)":
-        
-        # --- Bloco com a correção de indentação ---
         def calculate_remaining_days(row):
             agendamento = row['Agendamento']; status = row['Status']; finalizacao = row.get('Data de Finalização')
             if pd.isna(agendamento) or pd.notna(finalizacao) or ('finalizad' in str(status).lower()) or ('cancelad' in str(status).lower()): return float('inf') 
             prazo_dias = 30 
             try: 
                  rule = df_sla[df_sla["Nome do Projeto"].astype(str).str.upper() == str(row.get("Projeto","")).upper()]
-                 # --- CORREÇÃO: Esta linha DEVE estar indentada ---
                  if not rule.empty: prazo_dias = int(rule.iloc[0]["Prazo (dias)"])
-            except: 
-                pass # Ignora erros de busca de SLA
-            
-            dias_corridos = (hoje - agendamento.date()).days
-            return prazo_dias - dias_corridos
-        # --- Fim do bloco corrigido ---
-
+            except: pass
+            dias_corridos = (hoje - agendamento.date()).days; return prazo_dias - dias_corridos
         df_filtrado['sla_dias_restantes'] = df_filtrado.apply(calculate_remaining_days, axis=1)
         df_filtrado = df_filtrado.sort_values(by="sla_dias_restantes", ascending=True)
     
@@ -522,7 +514,7 @@ def tela_projetos():
     start_idx = st.session_state.page_number * items_per_page; end_idx = start_idx + items_per_page
     df_paginado = df_filtrado.iloc[start_idx:end_idx] 
     
-    # Carrega opções para edição
+    # Carrega opções
     agencias_cfg = utils.carregar_config_db("agencias"); agencia_options = ["N/A"] + (agencias_cfg.iloc[:, 0].tolist() if not agencias_cfg.empty and len(agencias_cfg.columns) > 0 else [])
     tecnicos_cfg = utils.carregar_config_db("tecnicos"); tecnico_options = ["N/A"] + (tecnicos_cfg.iloc[:, 0].tolist() if not tecnicos_cfg.empty and len(tecnicos_cfg.columns) > 0 else [])
     status_options_df = utils.carregar_config_db("status"); status_options = status_options_df.iloc[:, 0].tolist() if not status_options_df.empty and len(status_options_df.columns) > 0 else []
@@ -541,6 +533,7 @@ def tela_projetos():
         projeto_nome_text = html.escape(str(row.get("Projeto", "N/A"))) 
         agendamento_str = row.get('Agendamento_str', 'N/A') 
         gestor_text = html.escape(str(row.get('Gestor', 'N/A')))
+        # --- Chama a função de cor CORRIGIDA ---
         gestor_color = utils.get_color_for_name(gestor_text) 
         
         # Lógica Lembrete/SLA
@@ -562,7 +555,7 @@ def tela_projetos():
             if proxima_etapa: proxima_etapa_texto = proxima_etapa
             elif len(todas_etapas_lista) > 0: proxima_etapa_texto = "✔️ Todas concluídas"
 
-        # Cabeçalho do Card (COM GESTOR)
+        # --- Cabeçalho do Card (GESTOR MOVIDO) ---
         st.markdown("<div class='project-card'>", unsafe_allow_html=True)
         col_info_card, col_analista_card, col_agencia_card, col_status_card = st.columns([2.5, 2, 1.5, 2.0]) 
         
@@ -572,12 +565,14 @@ def tela_projetos():
             
         with col_analista_card:
             st.markdown(f"**Analista:** {analista_text}")
-            st.markdown(f"<span style='color:{gestor_color}; font-weight: bold;'>Gestor: {gestor_text}</span>", unsafe_allow_html=True)
+            # --- GESTOR REMOVIDO DESTA COLUNA ---
             st.markdown(f"<p style='color:{sla_color_real}; font-weight:bold; margin-top: 5px;'>{sla_text}</p>", unsafe_allow_html=True) 
             st.markdown(texto_lembrete_html, unsafe_allow_html=True) 
             
         with col_agencia_card:
             st.markdown(f"**Agência:** {agencia_text}") 
+            # --- GESTOR ADICIONADO ABAIXO DA AGÊNCIA ---
+            st.markdown(f"<span style='color:{gestor_color}; font-weight: bold;'>Gestor: {gestor_text}</span>", unsafe_allow_html=True)
             
         with col_status_card:
             status_color_name = utils.get_status_color(str(status_raw)) 
@@ -589,10 +584,11 @@ def tela_projetos():
                 unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
-        # --- Expander com Formulário de Edição ---
+        # --- Expander com Formulário de Edição (Sem alterações) ---
         with st.expander(f"Ver/Editar Detalhes - ID: {project_id}"):
+            # (O código do formulário de edição permanece o mesmo)
             with st.form(f"form_edicao_card_{project_id}"):
-                # ... (código do formulário de edição) ...
+                # ... (código do formulário) ...
                 st.markdown("#### Evolução da Demanda")
                 etapas_do_projeto = df_etapas_config[df_etapas_config["Nome do Projeto"] == row.get("Projeto", "")] if "Nome do Projeto" in df_etapas_config.columns else pd.DataFrame()
                 etapas_concluidas_str = row.get("Etapas Concluidas", ""); etapas_concluidas_lista = []
@@ -961,6 +957,7 @@ def main():
 if __name__ == "__main__":
     utils.criar_tabelas_iniciais() 
     main()
+
 
 
 
