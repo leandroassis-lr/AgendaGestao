@@ -493,7 +493,7 @@ def get_color_for_name(name_str):
         "#F57C00",  # Laranja
         "#7B1FA2",  # Roxo
         "#00796B",  # Teal
-        "#C2185B",  # Rosa Escuro
+        "#FB2DBA",  # Rosa Escuro
         "#5D4037",  # Marrom
         "#FF1F3D"   # Vermelho
     ]
@@ -517,5 +517,6 @@ def get_color_for_name(name_str):
         return COLORS_LIST[color_index]
     except Exception:
         return "#555" # Cor padrão em caso de erro
+
 
 
