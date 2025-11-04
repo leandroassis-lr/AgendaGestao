@@ -483,6 +483,7 @@ def calcular_sla(projeto_row, df_sla):
 def get_color_for_name(name_str):
     """
     Gera uma cor consistente de uma lista com base em um nome.
+    CORRIGIDO: Agora ignora maiúsculas/minúsculas e espaços.
     """
     # Lista de cores profissionais e distintas (para texto)
     COLORS_LIST = [
@@ -500,13 +501,19 @@ def get_color_for_name(name_str):
     if name_str is None or name_str == "N/A":
         return "#555" # Cor padrão (cinza)
 
+    # --- CORREÇÃO: Normaliza o nome antes de gerar a cor ---
+    # 1. Converte para string, 2. Remove espaços antes/depois, 3. Converte para MAIÚSCULO
+    name_normalized = str(name_str).strip().upper() 
+    
+    # Se o nome normalizado for vazio (ex: só espaços), retorna cinza
+    if not name_normalized:
+        return "#555"
+    # --- FIM DA CORREÇÃO ---
+
     try:
-        # Cria um "hash" simples somando os valores dos caracteres do nome
-        hash_val = sum(ord(char) for char in str(name_str))
-        # Escolhe um índice de cor da lista
+        # Cria o hash usando o nome normalizado
+        hash_val = sum(ord(char) for char in name_normalized)
         color_index = hash_val % len(COLORS_LIST)
         return COLORS_LIST[color_index]
     except Exception:
         return "#555" # Cor padrão em caso de erro
-
-
