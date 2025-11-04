@@ -488,13 +488,13 @@ def get_color_for_name(name_str):
     # Lista de cores profissionais e distintas (para texto)
     COLORS_LIST = [
         "#D32F2F",  # Vermelho Escuro
-        "#1976D2",  # Azul Escuro
+        "#9971B0",  # Roxo
         "#388E3C",  # Verde Escuro
         "#F57C00",  # Laranja
-        "#7B1FA2",  # Roxo
+        "#E8767C",  # Bordo
         "#38040F",  # Teal
         "#ED0E66",  # Rosa
-        "#5D4037",  # Marrom
+        "#2916F7",  # Azul
         "#617860"   # Verde Claro
     ]
     
@@ -517,5 +517,6 @@ def get_color_for_name(name_str):
         return COLORS_LIST[color_index]
     except Exception:
         return "#555" # Cor padrão em caso de erro
+
 
 
