@@ -10,6 +10,8 @@ import io
 import base64
 from io import BytesIO
 from PIL import Image
+import hashlib
+import unicodedata
 
 # (image_to_base64 - Sem alterações)
 def image_to_base64(image):
@@ -482,42 +484,37 @@ def calcular_sla(projeto_row, df_sla):
 
 def get_color_for_name(name_str):
     """
-    Gera uma cor consistente de uma lista com base em um nome.
-    CORRIGIDO: Usa um hash melhor (hash() nativo) para evitar colisões.
+    Gera uma cor automática e consistente (HEX) baseada no nome.
+    Ignora diferenças de maiúsculas/minúsculas, acentos e sobrenomes.
     """
-    # Lista de cores profissionais e distintas (para texto)
-    COLORS_LIST = [
-        "#D32F2F",  # Vermelho Escuro
-        "#9971B0",  # Roxo
-        "#388E3C",  # Verde Escuro
-        "#F57C00",  # Laranja
-        "#E8767C",  # Bordo
-        "#38040F",  # Teal
-        "#ED0E66",  # Rosa
-        "#2916F7",  # Azul
-        "#617860"   # Verde Claro
-    ]
-    
-    if name_str is None or name_str == "N/A":
-        return "#555" # Cor padrão (cinza)
+    if not name_str or name_str == "N/A":
+        return "#555555"  # Cor padrão (cinza)
 
-    # Normaliza o nome (ignora espaços, maiúsculas/minúsculas)
-    name_normalized = str(name_str).strip().upper() 
-    
-    if not name_normalized:
-        return "#555"
+    # --- Normalização do nome ---
+    name_normalized = str(name_str).strip().upper()
+    # Remove acentos
+    name_normalized = ''.join(
+        c for c in unicodedata.normalize('NFKD', name_normalized)
+        if not unicodedata.combining(c)
+    )
+    # Pega apenas o primeiro nome
+    first_name = name_normalized.split()[0]
 
-    try:
-        # --- CORREÇÃO: Usa o hash() nativo do Python ---
-        # Isso distribui os nomes de forma muito mais uniforme
-        hash_val = hash(name_normalized)
-        # --- FIM DA CORREÇÃO ---
-        
-        color_index = hash_val % len(COLORS_LIST)
-        return COLORS_LIST[color_index]
-    except Exception:
-        return "#0D0C0C" # Cor padrão em caso de erro
+    # --- Geração de hash estável ---
+    hash_bytes = hashlib.md5(first_name.encode('utf-8')).hexdigest()
+    hash_int = int(hash_bytes[:6], 16)  # usa os 6 primeiros caracteres
 
+    # --- Geração da cor ---
+    # Converte o hash em componentes RGB (0–255)
+    r = (hash_int & 0xFF0000) >> 16
+    g = (hash_int & 0x00FF00) >> 8
+    b = (hash_int & 0x0000FF)
 
+    # Evita cores muito escuras
+    min_brightness = 80
+    r = max(r, min_brightness)
+    g = max(g, min_brightness)
+    b = max(b, min_brightness)
 
-
+    # Retorna no formato HEX
+    return f"#{r:02X}{g:02X}{b:02X}"
