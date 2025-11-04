@@ -112,8 +112,10 @@ def formatar_df_para_html(df, titulo, hoje):
     
     return html_output
 
-
 # --- 2. TELA DE RELATÓRIOS (Atualizada com KPIs, Prioridade e Título) ---
+# (No seu arquivo pages/5_📧_Relatorios.py, substitua esta função)
+# (As funções enviar_email e formatar_df_para_html permanecem iguais)
+
 def tela_relatorios():
     st.markdown("<div class='section-title-center'>RELATÓRIOS POR EMAIL</div>", unsafe_allow_html=True)
     st.info("Gere e envie um relatório por analista, com os projetos vencidos e os agendados para a próxima semana.")
@@ -128,13 +130,13 @@ def tela_relatorios():
 
         with st.spinner("Gerando relatório e enviando email..."):
             df = utils.carregar_projetos_db()
-            df_backlog = utils.carregar_projetos_sem_agendamento_db() # Carrega dados do backlog
+            df_backlog = utils.carregar_projetos_sem_agendamento_db() 
             
             if df.empty and df_backlog.empty:
                 st.error("Não há dados de projetos para gerar o relatório.")
                 return
 
-            # --- Cálculo do Aging (Nova Lógica) ---
+            # --- Cálculo do Aging ---
             hoje = date.today()
             df['Agendamento'] = pd.to_datetime(df['Agendamento'], errors='coerce').dt.date
             df['Data de Abertura'] = pd.to_datetime(df['Data de Abertura'], errors='coerce').dt.date
@@ -147,16 +149,19 @@ def tela_relatorios():
             df_vencidos = df[(df['Agendamento'] < hoje) & (~df['Status'].str.contains("Finalizada|Cancelada", na=False, case=False))].copy()
             df_proxima_semana = df[(df['Agendamento'] >= hoje) & (df['Agendamento'] <= proxima_segunda)].copy()
 
-            # Pega lista de analistas
             lista_analistas = sorted(pd.concat([df_vencidos['Analista'], df_proxima_semana['Analista']]).unique())
 
-            # --- Colunas (ADICIONADA "Prioridade") ---
+            # Colunas (ADICIONADA "Prioridade")
             colunas_relatorio = ['Projeto', 'Agência', 'Agendamento', 'Status', 'Prioridade', 'Aging (Dias)']
 
-            # --- HTML para o Resumo de KPIs (NOVO) ---
+            # --- >>> CORREÇÃO AQUI <<< ---
+            # Define a fonte segura manualmente
+            familia_fonte_segura = "'Arial', sans-serif" 
+
+            # --- HTML para o Resumo de KPIs (CORRIGIDO) ---
             kpi_html = f"""
-            <h3 style="color: #2C3E50;">Resumo Geral da Operação</h3>
-            <table style="font-family: {formatar_df_para_html.__defaults__[1]}; width: 100%; border-collapse: collapse;">
+            <h3 style="color: #2C3E50; font-family: {familia_fonte_segura};">Resumo Geral da Operação</h3>
+            <table style="font-family: {familia_fonte_segura}; width: 100%; border-collapse: collapse;">
                 <tr style="background-color: #f3f3f3;">
                     <td style="padding: 10px; border-bottom: 1px solid #ddd;">🚨 Projetos Vencidos (Total):</td>
                     <td style="padding: 10px; border-bottom: 1px solid #ddd; font-weight: bold; color: #D32F2F; text-align: right;">{len(df_vencidos)}</td>
@@ -172,12 +177,13 @@ def tela_relatorios():
             </table>
             <br>
             """
+            # --- >>> FIM DA CORREÇÃO <<< ---
             
             # --- Corpo do Email (Atualizado) ---
             corpo_html = f"""
             <html>
                 <head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head>
-                <body style="font-family: 'Arial', sans-serif; line-height: 1.6;">
+                <body style="font-family: {familia_fonte_segura}; line-height: 1.6;">
                     <h2 style="color: #004D38; border-bottom: 2px solid #006A4E; padding-bottom: 10px;">
                         Relatório diário de Projetos - {hoje.strftime('%d/%m/%Y')}
                     </h2>
@@ -193,18 +199,15 @@ def tela_relatorios():
                 analista_html = html.escape(analista)
                 corpo_html += f"<hr><h3 style='background-color: #F0F2F5; padding: 10px; border-radius: 5px; color: #2C3E50;'>Analista: {analista_html}</h3>"
                 
-                # Filtra os projetos deste analista
                 df_vencidos_analista = df_vencidos[df_vencidos['Analista'] == analista]
                 df_proxima_semana_analista = df_proxima_semana[df_proxima_semana['Analista'] == analista]
                 
-                # Prepara DFs para formatação (mantendo dados brutos para `formatar_df_para_html`)
                 df_vencidos_html = df_vencidos_analista[colunas_relatorio].copy()
                 df_vencidos_html['Agendamento'] = df_vencidos_html['Agendamento'].apply(lambda x: x.strftime('%d/%m/%Y') if x else 'N/D')
                 
                 df_proxima_semana_html = df_proxima_semana_analista[colunas_relatorio].copy()
                 df_proxima_semana_html['Agendamento'] = df_proxima_semana_html['Agendamento'].apply(lambda x: x.strftime('%d/%m/%Y') if x else 'N/D')
 
-                # Adiciona as tabelas HTML ao corpo do email
                 # Passa a data 'hoje' para a função de formatação
                 corpo_html += formatar_df_para_html(df_vencidos_html, f"🚨 Projetos Vencidos ({len(df_vencidos_html)})", hoje)
                 corpo_html += formatar_df_para_html(df_proxima_semana_html, f"🗓️ Projetos Agendados até {proxima_segunda.strftime('%d/%m/%Y')} ({len(df_proxima_semana_html)})", hoje)
@@ -216,9 +219,8 @@ def tela_relatorios():
                 </body>
             </html>
             """
-            # --- FIM DO AGRUPAMENTO ---
 
-            # Envia o email (com novo assunto)
+            # Envia o email
             sucesso, mensagem = enviar_email(destinatario, f"Relatório diário de Projetos - {hoje.strftime('%d/%m/%Y')}", corpo_html)
 
             if sucesso:
