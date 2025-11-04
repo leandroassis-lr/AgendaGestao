@@ -483,41 +483,39 @@ def calcular_sla(projeto_row, df_sla):
 def get_color_for_name(name_str):
     """
     Gera uma cor consistente de uma lista com base em um nome.
-    CORRIGIDO: Agora ignora maiúsculas/minúsculas e espaços.
+    CORRIGIDO: Usa um hash melhor para evitar colisões.
     """
     # Lista de cores profissionais e distintas (para texto)
     COLORS_LIST = [
-        "#FFD529",  # Vermelho Escuro
+        "#D32F2F",  # Vermelho Escuro
         "#1976D2",  # Azul Escuro
         "#388E3C",  # Verde Escuro
         "#F57C00",  # Laranja
         "#7B1FA2",  # Roxo
         "#00796B",  # Teal
-        "#FFA07A",  # Rosa Escuro
+        "#C2185B",  # Rosa Escuro
         "#5D4037",  # Marrom
-        "#FF1F3D"   # Vermelho
+        "#BDB76B"   # Cinza Azulado
     ]
     
     if name_str is None or name_str == "N/A":
         return "#555" # Cor padrão (cinza)
 
-    # --- CORREÇÃO: Normaliza o nome antes de gerar a cor ---
-    # 1. Converte para string, 2. Remove espaços antes/depois, 3. Converte para MAIÚSCULO
+    # Normaliza o nome (ignora espaços, maiúsculas/minúsculas)
     name_normalized = str(name_str).strip().upper() 
     
-    # Se o nome normalizado for vazio (ex: só espaços), retorna cinza
     if not name_normalized:
         return "#555"
-    # --- FIM DA CORREÇÃO ---
 
     try:
-        # Cria o hash usando o nome normalizado
-        hash_val = sum(ord(char) for char in name_normalized)
+        # --- CORREÇÃO: Hash melhorado ---
+        # Multiplica o valor da letra pelo seu índice para diferenciar nomes
+        hash_val = 0
+        for i, char in enumerate(name_normalized):
+            hash_val += (ord(char) * (i + 1))
+        # --- FIM DA CORREÇÃO ---
+        
         color_index = hash_val % len(COLORS_LIST)
         return COLORS_LIST[color_index]
     except Exception:
         return "#555" # Cor padrão em caso de erro
-
-
-
-
