@@ -479,3 +479,34 @@ def calcular_sla(projeto_row, df_sla):
         if dias_restantes < 0: return f"Atrasado {-dias_restantes}d", "#EF5350" 
         elif dias_restantes == 0: return "SLA Vence Hoje!", "#FFA726" 
         else: return f"SLA: {dias_restantes}d restantes", "#66BB6F"
+
+
+def get_color_for_name(name_str):
+    """
+    Gera uma cor consistente de uma lista com base em um nome.
+    """
+    # Lista de cores profissionais e distintas (para texto)
+    COLORS_LIST = [
+        "#D32F2F",  # Vermelho Escuro
+        "#1976D2",  # Azul Escuro
+        "#388E3C",  # Verde Escuro
+        "#F57C00",  # Laranja
+        "#7B1FA2",  # Roxo
+        "#00796B",  # Teal
+        "#C2185B",  # Rosa Escuro
+        "#5D4037",  # Marrom
+        "#455A64"   # Cinza Azulado
+    ]
+    
+    if name_str is None or name_str == "N/A":
+        return "#555" # Cor padrão (cinza)
+
+    try:
+        # Cria um "hash" simples somando os valores dos caracteres do nome
+        hash_val = sum(ord(char) for char in str(name_str))
+        # Escolhe um índice de cor da lista
+        color_index = hash_val % len(COLORS_LIST)
+        return COLORS_LIST[color_index]
+    except Exception:
+        return "#555" # Cor padrão em caso de erro
+
