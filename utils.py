@@ -516,7 +516,8 @@ def get_color_for_name(name_str):
         color_index = hash_val % len(COLORS_LIST)
         return COLORS_LIST[color_index]
     except Exception:
-        return "#555" # Cor padrão em caso de erro
+        return "#0D0C0C" # Cor padrão em caso de erro
+
 
 
 
