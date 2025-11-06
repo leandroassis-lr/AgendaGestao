@@ -745,7 +745,6 @@ def tela_kanban():
     with col_busca:
         termo_busca = st.text_input("Buscar", key="kanban_termo_busca", placeholder="Digite um termo para buscar...", label_visibility="collapsed")
     with col_ordem:
-        # (Nota: Ordenação tem menos efeito no Kanban, mas mantemos para consistência do filtro)
         opcoes_ordenacao = ["Prioridade (Alta > Baixa)", "Data Agendamento (Mais Antigo)", "Data Agendamento (Mais Recente)"]
         ordem_selecionada = st.selectbox("Ordenar por:", options=opcoes_ordenacao, key="ordem_kanban", label_visibility="collapsed")
     
@@ -788,7 +787,7 @@ def tela_kanban():
     
     # --- NOVO BLOCO: PAINEL DE INDICADORES (KPIs) ---
     st.markdown("#### 📈 Indicadores da Visão Atual")
-    df_nao_finalizados = df_filtrado[~df_filtrado['Status'].str.contains("Finalizada|Cancelada", na=False, case=False)]
+    df_nao_finalizados = df_filtrado[~df_filtrado['Status'].str.contains("Finalizada|Cancelada", na=False, case=False)].copy() # Usa .copy()
     df_agendados = df_nao_finalizados[df_nao_finalizados['Agendamento'].notna()]
     kpi_vencidos = df_agendados[df_agendados['Agendamento'].dt.date < hoje]
     kpi_hoje = df_agendados[df_agendados['Agendamento'].dt.date == hoje]
@@ -801,9 +800,15 @@ def tela_kanban():
     col_kpi3.metric("⚙️ Em Andamento/Pendentes", len(kpi_em_andamento))
     col_kpi4.metric("🗃️ Backlog (Sem Data)", len(kpi_backlog))
 
-    # --- KPIs de Evolução ---
+    # --- KPIs de Evolução (Calculados com a nova função) ---
     if not df_nao_finalizados.empty:
-        df_nao_finalizados['proxima_etapa_calc'] = df_nao_finalizados.apply(get_next_stage, args=(df_etapas_config,), axis=1)
+        # --- CORREÇÃO: Aplicar get_next_stage ao df_filtrado ---
+        # (Para que as colunas do Kanban também tenham a info)
+        df_filtrado['proxima_etapa_calc'] = df_filtrado.apply(get_next_stage, args=(df_etapas_config,), axis=1)
+        
+        # Agora, filtre o df_nao_finalizados a partir do df_filtrado já calculado
+        df_nao_finalizados = df_filtrado[df_filtrado.index.isin(df_nao_finalizados.index)]
+        
         stage_counts = df_nao_finalizados['proxima_etapa_calc'].value_counts()
         stage_counts = stage_counts.drop(labels=["Ignorado", "Sem Etapas", "Concluído"], errors='ignore')
         
@@ -812,7 +817,8 @@ def tela_kanban():
             top_stages = stage_counts.head(4)
             cols_kpi_stages = st.columns(4)
             for i, (stage, count) in enumerate(top_stages.items()):
-                cols_kpi_stages[i].metric(f"Etapa: {stage}", count)
+                # --- CORREÇÃO: Remove "Etapa:" do label ---
+                cols_kpi_stages[i].metric(label=f"{stage}", value=count)
     
     st.divider()
     # --- FIM DO BLOCO DE KPIs ---
@@ -824,14 +830,13 @@ def tela_kanban():
     f_nao_iniciada = (df_filtrado['Agendamento'].notna()) & (df_filtrado['Status'].str.lower().str.contains('não iniciad')) & (~f_pendencia)
     f_em_andamento = (df_filtrado['Agendamento'].notna()) & (df_filtrado['Status'].str.lower().isin(['em andamento', 'pausado'])) & (~f_pendencia) & (~f_nao_iniciada)
     
-    # Aplica a ordenação selecionada a CADA coluna
     def sort_df(df_col, ordem):
         if ordem == "Data Agendamento (Mais Recente)": return df_col.sort_values(by="Agendamento", ascending=False, na_position='last')
         if ordem == "Data Agendamento (Mais Antigo)": return df_col.sort_values(by="Agendamento", ascending=True, na_position='last')
         if ordem == "Prioridade (Alta > Baixa)":
             priority_map = {"Alta": 1, "Média": 2, "Baixa": 3}; df_col['prioridade_num'] = df_col['Prioridade'].map(priority_map).fillna(2)
             return df_col.sort_values(by="prioridade_num", ascending=True).drop(columns=['prioridade_num'])
-        return df_col # Padrão (ou outra ordenação)
+        return df_col 
 
     dfs_colunas = {
         "BACKLOG": sort_df(df_filtrado[f_backlog], ordem_selecionada), 
@@ -881,7 +886,6 @@ def tela_kanban():
                         st.markdown(f"**Editando: {projeto_nome_text.upper()}**") 
                         
                         st.markdown("#### Evolução da Demanda")
-                        # ... (código da evolução) ...
                         etapas_do_projeto = df_etapas_config[df_etapas_config["Nome do Projeto"] == row.get("Projeto", "")] if "Nome do Projeto" in df_etapas_config.columns else pd.DataFrame()
                         etapas_concluidas_str = row.get("Etapas Concluidas", ""); etapas_concluidas_lista = []
                         if pd.notna(etapas_concluidas_str) and isinstance(etapas_concluidas_str, str) and etapas_concluidas_str.strip(): etapas_concluidas_lista = [e.strip() for e in etapas_concluidas_str.split(',') if e.strip()]
@@ -896,7 +900,6 @@ def tela_kanban():
                         else: st.caption("Nenhuma etapa de evolução configurada."); todas_etapas_possiveis = []; total_etapas = 0
                         
                         st.markdown("#### Informações e Prazos")
-                        # ... (código dos prazos c1-c4) ...
                         c1,c2,c3,c4 = st.columns(4)
                         with c1: status_selecionaveis = status_options[:]; status_atual = row.get('Status'); idx_status = status_selecionaveis.index(status_atual) if status_atual in status_selecionaveis else 0; novo_status_selecionado = st.selectbox("Status", status_selecionaveis, index=idx_status, key=f"status_kanban_{project_id}")
                         with c2: abertura_default = _to_date_safe(row.get('Data de Abertura')); nova_data_abertura = st.date_input("Data Abertura", value=abertura_default, key=f"abertura_kanban_{project_id}", format="DD/MM/YYYY")
@@ -904,7 +907,6 @@ def tela_kanban():
                         with c4: finalizacao_default = _to_date_safe(row.get('Data de Finalização')); nova_data_finalizacao = st.date_input("Data Finalização", value=finalizacao_default, key=f"final_kanban_{project_id}", format="DD/MM/YYYY")
                         
                         st.markdown("#### Detalhes do Projeto")
-                        # ... (código dos detalhes c5-c9 e prioridade) ...
                         c5,c6,c7, c_prio = st.columns(4) 
                         with c5: projeto_val = row.get('Projeto', ''); idx_proj = projeto_options.index(projeto_val) if projeto_val in projeto_options else 0; novo_projeto = st.selectbox("Projeto", options=projeto_options, index=idx_proj, key=f"proj_kanban_{project_id}")
                         with c6: novo_analista = st.text_input("Analista", value=row.get('Analista', ''), key=f"analista_kanban_{project_id}")
@@ -917,11 +919,11 @@ def tela_kanban():
                         with c8: agencia_val = row.get('Agência', ''); idx_ag = agencia_options.index(agencia_val) if agencia_val in agencia_options else 0; nova_agencia = st.selectbox("Agência", agencia_options, index=idx_ag, key=f"agencia_kanban_{project_id}")
                         with c9: tecnico_val = row.get('Técnico', ''); idx_tec = tecnico_options.index(tecnico_val) if tecnico_val in tecnico_options else 0; novo_tecnico = st.selectbox("Técnico", tecnico_options, index=idx_tec, key=f"tecnico_kanban_{project_id}")
                         
-                        # ... (código dos text_area e botões) ...
                         nova_demanda = st.text_input("Demanda", value=row.get('Demanda', ''), key=f"demanda_kanban_{project_id}")
                         nova_descricao = st.text_area("Descrição", value=row.get('Descrição', ''), key=f"desc_kanban_{project_id}")
                         nova_observacao = st.text_area("Observação / Pendências", value=row.get('Observação', ''), key=f"obs_kanban_{project_id}")
                         log_agendamento_existente = row.get("Log Agendamento", "") if pd.notna(row.get("Log Agendamento")) else ""; st.text_area("Histórico de Alterações", value=log_agendamento_existente, height=100, disabled=True, key=f"log_kanban_{project_id}")
+                        
                         _, col_save, col_delete = st.columns([3, 1.5, 1]) 
                         with col_save: btn_salvar_card = st.form_submit_button("💾 Salvar", use_container_width=True)
                         with col_delete: btn_excluir_card = st.form_submit_button("🗑️ Excluir", use_container_width=True, type="primary")
@@ -937,7 +939,7 @@ def tela_kanban():
                                 if total_etapas > 0 and len(novas_etapas_marcadas) < total_etapas: st.error(f"ERRO: Para 'Finalizado', todas as {total_etapas} etapas devem estar selecionadas.", icon="🚨"); st.stop() 
                                 if not _to_date_safe(nova_data_finalizacao): st.error("ERRO: Se 'Finalizada', Data de Finalização é obrigatória.", icon="🚨"); st.stop() 
                             
-                            # --- Lógica de Status Automático (Corrigida) ---
+                            # Lógica de Status Automático (Corrigida)
                             status_atual_normalizado = str(row.get('Status', '')).strip().upper()
                             status_final_normalizado = str(status_final).strip().upper()
                             if (status_atual_normalizado == 'NÃO INICIADA') and (len(novas_etapas_marcadas) > 0) and (status_final_normalizado == 'NÃO INICIADA'):
@@ -966,7 +968,7 @@ def tela_kanban():
                 st.markdown(f"<div style='text-align:center; padding-top: 5px;'>Pág {st.session_state[key_pagina]} de {total_paginas}</div>", unsafe_allow_html=True)
             with col_btn2:
                 if st.button("➡️", key=f"next_{col_nome}", use_container_width=True, disabled=(st.session_state[key_pagina] >= total_paginas)):
-                    st.session_state[key_pagina] += 1; st.rerun()
+                    st.session_state[key_pagina] += 1; st.rerun()     
                     
 # ----------------- FUNÇÃO MAIN ----------------- #
 
@@ -1045,6 +1047,7 @@ def main():
 if __name__ == "__main__":
     utils.criar_tabelas_iniciais() 
     main()
+
 
 
 
