@@ -470,20 +470,16 @@ def tela_projetos():
     df['Agendamento'] = pd.to_datetime(df['Agendamento'], errors='coerce') 
     df['Agendamento_str'] = df['Agendamento'].dt.strftime("%d/%m/%y").fillna('N/A')
 
-    # --- >>> AJUSTE 1: Busca e Ordenação lado a lado <<< ---
+    # Filtros e Ordenação
     st.markdown("#### 🔍 Busca e Ordenação")
-    col_busca, col_ordem = st.columns([3, 2]) # 3 partes para busca, 2 para ordem
-    
+    col_busca, col_ordem = st.columns([3, 2])
     with col_busca:
         termo_busca = st.text_input("Buscar", key="termo_busca", placeholder="Digite um termo para buscar...", label_visibility="collapsed")
-    
     with col_ordem:
         opcoes_ordenacao = ["Data Agendamento (Mais Recente)", "Data Agendamento (Mais Antigo)", "Prioridade (Alta > Baixa)", "SLA Restante (Menor > Maior)"]
         ordem_selecionada = st.selectbox("Ordenar por:", options=opcoes_ordenacao, key="ordem_projetos", label_visibility="collapsed")
     
     st.markdown("#### 🎛️ Filtros")
-    # --- FIM DO AJUSTE 1 ---
-    
     filtros = {} 
     col1, col2, col3, col4 = st.columns(4); campos_linha_1 = {"Status": col1, "Analista": col2, "Agência": col3, "Gestor": col4}
     for campo, col in campos_linha_1.items():
@@ -520,12 +516,11 @@ def tela_projetos():
 
     st.divider()
     
-    # --- >>> AJUSTE 2: PAINEL DE INDICADORES (KPIs) <<< ---
+    # --- KPIs de Status e Evolução ---
     st.markdown("#### 📈 Indicadores da Visão Atual")
     hoje = date.today()
     
-    # --- KPIs de Status ---
-    df_nao_finalizados = df_filtrado[~df_filtrado['Status'].str.contains("Finalizada|Cancelada", na=False, case=False)]
+    df_nao_finalizados = df_filtrado[~df_filtrado['Status'].str.contains("Finalizada|Cancelada", na=False, case=False)].copy() # Usa .copy() para evitar SettingWithCopyWarning
     df_agendados = df_nao_finalizados[df_nao_finalizados['Agendamento'].notna()]
     kpi_vencidos = df_agendados[df_agendados['Agendamento'].dt.date < hoje]
     kpi_hoje = df_agendados[df_agendados['Agendamento'].dt.date == hoje]
@@ -538,24 +533,26 @@ def tela_projetos():
     col_kpi3.metric("⚙️ Em Andamento/Pendentes", len(kpi_em_andamento))
     col_kpi4.metric("🗃️ Backlog (Sem Data)", len(kpi_backlog))
 
-    # --- KPIs de Evolução (Calculados com a nova função) ---
-    if not df_nao_finalizados.empty:
-        # Calcula a próxima etapa para cada projeto ativo
-        df_nao_finalizados['proxima_etapa_calc'] = df_nao_finalizados.apply(get_next_stage, args=(df_etapas_config,), axis=1)
-        # Conta os valores
-        stage_counts = df_nao_finalizados['proxima_etapa_calc'].value_counts()
-        # Remove os status que não são etapas reais
+    # --- CORREÇÃO: Aplicar get_next_stage a TODO o df_filtrado ---
+    # Isso garante que df_paginado (que vem de df_filtrado) tenha a coluna
+    if not df_filtrado.empty:
+        df_filtrado['proxima_etapa_calc'] = df_filtrado.apply(get_next_stage, args=(df_etapas_config,), axis=1)
+    
+    # KPIs de Evolução (agora usa a coluna de df_filtrado)
+    if not df_filtrado.empty:
+        stage_counts = df_filtrado['proxima_etapa_calc'].value_counts()
         stage_counts = stage_counts.drop(labels=["Ignorado", "Sem Etapas", "Concluído"], errors='ignore')
         
         if not stage_counts.empty:
             st.markdown("#### 📋 Resumo das Próximas Etapas")
-            # Mostra os 4 mais comuns
             top_stages = stage_counts.head(4)
             cols_kpi_stages = st.columns(4)
             for i, (stage, count) in enumerate(top_stages.items()):
-                cols_kpi_stages[i].metric(f"Etapa: {stage}", count)
+                # --- CORREÇÃO: Remove "Etapa:" do label ---
+                cols_kpi_stages[i].metric(label=f"{stage}", value=count) # Remove o prefixo "Etapa:"
     
     st.divider()
+    # --- FIM DAS CORREÇÕES DE KPI ---
 
     # Lógica de Ordenação
     if ordem_selecionada == "Data Agendamento (Mais Recente)": df_filtrado = df_filtrado.sort_values(by="Agendamento", ascending=False, na_position='last')
@@ -621,18 +618,18 @@ def tela_projetos():
             if agendamento_date_obj == hoje: icone_lembrete = "❗"; cor_lembrete = "red"; texto_lembrete_html = f"<p style='color:{cor_lembrete}; font-weight:bold; margin-top: -5px;'>ATENÇÃO - DEMANDA PARA HOJE</p>"
             elif agendamento_date_obj and hoje < agendamento_date_obj <= limite_lembrete: icone_lembrete = "⚠️"; cor_lembrete = "orange"; texto_lembrete_html = f"<p style='color:{cor_lembrete}; font-weight:bold; margin-top: -5px;'>Lembrete: Próximo!</p>"
 
-        # Lógica Próxima Etapa
-        # (Usa a coluna já calculada se existir, senão calcula na hora)
-        if 'proxima_etapa_calc' in row:
-            proxima_etapa = row['proxima_etapa_calc']
-            if proxima_etapa == "Ignorado" or proxima_etapa == "Sem Etapas": proxima_etapa_texto = "Nenhuma etapa configurada"
-            elif proxima_etapa == "Concluído": proxima_etapa_texto = "✔️ Todas concluídas"
-            else: proxima_etapa_texto = proxima_etapa
+        # --- CORREÇÃO: Lógica Próxima Etapa ---
+        # Pega o valor da coluna pré-calculada
+        proxima_etapa = row.get('proxima_etapa_calc', 'Sem Etapas') # Usa .get() para segurança
+        
+        if proxima_etapa == "Ignorado" or proxima_etapa == "Sem Etapas":
+            proxima_etapa_texto = "Nenhuma etapa configurada"
+        elif proxima_etapa == "Concluído":
+            proxima_etapa_texto = "✔️ Todas concluídas"
         else:
-            # Fallback (caso a coluna não tenha sido calculada)
-            proxima_etapa_texto = "N/A" # Simples fallback
+            proxima_etapa_texto = proxima_etapa # Apenas o nome da etapa
 
-        # Cabeçalho do Card (COM GESTOR)
+        # Cabeçalho do Card
         st.markdown("<div class='project-card'>", unsafe_allow_html=True)
         col_info_card, col_analista_card, col_agencia_card, col_status_card = st.columns([2.5, 2, 1.5, 2.0]) 
         with col_info_card:
@@ -721,7 +718,7 @@ def tela_projetos():
         with col_prev_pag:
             if st.button("⬅️ Anterior", use_container_width=True, disabled=(st.session_state.page_number == 0)): st.session_state.page_number -= 1; st.rerun()
         with col_next_pag:
-            if st.button("Próxima ➡️", use_container_width=True, disabled=(st.session_state.page_number >= total_pages - 1)): st.session_state.page_number += 1; st.rerun()    
+            if st.button("Próxima ➡️", use_container_width=True, disabled=(st.session_state.page_number >= total_pages - 1)): st.session_state.page_number += 1; st.rerun()   
                 
 # ---- Tela Kanban ---- #
 
@@ -1048,6 +1045,7 @@ def main():
 if __name__ == "__main__":
     utils.criar_tabelas_iniciais() 
     main()
+
 
 
 
