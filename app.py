@@ -424,6 +424,41 @@ def tela_cadastro_projeto():
      
 # --- TELA_PROJETOS --- #
 
+def get_next_stage(row, etapas_config_df):
+    """
+    Função helper para calcular a próxima etapa pendente para uma linha (um projeto).
+    Usado para calcular os KPIs de etapas.
+    """
+    projeto_nome = row.get("Projeto")
+    # Retorna "Ignorado" se o projeto não tiver nome ou já estiver finalizado/cancelado
+    if pd.isna(projeto_nome):
+        return "Ignorado"
+    if 'finalizad' in str(row.get('Status','')).lower() or 'cancelad' in str(row.get('Status','')).lower():
+        return "Ignorado"
+        
+    # Busca as etapas configuradas para este tipo de projeto
+    etapas_possiveis_df = etapas_config_df[etapas_config_df["Nome do Projeto"] == projeto_nome]
+    if etapas_possiveis_df.empty or "Etapa" not in etapas_possiveis_df.columns:
+        return "Sem Etapas" # Nenhuma etapa configurada para este tipo
+    
+    todas_etapas_lista = etapas_possiveis_df["Etapa"].astype(str).str.strip().tolist()
+    
+    # Pega as etapas já concluídas
+    etapas_concluidas_str = row.get("Etapas Concluidas", "")
+    etapas_concluidas_set = set()
+    if pd.notna(etapas_concluidas_str) and isinstance(etapas_concluidas_str, str) and etapas_concluidas_str.strip():
+         etapas_concluidas_set = set(e.strip() for e in etapas_concluidas_str.split(',') if e.strip())
+
+    # Encontra a próxima etapa
+    proxima_etapa = next((etapa for etapa in todas_etapas_lista if etapa not in etapas_concluidas_set), None)
+    
+    if proxima_etapa:
+        return proxima_etapa # Retorna o nome da próxima etapa
+    elif len(todas_etapas_lista) > 0:
+        return "Concluído" # Todas as etapas deste projeto foram marcadas
+    else:
+        return "Sem Etapas" # Fallback
+
 def tela_projetos():
     st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True)
     
@@ -435,9 +470,20 @@ def tela_projetos():
     df['Agendamento'] = pd.to_datetime(df['Agendamento'], errors='coerce') 
     df['Agendamento_str'] = df['Agendamento'].dt.strftime("%d/%m/%y").fillna('N/A')
 
-    # Filtros 
-    st.markdown("#### 🔍 Filtros e Busca")
-    termo_busca = st.text_input("Buscar", key="termo_busca", placeholder="Digite um termo para buscar...")
+    # --- >>> AJUSTE 1: Busca e Ordenação lado a lado <<< ---
+    st.markdown("#### 🔍 Busca e Ordenação")
+    col_busca, col_ordem = st.columns([3, 2]) # 3 partes para busca, 2 para ordem
+    
+    with col_busca:
+        termo_busca = st.text_input("Buscar", key="termo_busca", placeholder="Digite um termo para buscar...", label_visibility="collapsed")
+    
+    with col_ordem:
+        opcoes_ordenacao = ["Data Agendamento (Mais Recente)", "Data Agendamento (Mais Antigo)", "Prioridade (Alta > Baixa)", "SLA Restante (Menor > Maior)"]
+        ordem_selecionada = st.selectbox("Ordenar por:", options=opcoes_ordenacao, key="ordem_projetos", label_visibility="collapsed")
+    
+    st.markdown("#### 🎛️ Filtros")
+    # --- FIM DO AJUSTE 1 ---
+    
     filtros = {} 
     col1, col2, col3, col4 = st.columns(4); campos_linha_1 = {"Status": col1, "Analista": col2, "Agência": col3, "Gestor": col4}
     for campo, col in campos_linha_1.items():
@@ -474,14 +520,13 @@ def tela_projetos():
 
     st.divider()
     
-    # --- >>> NOVO BLOCO: PAINEL DE INDICADORES (KPIs) <<< ---
+    # --- >>> AJUSTE 2: PAINEL DE INDICADORES (KPIs) <<< ---
     st.markdown("#### 📈 Indicadores da Visão Atual")
     hoje = date.today()
     
-    # Filtros para os KPIs (baseados no df_filtrado)
+    # --- KPIs de Status ---
     df_nao_finalizados = df_filtrado[~df_filtrado['Status'].str.contains("Finalizada|Cancelada", na=False, case=False)]
     df_agendados = df_nao_finalizados[df_nao_finalizados['Agendamento'].notna()]
-
     kpi_vencidos = df_agendados[df_agendados['Agendamento'].dt.date < hoje]
     kpi_hoje = df_agendados[df_agendados['Agendamento'].dt.date == hoje]
     kpi_em_andamento = df_filtrado[df_filtrado['Status'].str.lower().isin(['em andamento', 'pausado', 'pendencia'])]
@@ -492,13 +537,26 @@ def tela_projetos():
     col_kpi2.metric("❗ Para Hoje", len(kpi_hoje))
     col_kpi3.metric("⚙️ Em Andamento/Pendentes", len(kpi_em_andamento))
     col_kpi4.metric("🗃️ Backlog (Sem Data)", len(kpi_backlog))
-    # --- >>> FIM DO BLOCO DE KPIs <<< ---
 
-    # Ordenação (agora vem depois dos KPIs)
-    st.markdown("#### 📊 Ordenação de Projetos")
-    opcoes_ordenacao = ["Data Agendamento (Mais Recente)", "Data Agendamento (Mais Antigo)", "Prioridade (Alta > Baixa)", "SLA Restante (Menor > Maior)"]
-    ordem_selecionada = st.selectbox("Ordenar por:", options=opcoes_ordenacao, key="ordem_projetos", label_visibility="collapsed")
+    # --- KPIs de Evolução (Calculados com a nova função) ---
+    if not df_nao_finalizados.empty:
+        # Calcula a próxima etapa para cada projeto ativo
+        df_nao_finalizados['proxima_etapa_calc'] = df_nao_finalizados.apply(get_next_stage, args=(df_etapas_config,), axis=1)
+        # Conta os valores
+        stage_counts = df_nao_finalizados['proxima_etapa_calc'].value_counts()
+        # Remove os status que não são etapas reais
+        stage_counts = stage_counts.drop(labels=["Ignorado", "Sem Etapas", "Concluído"], errors='ignore')
+        
+        if not stage_counts.empty:
+            st.markdown("#### 📋 Resumo das Próximas Etapas")
+            # Mostra os 4 mais comuns
+            top_stages = stage_counts.head(4)
+            cols_kpi_stages = st.columns(4)
+            for i, (stage, count) in enumerate(top_stages.items()):
+                cols_kpi_stages[i].metric(f"Etapa: {stage}", count)
     
+    st.divider()
+
     # Lógica de Ordenação
     if ordem_selecionada == "Data Agendamento (Mais Recente)": df_filtrado = df_filtrado.sort_values(by="Agendamento", ascending=False, na_position='last')
     elif ordem_selecionada == "Data Agendamento (Mais Antigo)": df_filtrado = df_filtrado.sort_values(by="Agendamento", ascending=True, na_position='last')
@@ -522,7 +580,7 @@ def tela_projetos():
     col_info_export, col_export_btn = st.columns([4, 1.2]); total_items = len(df_filtrado)
     with col_info_export: st.info(f"Projetos encontrados (filtrados): {total_items}")
     with col_export_btn:
-        excel_bytes = utils.dataframe_to_excel_bytes(df_filtrado.drop(columns=['sla_dias_restantes'], errors='ignore'))
+        excel_bytes = utils.dataframe_to_excel_bytes(df_filtrado.drop(columns=['sla_dias_restantes', 'proxima_etapa_calc'], errors='ignore'))
         st.download_button(label="📥 Exportar para Excel", data=excel_bytes, file_name=f"projetos_{date.today().strftime('%Y-%m-%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
     st.divider()
     items_per_page = 10; 
@@ -564,33 +622,29 @@ def tela_projetos():
             elif agendamento_date_obj and hoje < agendamento_date_obj <= limite_lembrete: icone_lembrete = "⚠️"; cor_lembrete = "orange"; texto_lembrete_html = f"<p style='color:{cor_lembrete}; font-weight:bold; margin-top: -5px;'>Lembrete: Próximo!</p>"
 
         # Lógica Próxima Etapa
-        proxima_etapa_texto = "Nenhuma etapa configurada" 
-        etapas_configuradas_df = df_etapas_config[df_etapas_config["Nome do Projeto"] == projeto_nome_text] if "Nome do Projeto" in df_etapas_config.columns else pd.DataFrame()
-        if not etapas_configuradas_df.empty and "Etapa" in etapas_configuradas_df.columns:
-            todas_etapas_lista = etapas_configuradas_df["Etapa"].astype(str).str.strip().tolist()
-            etapas_concluidas_str = row.get("Etapas Concluidas", ""); etapas_concluidas_lista = []
-            if pd.notna(etapas_concluidas_str) and isinstance(etapas_concluidas_str, str) and etapas_concluidas_str.strip(): etapas_concluidas_lista = [e.strip() for e in etapas_concluidas_str.split(',') if e.strip()]
-            proxima_etapa = next((etapa for etapa in todas_etapas_lista if etapa not in etapas_concluidas_lista), None)
-            if proxima_etapa: proxima_etapa_texto = proxima_etapa
-            elif len(todas_etapas_lista) > 0: proxima_etapa_texto = "✔️ Todas concluídas"
+        # (Usa a coluna já calculada se existir, senão calcula na hora)
+        if 'proxima_etapa_calc' in row:
+            proxima_etapa = row['proxima_etapa_calc']
+            if proxima_etapa == "Ignorado" or proxima_etapa == "Sem Etapas": proxima_etapa_texto = "Nenhuma etapa configurada"
+            elif proxima_etapa == "Concluído": proxima_etapa_texto = "✔️ Todas concluídas"
+            else: proxima_etapa_texto = proxima_etapa
+        else:
+            # Fallback (caso a coluna não tenha sido calculada)
+            proxima_etapa_texto = "N/A" # Simples fallback
 
         # Cabeçalho do Card (COM GESTOR)
         st.markdown("<div class='project-card'>", unsafe_allow_html=True)
         col_info_card, col_analista_card, col_agencia_card, col_status_card = st.columns([2.5, 2, 1.5, 2.0]) 
-        
         with col_info_card:
             st.markdown(f"<h6>{icone_lembrete} 📅 {agendamento_str}</h6>", unsafe_allow_html=True) 
             st.markdown(f"<h5 style='margin:2px 0'>{projeto_nome_text.upper()}</h5>", unsafe_allow_html=True)
-            
         with col_analista_card:
             st.markdown(f"**Analista:** {analista_text}")
             st.markdown(f"<p style='color:{sla_color_real}; font-weight:bold; margin-top: 5px;'>{sla_text}</p>", unsafe_allow_html=True) 
             st.markdown(texto_lembrete_html, unsafe_allow_html=True) 
-            
         with col_agencia_card:
             st.markdown(f"**Agência:** {agencia_text}") 
             st.markdown(f"<span style='color:{gestor_color}; font-weight: bold;'>Gestor: {gestor_text}</span>", unsafe_allow_html=True)
-            
         with col_status_card:
             status_color_name = utils.get_status_color(str(status_raw)) 
             st.markdown(
@@ -667,7 +721,7 @@ def tela_projetos():
         with col_prev_pag:
             if st.button("⬅️ Anterior", use_container_width=True, disabled=(st.session_state.page_number == 0)): st.session_state.page_number -= 1; st.rerun()
         with col_next_pag:
-            if st.button("Próxima ➡️", use_container_width=True, disabled=(st.session_state.page_number >= total_pages - 1)): st.session_state.page_number += 1; st.rerun()
+            if st.button("Próxima ➡️", use_container_width=True, disabled=(st.session_state.page_number >= total_pages - 1)): st.session_state.page_number += 1; st.rerun()    
                 
 # ---- Tela Kanban ---- #
 
@@ -688,9 +742,17 @@ def tela_kanban():
 
     hoje = date.today(); limite_lembrete = hoje + timedelta(days=3)
 
-    # --- 2. Bloco de Filtros ---
-    st.markdown("#### 🔍 Filtros e Busca")
-    termo_busca = st.text_input("Buscar", key="kanban_termo_busca", placeholder="Digite um termo para buscar...")
+    # --- 2. Bloco de Filtros (Com Busca e Ordenação lado a lado) ---
+    st.markdown("#### 🔍 Busca e Ordenação")
+    col_busca, col_ordem = st.columns([3, 2])
+    with col_busca:
+        termo_busca = st.text_input("Buscar", key="kanban_termo_busca", placeholder="Digite um termo para buscar...", label_visibility="collapsed")
+    with col_ordem:
+        # (Nota: Ordenação tem menos efeito no Kanban, mas mantemos para consistência do filtro)
+        opcoes_ordenacao = ["Prioridade (Alta > Baixa)", "Data Agendamento (Mais Antigo)", "Data Agendamento (Mais Recente)"]
+        ordem_selecionada = st.selectbox("Ordenar por:", options=opcoes_ordenacao, key="ordem_kanban", label_visibility="collapsed")
+    
+    st.markdown("#### 🎛️ Filtros")
     filtros = {} 
     col1, col2, col3, col4 = st.columns(4); campos_linha_1 = {"Status": col1, "Analista": col2, "Agência": col3, "Gestor": col4}
     for campo, col in campos_linha_1.items():
@@ -727,13 +789,10 @@ def tela_kanban():
 
     st.divider()
     
-    # --- >>> NOVO BLOCO: PAINEL DE INDICADORES (KPIs) <<< ---
+    # --- NOVO BLOCO: PAINEL DE INDICADORES (KPIs) ---
     st.markdown("#### 📈 Indicadores da Visão Atual")
-    
-    # Filtros para os KPIs (baseados no df_filtrado)
     df_nao_finalizados = df_filtrado[~df_filtrado['Status'].str.contains("Finalizada|Cancelada", na=False, case=False)]
     df_agendados = df_nao_finalizados[df_nao_finalizados['Agendamento'].notna()]
-
     kpi_vencidos = df_agendados[df_agendados['Agendamento'].dt.date < hoje]
     kpi_hoje = df_agendados[df_agendados['Agendamento'].dt.date == hoje]
     kpi_em_andamento = df_filtrado[df_filtrado['Status'].str.lower().isin(['em andamento', 'pausado', 'pendencia'])]
@@ -744,9 +803,22 @@ def tela_kanban():
     col_kpi2.metric("❗ Para Hoje", len(kpi_hoje))
     col_kpi3.metric("⚙️ Em Andamento/Pendentes", len(kpi_em_andamento))
     col_kpi4.metric("🗃️ Backlog (Sem Data)", len(kpi_backlog))
+
+    # --- KPIs de Evolução ---
+    if not df_nao_finalizados.empty:
+        df_nao_finalizados['proxima_etapa_calc'] = df_nao_finalizados.apply(get_next_stage, args=(df_etapas_config,), axis=1)
+        stage_counts = df_nao_finalizados['proxima_etapa_calc'].value_counts()
+        stage_counts = stage_counts.drop(labels=["Ignorado", "Sem Etapas", "Concluído"], errors='ignore')
+        
+        if not stage_counts.empty:
+            st.markdown("#### 📋 Resumo das Próximas Etapas")
+            top_stages = stage_counts.head(4)
+            cols_kpi_stages = st.columns(4)
+            for i, (stage, count) in enumerate(top_stages.items()):
+                cols_kpi_stages[i].metric(f"Etapa: {stage}", count)
     
-    st.divider() # Adiciona um divisor extra
-    # --- >>> FIM DO BLOCO DE KPIs <<< ---
+    st.divider()
+    # --- FIM DO BLOCO DE KPIs ---
 
     # --- 4. Definir as colunas e filtros (LÓGICA CORRIGIDA) ---
     colunas_kanban = ["BACKLOG", "PENDÊNCIA", "NÃO INICIADA", "EM ANDAMENTO"] 
@@ -754,11 +826,21 @@ def tela_kanban():
     f_pendencia = (df_filtrado['Agendamento'].notna()) & (df_filtrado['Status'].str.lower().str.contains('pendencia'))
     f_nao_iniciada = (df_filtrado['Agendamento'].notna()) & (df_filtrado['Status'].str.lower().str.contains('não iniciad')) & (~f_pendencia)
     f_em_andamento = (df_filtrado['Agendamento'].notna()) & (df_filtrado['Status'].str.lower().isin(['em andamento', 'pausado'])) & (~f_pendencia) & (~f_nao_iniciada)
+    
+    # Aplica a ordenação selecionada a CADA coluna
+    def sort_df(df_col, ordem):
+        if ordem == "Data Agendamento (Mais Recente)": return df_col.sort_values(by="Agendamento", ascending=False, na_position='last')
+        if ordem == "Data Agendamento (Mais Antigo)": return df_col.sort_values(by="Agendamento", ascending=True, na_position='last')
+        if ordem == "Prioridade (Alta > Baixa)":
+            priority_map = {"Alta": 1, "Média": 2, "Baixa": 3}; df_col['prioridade_num'] = df_col['Prioridade'].map(priority_map).fillna(2)
+            return df_col.sort_values(by="prioridade_num", ascending=True).drop(columns=['prioridade_num'])
+        return df_col # Padrão (ou outra ordenação)
+
     dfs_colunas = {
-        "BACKLOG": df_filtrado[f_backlog].sort_values(by="Prioridade", key=lambda p: p.map({"Alta":1, "Média":2, "Baixa":3}).fillna(2)), 
-        "PENDÊNCIA": df_filtrado[f_pendencia].sort_values(by="Agendamento", ascending=True, na_position='last'), 
-        "NÃO INICIADA": df_filtrado[f_nao_iniciada].sort_values(by="Agendamento", ascending=True, na_position='last'), 
-        "EM ANDAMENTO": df_filtrado[f_em_andamento].sort_values(by="Agendamento", ascending=True, na_position='last') 
+        "BACKLOG": sort_df(df_filtrado[f_backlog], ordem_selecionada), 
+        "PENDÊNCIA": sort_df(df_filtrado[f_pendencia], ordem_selecionada), 
+        "NÃO INICIADA": sort_df(df_filtrado[f_nao_iniciada], ordem_selecionada), 
+        "EM ANDAMENTO": sort_df(df_filtrado[f_em_andamento], ordem_selecionada) 
     }
 
     cols_streamlit = st.columns(len(colunas_kanban))
@@ -802,6 +884,7 @@ def tela_kanban():
                         st.markdown(f"**Editando: {projeto_nome_text.upper()}**") 
                         
                         st.markdown("#### Evolução da Demanda")
+                        # ... (código da evolução) ...
                         etapas_do_projeto = df_etapas_config[df_etapas_config["Nome do Projeto"] == row.get("Projeto", "")] if "Nome do Projeto" in df_etapas_config.columns else pd.DataFrame()
                         etapas_concluidas_str = row.get("Etapas Concluidas", ""); etapas_concluidas_lista = []
                         if pd.notna(etapas_concluidas_str) and isinstance(etapas_concluidas_str, str) and etapas_concluidas_str.strip(): etapas_concluidas_lista = [e.strip() for e in etapas_concluidas_str.split(',') if e.strip()]
@@ -816,6 +899,7 @@ def tela_kanban():
                         else: st.caption("Nenhuma etapa de evolução configurada."); todas_etapas_possiveis = []; total_etapas = 0
                         
                         st.markdown("#### Informações e Prazos")
+                        # ... (código dos prazos c1-c4) ...
                         c1,c2,c3,c4 = st.columns(4)
                         with c1: status_selecionaveis = status_options[:]; status_atual = row.get('Status'); idx_status = status_selecionaveis.index(status_atual) if status_atual in status_selecionaveis else 0; novo_status_selecionado = st.selectbox("Status", status_selecionaveis, index=idx_status, key=f"status_kanban_{project_id}")
                         with c2: abertura_default = _to_date_safe(row.get('Data de Abertura')); nova_data_abertura = st.date_input("Data Abertura", value=abertura_default, key=f"abertura_kanban_{project_id}", format="DD/MM/YYYY")
@@ -823,6 +907,7 @@ def tela_kanban():
                         with c4: finalizacao_default = _to_date_safe(row.get('Data de Finalização')); nova_data_finalizacao = st.date_input("Data Finalização", value=finalizacao_default, key=f"final_kanban_{project_id}", format="DD/MM/YYYY")
                         
                         st.markdown("#### Detalhes do Projeto")
+                        # ... (código dos detalhes c5-c9 e prioridade) ...
                         c5,c6,c7, c_prio = st.columns(4) 
                         with c5: projeto_val = row.get('Projeto', ''); idx_proj = projeto_options.index(projeto_val) if projeto_val in projeto_options else 0; novo_projeto = st.selectbox("Projeto", options=projeto_options, index=idx_proj, key=f"proj_kanban_{project_id}")
                         with c6: novo_analista = st.text_input("Analista", value=row.get('Analista', ''), key=f"analista_kanban_{project_id}")
@@ -835,11 +920,11 @@ def tela_kanban():
                         with c8: agencia_val = row.get('Agência', ''); idx_ag = agencia_options.index(agencia_val) if agencia_val in agencia_options else 0; nova_agencia = st.selectbox("Agência", agencia_options, index=idx_ag, key=f"agencia_kanban_{project_id}")
                         with c9: tecnico_val = row.get('Técnico', ''); idx_tec = tecnico_options.index(tecnico_val) if tecnico_val in tecnico_options else 0; novo_tecnico = st.selectbox("Técnico", tecnico_options, index=idx_tec, key=f"tecnico_kanban_{project_id}")
                         
+                        # ... (código dos text_area e botões) ...
                         nova_demanda = st.text_input("Demanda", value=row.get('Demanda', ''), key=f"demanda_kanban_{project_id}")
                         nova_descricao = st.text_area("Descrição", value=row.get('Descrição', ''), key=f"desc_kanban_{project_id}")
                         nova_observacao = st.text_area("Observação / Pendências", value=row.get('Observação', ''), key=f"obs_kanban_{project_id}")
                         log_agendamento_existente = row.get("Log Agendamento", "") if pd.notna(row.get("Log Agendamento")) else ""; st.text_area("Histórico de Alterações", value=log_agendamento_existente, height=100, disabled=True, key=f"log_kanban_{project_id}")
-                        
                         _, col_save, col_delete = st.columns([3, 1.5, 1]) 
                         with col_save: btn_salvar_card = st.form_submit_button("💾 Salvar", use_container_width=True)
                         with col_delete: btn_excluir_card = st.form_submit_button("🗑️ Excluir", use_container_width=True, type="primary")
@@ -852,7 +937,7 @@ def tela_kanban():
                             if novo_projeto == "N/A": st.error("ERRO: 'Projeto' é obrigatório.", icon="🚨"); st.stop()
                             if nova_agencia == "N/A": st.error("ERRO: 'Agência' é obrigatória.", icon="🚨"); st.stop()
                             if 'finalizad' in status_final.lower():
-                                if total_etapas > 0 and len(novas_etapas_marcadas) < total_etapas: st.error(f"ERRO: Para 'Finalizado', todas as {total_etapas} etapas devem ser selecionadas.", icon="🚨"); st.stop() 
+                                if total_etapas > 0 and len(novas_etapas_marcadas) < total_etapas: st.error(f"ERRO: Para 'Finalizado', todas as {total_etapas} etapas devem estar selecionadas.", icon="🚨"); st.stop() 
                                 if not _to_date_safe(nova_data_finalizacao): st.error("ERRO: Se 'Finalizada', Data de Finalização é obrigatória.", icon="🚨"); st.stop() 
                             
                             # --- Lógica de Status Automático (Corrigida) ---
@@ -884,7 +969,7 @@ def tela_kanban():
                 st.markdown(f"<div style='text-align:center; padding-top: 5px;'>Pág {st.session_state[key_pagina]} de {total_paginas}</div>", unsafe_allow_html=True)
             with col_btn2:
                 if st.button("➡️", key=f"next_{col_nome}", use_container_width=True, disabled=(st.session_state[key_pagina] >= total_paginas)):
-                    st.session_state[key_pagina] += 1; st.rerun()      
+                    st.session_state[key_pagina] += 1; st.rerun()
                     
 # ----------------- FUNÇÃO MAIN ----------------- #
 
@@ -963,6 +1048,7 @@ def main():
 if __name__ == "__main__":
     utils.criar_tabelas_iniciais() 
     main()
+
 
 
 
