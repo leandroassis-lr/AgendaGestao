@@ -274,7 +274,6 @@ def atualizar_projeto_db(project_id, updates: dict):
         conn.rollback() # Garante rollback em caso de erro na transação
         return False
 
-
 # (excluir_projeto_db - Sem alterações)
 def excluir_projeto_db(project_id):
     # ... (código original) ...
@@ -284,7 +283,6 @@ def excluir_projeto_db(project_id):
         st.cache_data.clear(); return True
     except Exception as e:
         st.toast(f"Erro ao excluir projeto: {e}", icon="🔥"); return False
-
 
 # --- Funções do Banco (Configurações e Usuários) ---
 # (carregar_config_db - Sem alterações)
@@ -379,6 +377,7 @@ def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
     
     # Validações
     if 'Projeto' not in df.columns or 'Agência' not in df.columns: st.error("Erro: Planilha deve conter 'Projeto' e 'Agência'."); return False, 0
+    # Checa nulos ANTES de renomear
     if df[['Projeto', 'Agência']].isnull().values.any(): st.error("Erro: 'Projeto' e 'Agência' não podem ser vazios."); return False, 0
 
     df_to_insert = df.rename(columns=column_map)
@@ -391,9 +390,11 @@ def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
     
     # Define padrões (status, data_abertura, analista, prioridade)
     df_to_insert['status'] = 'NÃO INICIADA'
-    df_to_insert['data_abertura'] = date.today()
+    df_to_insert['data_abertura'] = date.today() # Isso já é um objeto 'date' do Python (correto)
+    
     if 'analista' not in df_to_insert or df_to_insert['analista'].isnull().all(): df_to_insert['analista'] = usuario_logado
     else: df_to_insert['analista'] = df_to_insert['analista'].fillna(usuario_logado)
+    
     if 'prioridade' not in df_to_insert: df_to_insert['prioridade'] = 'Média'
     else:
         df_to_insert['prioridade'] = df_to_insert['prioridade'].astype(str).replace(['', 'nan', 'None'], 'Média').fillna('Média')
@@ -408,18 +409,17 @@ def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
                       'prioridade', 'agendamento'] 
                       
     df_final = df_to_insert[[col for col in cols_to_insert if col in df_to_insert.columns]]
+    
+    for col in df_final.select_dtypes(include=['datetime64[ns]']).columns:
+        # .dt.to_pydatetime() converte a série para objetos Python
+        # .replace({pd.NaT: None}) converte valores nulos (NaT) para None
+        df_final[col] = df_final[col].dt.to_pydatetime().replace({pd.NaT: None})
         
-    values = []
-    for record in df_final.to_records(index=False):
-        processed_record = []
-        for cell in record:
-            if pd.isna(cell):
-                processed_record.append(None) # Converte NaT (Not a Time) e NaN para None
-            elif isinstance(cell, pd.Timestamp):
-                processed_record.append(cell.to_pydatetime()) # Converte o 'datetime64' para um datetime do Python
-            else:
-                processed_record.append(cell) # Mantém strings, ints, etc.
-        values.append(tuple(processed_record))
+    # Agora, o df_final só contém tipos nativos do Python (str, int, date, datetime, None)
+    # A coluna 'data_abertura' (que é 'date') não é afetada por isso.
+    
+    # Converte o DataFrame limpo para tuplas
+    values = [tuple(x for x in record) for record in df_final.to_records(index=False)]
     
     cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns)); placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
     query = sql.SQL("INSERT INTO projetos ({}) VALUES ({})").format(cols_sql, placeholders)
@@ -430,7 +430,7 @@ def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
     except Exception as e: 
         st.error(f"Erro ao salvar no banco: {e}"); # Mostra o erro do BD
         conn.rollback(); 
-        return False, 0
+        return False, 0     
         
 # (dataframe_to_excel_bytes - Com Prioridade)
 def dataframe_to_excel_bytes(df):
@@ -554,5 +554,6 @@ def get_color_for_name(name_str):
     _COLOR_CACHE[first_name] = color_hex
 
     return color_hex
+
 
 
