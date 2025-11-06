@@ -370,28 +370,26 @@ def generate_excel_template_bytes():
 def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
     if not conn: return False, 0
     
-    # --- Deve incluir 'Agendamento' ---
+    # Mapa de colunas (incluindo Agendamento)
     column_map = {
         'Projeto': 'projeto', 'Descrição': 'descricao', 'Agência': 'agencia', 'Técnico': 'tecnico',
         'Demanda': 'demanda', 'Observação': 'observacao', 'Analista': 'analista', 'Gestor': 'gestor',
         'Prioridade': 'prioridade', 'Agendamento': 'agendamento' 
     }
     
+    # Validações
     if 'Projeto' not in df.columns or 'Agência' not in df.columns: st.error("Erro: Planilha deve conter 'Projeto' e 'Agência'."); return False, 0
-    # Verificação de nulos ANTES de renomear
-    if df[['Projeto', 'Agência']].isnull().values.any(): st.error("Erro: Colunas 'Projeto' e 'Agência' não podem conter valores vazios."); return False, 0
+    if df[['Projeto', 'Agência']].isnull().values.any(): st.error("Erro: 'Projeto' e 'Agência' não podem ser vazios."); return False, 0
 
     df_to_insert = df.rename(columns=column_map)
     
-    # --- Lógica de conversão de data ---
+    # Converte a coluna 'agendamento' para objetos de data (ou NaT se falhar)
     if 'agendamento' in df_to_insert.columns:
-        # 'coerce' transforma datas inválidas (ou texto errado) em NaT (None)
         df_to_insert['agendamento'] = pd.to_datetime(df_to_insert['agendamento'], errors='coerce')
     else:
         df_to_insert['agendamento'] = None 
-    # --- Fim da lógica de data ---
-
-    # (Resto da função: status, data_abertura, analista, prioridade...)
+    
+    # Define padrões (status, data_abertura, analista, prioridade)
     df_to_insert['status'] = 'NÃO INICIADA'
     df_to_insert['data_abertura'] = date.today()
     if 'analista' not in df_to_insert or df_to_insert['analista'].isnull().all(): df_to_insert['analista'] = usuario_logado
@@ -404,15 +402,24 @@ def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
         if not invalid_priorities.empty: st.warning(f"Prioridades inválidas (linhas: {invalid_priorities.index.tolist()}) substituídas por 'Média'."); df_to_insert.loc[invalid_priorities.index, 'prioridade'] = 'média'
         df_to_insert['prioridade'] = df_to_insert['prioridade'].str.capitalize()
 
-    # --- Deve incluir 'agendamento' ---
+    # Colunas que queremos inserir
     cols_to_insert = ['projeto', 'descricao', 'agencia', 'tecnico', 'status',
                       'data_abertura', 'observacao', 'demanda', 'analista', 'gestor',
                       'prioridade', 'agendamento'] 
                       
     df_final = df_to_insert[[col for col in cols_to_insert if col in df_to_insert.columns]]
-    
-    # Converte para tuplas (pd.NaT vira None, que o BD aceita)
-    values = [tuple(None if pd.isna(x) else x for x in record) for record in df_final.to_records(index=False)]
+        
+    values = []
+    for record in df_final.to_records(index=False):
+        processed_record = []
+        for cell in record:
+            if pd.isna(cell):
+                processed_record.append(None) # Converte NaT (Not a Time) e NaN para None
+            elif isinstance(cell, pd.Timestamp):
+                processed_record.append(cell.to_pydatetime()) # Converte o 'datetime64' para um datetime do Python
+            else:
+                processed_record.append(cell) # Mantém strings, ints, etc.
+        values.append(tuple(processed_record))
     
     cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns)); placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
     query = sql.SQL("INSERT INTO projetos ({}) VALUES ({})").format(cols_sql, placeholders)
@@ -547,4 +554,5 @@ def get_color_for_name(name_str):
     _COLOR_CACHE[first_name] = color_hex
 
     return color_hex
+
 
