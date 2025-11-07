@@ -366,71 +366,102 @@ def generate_excel_template_bytes():
     return output.getvalue()
 
 def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
-    if not conn: return False, 0
+    if not conn:
+        return False, 0
     
-    # Mapa de colunas (incluindo Agendamento)
+    # --- Mapa de colunas (incluindo Agendamento) ---
     column_map = {
-        'Projeto': 'projeto', 'Descrição': 'descricao', 'Agência': 'agencia', 'Técnico': 'tecnico',
-        'Demanda': 'demanda', 'Observação': 'observacao', 'Analista': 'analista', 'Gestor': 'gestor',
-        'Prioridade': 'prioridade', 'Agendamento': 'agendamento' 
+        'Projeto': 'projeto',
+        'Descrição': 'descricao',
+        'Agência': 'agencia',
+        'Técnico': 'tecnico',
+        'Demanda': 'demanda',
+        'Observação': 'observacao',
+        'Analista': 'analista',
+        'Gestor': 'gestor',
+        'Prioridade': 'prioridade',
+        'Agendamento': 'agendamento'
     }
-    
-    # Validações
-    if 'Projeto' not in df.columns or 'Agência' not in df.columns: st.error("Erro: Planilha deve conter 'Projeto' e 'Agência'."); return False, 0
-    # Checa nulos ANTES de renomear
-    if df[['Projeto', 'Agência']].isnull().values.any(): st.error("Erro: 'Projeto' e 'Agência' não podem ser vazios."); return False, 0
 
+    # --- Validações iniciais ---
+    if 'Projeto' not in df.columns or 'Agência' not in df.columns:
+        st.error("Erro: Planilha deve conter as colunas 'Projeto' e 'Agência'.")
+        return False, 0
+
+    if df[['Projeto', 'Agência']].isnull().values.any():
+        st.error("Erro: 'Projeto' e 'Agência' não podem ser vazios.")
+        return False, 0
+
+    # --- Renomeia colunas conforme o mapa ---
     df_to_insert = df.rename(columns=column_map)
-    
-    # Converte a coluna 'agendamento' para objetos de data (ou NaT se falhar)
+
+    # --- Converte coluna de agendamento para datetime ---
     if 'agendamento' in df_to_insert.columns:
         df_to_insert['agendamento'] = pd.to_datetime(df_to_insert['agendamento'], errors='coerce')
     else:
-        df_to_insert['agendamento'] = None 
-    
-    # Define padrões (status, data_abertura, analista, prioridade)
+        df_to_insert['agendamento'] = None
+
+    # --- Define padrões (status, data de abertura, analista, prioridade) ---
     df_to_insert['status'] = 'NÃO INICIADA'
-    df_to_insert['data_abertura'] = date.today() # Isso já é um objeto 'date' do Python (correto)
-    
-    if 'analista' not in df_to_insert or df_to_insert['analista'].isnull().all(): df_to_insert['analista'] = usuario_logado
-    else: df_to_insert['analista'] = df_to_insert['analista'].fillna(usuario_logado)
-    
-    if 'prioridade' not in df_to_insert: df_to_insert['prioridade'] = 'Média'
+    df_to_insert['data_abertura'] = date.today()
+
+    if 'analista' not in df_to_insert or df_to_insert['analista'].isnull().all():
+        df_to_insert['analista'] = usuario_logado
     else:
-        df_to_insert['prioridade'] = df_to_insert['prioridade'].astype(str).replace(['', 'nan', 'None'], 'Média').fillna('Média')
-        allowed_priorities = ['alta', 'média', 'baixa']; df_to_insert['prioridade'] = df_to_insert['prioridade'].str.lower()
+        df_to_insert['analista'] = df_to_insert['analista'].fillna(usuario_logado)
+
+    if 'prioridade' not in df_to_insert:
+        df_to_insert['prioridade'] = 'Média'
+    else:
+        df_to_insert['prioridade'] = (
+            df_to_insert['prioridade']
+            .astype(str)
+            .replace(['', 'nan', 'None'], 'Média')
+            .fillna('Média')
+        )
+
+        allowed_priorities = ['alta', 'média', 'baixa']
+        df_to_insert['prioridade'] = df_to_insert['prioridade'].str.lower()
+
         invalid_priorities = df_to_insert[~df_to_insert['prioridade'].isin(allowed_priorities)]
-        if not invalid_priorities.empty: st.warning(f"Prioridades inválidas (linhas: {invalid_priorities.index.tolist()}) substituídas por 'Média'."); df_to_insert.loc[invalid_priorities.index, 'prioridade'] = 'média'
+        if not invalid_priorities.empty:
+            st.warning(
+                f"Prioridades inválidas (linhas: {invalid_priorities.index.tolist()}) substituídas por 'Média'."
+            )
+            df_to_insert.loc[invalid_priorities.index, 'prioridade'] = 'média'
+
         df_to_insert['prioridade'] = df_to_insert['prioridade'].str.capitalize()
 
-    # Colunas que queremos inserir
-    cols_to_insert = ['projeto', 'descricao', 'agencia', 'tecnico', 'status',
-                      'data_abertura', 'observacao', 'demanda', 'analista', 'gestor',
-                      'prioridade', 'agendamento'] 
-                      
+    # --- Seleciona colunas para inserir ---
+    cols_to_insert = [
+        'projeto', 'descricao', 'agencia', 'tecnico', 'status',
+        'data_abertura', 'observacao', 'demanda', 'analista', 'gestor',
+        'prioridade', 'agendamento'
+    ]
+
     df_final = df_to_insert[[col for col in cols_to_insert if col in df_to_insert.columns]]
-    
+
+    # --- Corrige o tratamento de datas ---
     for col in df_final.select_dtypes(include=['datetime64[ns]']).columns:
-        # .dt.to_pydatetime() converte a série para objetos Python
-        # .replace({pd.NaT: None}) converte valores nulos (NaT) para None
-        df_final[col] = df_final[col].dt.to_pydatetime().replace({pd.NaT: None})
-        
-    # Agora, o df_final só contém tipos nativos do Python (str, int, date, datetime, None)
-    # A coluna 'data_abertura' (que é 'date') não é afetada por isso.
-    
-    # Converte o DataFrame limpo para tuplas
+        # Substitui valores NaT por None de forma segura
+        df_final[col] = df_final[col].apply(lambda x: x.to_pydatetime() if pd.notnull(x) else None)
+
+    # --- Converte DataFrame limpo para tuplas ---
     values = [tuple(x for x in record) for record in df_final.to_records(index=False)]
-    
-    cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns)); placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
+
+    cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns))
+    placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
     query = sql.SQL("INSERT INTO projetos ({}) VALUES ({})").format(cols_sql, placeholders)
 
     try:
-        with conn.cursor() as cur: cur.executemany(query, values) 
-        st.cache_data.clear(); return True, len(values)
-    except Exception as e: 
-        st.error(f"Erro ao salvar no banco: {e}"); # Mostra o erro do BD
-        conn.rollback(); 
-        return False, 0     
+        with conn.cursor() as cur:
+            cur.executemany(query, values)
+        st.cache_data.clear()
+        return True, len(values)
+    except Exception as e:
+        st.error(f"Erro ao salvar no banco: {e}")
+        conn.rollback()
+        return False, 0
         
 # (dataframe_to_excel_bytes - Com Prioridade)
 def dataframe_to_excel_bytes(df):
@@ -554,6 +585,7 @@ def get_color_for_name(name_str):
     _COLOR_CACHE[first_name] = color_hex
 
     return color_hex
+
 
 
 
