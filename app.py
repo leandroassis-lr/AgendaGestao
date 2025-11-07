@@ -459,19 +459,22 @@ def get_next_stage(row, etapas_config_df):
 def tela_projetos():
     st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True)
     
-    # (Carrega DFs, Filtros, Ordenação, KPIs, etc. - Sem alterações)
+    # Carrega dados
     df = utils.carregar_projetos_db()
     df_sla = utils.carregar_config_db("sla") 
     df_etapas_config = utils.carregar_config_db("etapas_evolucao") 
     if df.empty: st.info("Nenhum projeto cadastrado ainda."); return
     df['Agendamento'] = pd.to_datetime(df['Agendamento'], errors='coerce') 
     df['Agendamento_str'] = df['Agendamento'].dt.strftime("%d/%m/%y").fillna('N/A')
+
+    # Filtros e Ordenação
     st.markdown("#### 🔍 Busca e Ordenação")
     col_busca, col_ordem = st.columns([3, 2])
     with col_busca: termo_busca = st.text_input("Buscar", key="termo_busca", placeholder="Digite um termo para buscar...", label_visibility="collapsed")
     with col_ordem:
         opcoes_ordenacao = ["Data Agendamento (Mais Recente)", "Data Agendamento (Mais Antigo)", "Prioridade (Alta > Baixa)", "SLA Restante (Menor > Maior)"]
         ordem_selecionada = st.selectbox("Ordenar por:", options=opcoes_ordenacao, key="ordem_projetos", label_visibility="collapsed")
+    
     st.markdown("#### 🎛️ Filtros")
     filtros = {} 
     col1, col2, col3, col4 = st.columns(4); campos_linha_1 = {"Status": col1, "Analista": col2, "Agência": col3, "Gestor": col4}
@@ -490,6 +493,8 @@ def tela_projetos():
         else: st.empty()
     with col7: data_inicio = st.date_input("Agendamento (de)", value=None, key="data_inicio_filtro", format="DD/MM/YYYY")
     with col8: data_fim = st.date_input("Agendamento (até)", value=None, key="data_fim_filtro", format="DD/MM/YYYY")
+
+    # Lógica de Filtros
     df_filtrado = df.copy()
     for campo, valor in filtros.items():
         if valor != "Todos" and campo in df_filtrado.columns: df_filtrado = df_filtrado[df_filtrado[campo].astype(str) == str(valor)]
@@ -497,6 +502,8 @@ def tela_projetos():
     if data_fim: df_filtrado = df_filtrado[(df_filtrado['Agendamento'].notna()) & (df_filtrado['Agendamento'] <= pd.to_datetime(data_fim).replace(hour=23, minute=59, second=59))]
     if termo_busca: termo = termo_busca.lower().strip(); mask_busca = df_filtrado.apply(lambda row: row.astype(str).str.lower().str.contains(termo, na=False, regex=False).any(), axis=1); df_filtrado = df_filtrado[mask_busca]
     st.divider()
+    
+    # KPIs de Status e Evolução
     st.markdown("#### 📈 Indicadores da Visão Atual")
     hoje = date.today()
     df_nao_finalizados = df_filtrado[~df_filtrado['Status'].str.contains("Finalizada|Cancelada", na=False, case=False)].copy() 
@@ -513,6 +520,8 @@ def tela_projetos():
             st.markdown("#### 📋 Resumo das Próximas Etapas"); top_stages = stage_counts.head(4); cols_kpi_stages = st.columns(4)
             for i, (stage, count) in enumerate(top_stages.items()): cols_kpi_stages[i].metric(label=f"{stage}", value=count)
     st.divider()
+    
+    # Lógica de Ordenação
     if ordem_selecionada == "Data Agendamento (Mais Recente)": df_filtrado = df_filtrado.sort_values(by="Agendamento", ascending=False, na_position='last')
     elif ordem_selecionada == "Data Agendamento (Mais Antigo)": df_filtrado = df_filtrado.sort_values(by="Agendamento", ascending=True, na_position='last')
     elif ordem_selecionada == "Prioridade (Alta > Baixa)":
@@ -530,6 +539,8 @@ def tela_projetos():
             dias_corridos = (hoje - agendamento.date()).days; return prazo_dias - dias_corridos
         df_filtrado['sla_dias_restantes'] = df_filtrado.apply(calculate_remaining_days, axis=1)
         df_filtrado = df_filtrado.sort_values(by="sla_dias_restantes", ascending=True)
+    
+    # Exportar e Paginação 
     col_info_export, col_export_btn = st.columns([4, 1.2]); total_items = len(df_filtrado)
     with col_info_export: st.info(f"Projetos encontrados (filtrados): {total_items}")
     with col_export_btn:
@@ -544,6 +555,8 @@ def tela_projetos():
     if st.session_state.page_number > current_max_page: st.session_state.page_number = 0
     start_idx = st.session_state.page_number * items_per_page; end_idx = start_idx + items_per_page
     df_paginado = df_filtrado.iloc[start_idx:end_idx] 
+    
+    # Carrega opções
     agencias_cfg = utils.carregar_config_db("agencias"); agencia_options = ["N/A"] + (agencias_cfg.iloc[:, 0].tolist() if not agencias_cfg.empty and len(agencias_cfg.columns) > 0 else [])
     tecnicos_cfg = utils.carregar_config_db("tecnicos"); tecnico_options = ["N/A"] + (tecnicos_cfg.iloc[:, 0].tolist() if not tecnicos_cfg.empty and len(tecnicos_cfg.columns) > 0 else [])
     status_options_df = utils.carregar_config_db("status"); status_options = status_options_df.iloc[:, 0].tolist() if not status_options_df.empty and len(status_options_df.columns) > 0 else []
@@ -563,6 +576,7 @@ def tela_projetos():
         if not ('finalizad' in status_raw.lower() or 'cancelad' in status_raw.lower()):
             if agendamento_date_obj == hoje: icone_lembrete = "❗"; cor_lembrete = "red"; texto_lembrete_html = f"<p style='color:{cor_lembrete}; font-weight:bold; margin-top: -5px;'>ATENÇÃO - DEMANDA PARA HOJE</p>"
             elif agendamento_date_obj and hoje < agendamento_date_obj <= limite_lembrete: icone_lembrete = "⚠️"; cor_lembrete = "orange"; texto_lembrete_html = f"<p style='color:{cor_lembrete}; font-weight:bold; margin-top: -5px;'>Lembrete: Próximo!</p>"
+        
         proxima_etapa = row.get('proxima_etapa_calc', 'Sem Etapas'); 
         if proxima_etapa == "Ignorado" or proxima_etapa == "Sem Etapas": proxima_etapa_texto = "Nenhuma etapa configurada"
         elif proxima_etapa == "Concluído": proxima_etapa_texto = "✔️ Todas concluídas"
@@ -581,18 +595,25 @@ def tela_projetos():
         with col_agencia_card:
             st.markdown(f"**Agência:** {agencia_text}") 
             st.markdown(f"<span style='color:{gestor_color}; font-weight: bold;'>Gestor: {gestor_text}</span>", unsafe_allow_html=True)
+        
+        # --- >>> BLOCO DE STATUS CORRIGIDO <<< ---
         with col_status_card:
             status_color_name = utils.get_status_color(str(status_raw)) 
-            st.markdown(f"""<div style="height:100%; ...">{status_text}</span> ... {proxima_etapa_texto}</span></div>""", unsafe_allow_html=True)
+            st.markdown(
+                f"""<div style="height:100%; display:flex; flex-direction: column; align-items: flex-end; justify-content: center;">
+                    <span style="background-color:{status_color_name}; color:black; padding:8px 15px; border-radius:5px; font-weight:bold; font-size:0.9em; margin-bottom: 5px;">{status_text}</span>
+                    <span style="font-size: 0.95em; color: var(--primary-dark); font-weight: bold; text-align: right;">{proxima_etapa_texto}</span> 
+                </div>""",
+                unsafe_allow_html=True)
+        # --- >>> FIM DA CORREÇÃO <<< ---
+            
         st.markdown("</div>", unsafe_allow_html=True)
 
-        # --- Expander com Formulário de Edição (ATUALIZADO) ---
+        # --- Expander com Formulário de Edição (Sem alterações) ---
         with st.expander(f"Ver/Editar Detalhes - ID: {project_id}"):
             with st.form(f"form_edicao_card_{project_id}"):
-                
-                # (Evolução)
+                # ... (código do formulário de edição) ...
                 st.markdown("#### Evolução da Demanda")
-                # ... (código da evolução) ...
                 etapas_do_projeto = df_etapas_config[df_etapas_config["Nome do Projeto"] == row.get("Projeto", "")] if "Nome do Projeto" in df_etapas_config.columns else pd.DataFrame()
                 etapas_concluidas_str = row.get("Etapas Concluidas", ""); etapas_concluidas_lista = []
                 if pd.notna(etapas_concluidas_str) and isinstance(etapas_concluidas_str, str) and etapas_concluidas_str.strip(): etapas_concluidas_lista = [e.strip() for e in etapas_concluidas_str.split(',') if e.strip()]
@@ -605,20 +626,14 @@ def tela_projetos():
                         marcado = st.checkbox(etapa, value=(etapa in etapas_concluidas_lista), key=f"chk_{project_id}_{utils.clean_key(etapa)}")
                         if marcado: novas_etapas_marcadas.append(etapa)
                 else: st.caption("Nenhuma etapa de evolução configurada."); todas_etapas_possiveis = []; total_etapas = 0
-                
-                # (Informações e Prazos)
                 st.markdown("#### Informações e Prazos")
                 c1,c2,c3,c4 = st.columns(4)
-                # ... (código de c1 a c4) ...
                 with c1: status_selecionaveis = status_options[:]; status_atual = row.get('Status'); idx_status = status_selecionaveis.index(status_atual) if status_atual in status_selecionaveis else 0; novo_status_selecionado = st.selectbox("Status", status_selecionaveis, index=idx_status, key=f"status_{project_id}")
                 with c2: abertura_default = _to_date_safe(row.get('Data de Abertura')); nova_data_abertura = st.date_input("Data Abertura", value=abertura_default, key=f"abertura_{project_id}", format="DD/MM/YYYY")
                 with c3: agendamento_default = _to_date_safe(row.get('Agendamento')); novo_agendamento = st.date_input("Agendamento", value=agendamento_default, key=f"agend_{project_id}", format="DD/MM/YYYY")
                 with c4: finalizacao_default = _to_date_safe(row.get('Data de Finalização')); nova_data_finalizacao = st.date_input("Data Finalização", value=finalizacao_default, key=f"final_{project_id}", format="DD/MM/YYYY")
-                
-                # (Detalhes do Projeto)
                 st.markdown("#### Detalhes do Projeto")
                 c5,c6,c7, c_prio = st.columns(4) 
-                # ... (código de c5 a c9 e prioridade) ...
                 with c5: projeto_val = row.get('Projeto', ''); idx_proj = projeto_options.index(projeto_val) if projeto_val in projeto_options else 0; novo_projeto = st.selectbox("Projeto", options=projeto_options, index=idx_proj, key=f"proj_{project_id}")
                 with c6: novo_analista = st.text_input("Analista", value=row.get('Analista', ''), key=f"analista_{project_id}")
                 with c7: novo_gestor = st.text_input("Gestor", value=row.get('Gestor', ''), key=f"gestor_{project_id}")
@@ -629,43 +644,26 @@ def tela_projetos():
                 c8,c9 = st.columns(2)
                 with c8: agencia_val = row.get('Agência', ''); idx_ag = agencia_options.index(agencia_val) if agencia_val in agencia_options else 0; nova_agencia = st.selectbox("Agência", agencia_options, index=idx_ag, key=f"agencia_{project_id}")
                 with c9: tecnico_val = row.get('Técnico', ''); idx_tec = tecnico_options.index(tecnico_val) if tecnico_val in tecnico_options else 0; novo_tecnico = st.selectbox("Técnico", tecnico_options, index=idx_tec, key=f"tecnico_{project_id}")
-                
-                # (Campos de Texto Longo e Log)
                 nova_demanda = st.text_input("Demanda", value=row.get('Demanda', ''), key=f"demanda_{project_id}")
                 nova_descricao = st.text_area("Descrição", value=row.get('Descrição', ''), key=f"desc_{project_id}")
                 nova_observacao = st.text_area("Observação / Pendências", value=row.get('Observação', ''), key=f"obs_{project_id}")
-                
-                # --- >>> INÍCIO DA MUDANÇA: Exibe Links Salvos <<< ---
                 links_salvos = row.get('Links de Referência', '')
                 if links_salvos and links_salvos.strip():
-                    st.markdown("---")
-                    st.markdown("📎 **Links Salvos** (clicáveis)")
+                    st.markdown("---"); st.markdown("📎 **Links Salvos** (clicáveis)")
                     links_lista = links_salvos.strip().split('\n')
                     for link in links_lista:
                         link_limpo = link.strip()
                         if link_limpo.startswith("http"):
-                            # Texto curto para o link
-                            display_text = link_limpo
+                            display_text = link_limpo; 
                             if len(display_text) > 70: display_text = display_text[:67] + "..."
                             st.markdown(f"- [{display_text}]({link_limpo})")
-                        elif link_limpo:
-                            st.markdown(f"- {link_limpo} (Texto salvo, não é um link)")
-                    st.markdown("---") # Divisor
-                # --- >>> FIM DA MUDANÇA <<< ---
-
-                nova_links = st.text_area("Editar Links de Referência", 
-                                        value=links_salvos, # Usa o mesmo valor carregado
-                                        key=f"links_{project_id}",
-                                        placeholder="Cole links aqui, um por linha...")
-                
+                        elif link_limpo: st.markdown(f"- {link_limpo} (Texto salvo)")
+                    st.markdown("---")
+                nova_links = st.text_area("Editar Links de Referência", value=links_salvos, key=f"links_{project_id}", placeholder="Cole links aqui, um por linha...")
                 log_agendamento_existente = row.get("Log Agendamento", "") if pd.notna(row.get("Log Agendamento")) else ""; st.text_area("Histórico de Alterações", value=log_agendamento_existente, height=100, disabled=True, key=f"log_{project_id}")
-                
-                # (Botões)
                 _, col_save, col_delete = st.columns([3, 1.5, 1]) 
                 with col_save: btn_salvar_card = st.form_submit_button("💾 Salvar", use_container_width=True)
                 with col_delete: btn_excluir_card = st.form_submit_button("🗑️ Excluir", use_container_width=True, type="primary")
-                
-                # (Lógica dos Botões)
                 if btn_excluir_card:
                     if utils.excluir_projeto_db(project_id): st.success(f"Projeto ID {project_id} excluído."); st.rerun()
                 if btn_salvar_card:
@@ -679,20 +677,10 @@ def tela_projetos():
                     if (status_atual_normalizado == 'NÃO INICIADA') and (len(novas_etapas_marcadas) > 0) and (status_final_normalizado == 'NÃO INICIADA'):
                         status_final = 'EM ANDAMENTO'; st.info("Status alterado para 'EM ANDAMENTO'.")
                     nova_data_abertura_date = _to_date_safe(nova_data_abertura); nova_data_finalizacao_date = _to_date_safe(nova_data_finalizacao); novo_agendamento_date = _to_date_safe(novo_agendamento)
-                    
-                    updates = {
-                        "Status": status_final, "Agendamento": novo_agendamento_date, "Analista": novo_analista,
-                        "Agência": nova_agencia if nova_agencia != "N/A" else None, "Gestor": novo_gestor, 
-                        "Projeto": novo_projeto, "Técnico": novo_tecnico if novo_tecnico != "N/A" else None, 
-                        "Demanda": nova_demanda, "Descrição": nova_descricao, "Observação": nova_observacao, 
-                        "Data de Abertura": nova_data_abertura_date, "Data de Finalização": nova_data_finalizacao_date, 
-                        "Etapas Concluidas": ",".join(novas_etapas_marcadas) if novas_etapas_marcadas else None, 
-                        "Prioridade": nova_prioridade,
-                        "Links de Referência": nova_links 
-                    }
+                    updates = {"Status": status_final, "Agendamento": novo_agendamento_date, "Analista": novo_analista,"Agência": nova_agencia if nova_agencia != "N/A" else None, "Gestor": novo_gestor, "Projeto": novo_projeto, "Técnico": novo_tecnico if novo_tecnico != "N/A" else None, "Demanda": nova_demanda, "Descrição": nova_descricao, "Observação": nova_observacao, "Data de Abertura": nova_data_abertura_date, "Data de Finalização": nova_data_finalizacao_date, "Etapas Concluidas": ",".join(novas_etapas_marcadas) if novas_etapas_marcadas else None, "Prioridade": nova_prioridade, "Links de Referência": nova_links }
                     if utils.atualizar_projeto_db(project_id, updates): st.success(f"Projeto '{novo_projeto}' (ID: {project_id}) atualizado."); st.rerun()
 
-    # (Paginação)
+    # Paginação
     st.divider()
     if total_pages > 1:
         col_info_pag, col_prev_pag, col_next_pag = st.columns([5, 1.5, 1.5]) 
@@ -700,8 +688,8 @@ def tela_projetos():
         with col_prev_pag:
             if st.button("⬅️ Anterior", use_container_width=True, disabled=(st.session_state.page_number == 0)): st.session_state.page_number -= 1; st.rerun()
         with col_next_pag:
-            if st.button("Próxima ➡️", use_container_width=True, disabled=(st.session_state.page_number >= total_pages - 1)): st.session_state.page_number += 1; st.rerun()
-                             
+            if st.button("Próxima ➡️", use_container_width=True, disabled=(st.session_state.page_number >= total_pages - 1)): st.session_state.page_number += 1; st.rerun()                             
+
 # ---- Tela Kanban ---- #
 
 def tela_kanban():
@@ -1010,4 +998,5 @@ def main():
 if __name__ == "__main__":
     utils.criar_tabelas_iniciais() 
     main()
+
 
