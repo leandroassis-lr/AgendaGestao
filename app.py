@@ -421,6 +421,41 @@ def tela_cadastro_projeto():
                     
 # --- TELA_PROJETOS --- #
 
+def get_next_stage(row, etapas_config_df):
+    """
+    Função helper para calcular a próxima etapa pendente para uma linha (um projeto).
+    Usado para calcular os KPIs de etapas.
+    """
+    projeto_nome = row.get("Projeto")
+    # Retorna "Ignorado" se o projeto não tiver nome ou já estiver finalizado/cancelado
+    if pd.isna(projeto_nome):
+        return "Ignorado"
+    if 'finalizad' in str(row.get('Status','')).lower() or 'cancelad' in str(row.get('Status','')).lower():
+        return "Ignorado"
+        
+    # Busca as etapas configuradas para este tipo de projeto
+    etapas_possiveis_df = etapas_config_df[etapas_config_df["Nome do Projeto"] == projeto_nome]
+    if etapas_possiveis_df.empty or "Etapa" not in etapas_possiveis_df.columns:
+        return "Sem Etapas" # Nenhuma etapa configurada para este tipo
+    
+    todas_etapas_lista = etapas_possiveis_df["Etapa"].astype(str).str.strip().tolist()
+    
+    # Pega as etapas já concluídas
+    etapas_concluidas_str = row.get("Etapas Concluidas", "")
+    etapas_concluidas_set = set()
+    if pd.notna(etapas_concluidas_str) and isinstance(etapas_concluidas_str, str) and etapas_concluidas_str.strip():
+         etapas_concluidas_set = set(e.strip() for e in etapas_concluidas_str.split(',') if e.strip())
+
+    # Encontra a próxima etapa
+    proxima_etapa = next((etapa for etapa in todas_etapas_lista if etapa not in etapas_concluidas_set), None)
+    
+    if proxima_etapa:
+        return proxima_etapa # Retorna o nome da próxima etapa
+    elif len(todas_etapas_lista) > 0:
+        return "Concluído" # Todas as etapas deste projeto foram marcadas
+    else:
+        return "Sem Etapas" # Fallback
+
 def tela_projetos():
     st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True)
     
@@ -974,31 +1009,3 @@ def main():
 if __name__ == "__main__":
     utils.criar_tabelas_iniciais() 
     main()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
