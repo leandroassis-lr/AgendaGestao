@@ -280,7 +280,6 @@ def validar_usuario(nome, email):
 
 # --- Funções de Importação/Exportação ---
 
-# (generate_excel_template_bytes - Com Prioridade e formato de data)
 def generate_excel_template_bytes():
     template_columns = ["Projeto", "Descrição", "Agência", "Técnico", "Agendamento", 
                         "Demanda", "Observação", "Analista", "Gestor", "Prioridade"] 
@@ -292,29 +291,29 @@ def generate_excel_template_bytes():
         df_template.to_excel(writer, index=False, sheet_name='Projetos')
     return output.getvalue()
 
-# --- >>> AQUI ESTÁ A CORREÇÃO MAIS IMPORTANTE <<< ---
-# (bulk_insert_projetos_db - CORRIGIDO para converter data64 para date)
 def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
     if not conn: return False, 0
     
+    # Mapa de colunas (incluindo Agendamento)
     column_map = {
         'Projeto': 'projeto', 'Descrição': 'descricao', 'Agência': 'agencia', 'Técnico': 'tecnico',
         'Demanda': 'demanda', 'Observação': 'observacao', 'Analista': 'analista', 'Gestor': 'gestor',
         'Prioridade': 'prioridade', 'Agendamento': 'agendamento' 
     }
     
+    # Validações
     if 'Projeto' not in df.columns or 'Agência' not in df.columns: st.error("Erro: Planilha deve conter 'Projeto' e 'Agência'."); return False, 0
     if df[['Projeto', 'Agência']].isnull().values.any(): st.error("Erro: 'Projeto' e 'Agência' não podem ser vazios."); return False, 0
 
     df_to_insert = df.rename(columns=column_map)
     
-    # 1. Converte a coluna 'agendamento' para objetos datetime (ou NaT se falhar)
+    # Converte a coluna 'agendamento' para objetos datetime (ou NaT se falhar)
     if 'agendamento' in df_to_insert.columns:
         df_to_insert['agendamento'] = pd.to_datetime(df_to_insert['agendamento'], errors='coerce')
     else:
         df_to_insert['agendamento'] = None 
     
-    # 2. Define padrões
+    # Define padrões (status, data_abertura, analista, prioridade)
     df_to_insert['status'] = 'NÃO INICIADA'
     df_to_insert['data_abertura'] = date.today() # Isso já é 'date' (correto)
     
@@ -334,23 +333,21 @@ def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
                       'prioridade', 'agendamento'] 
                       
     df_final = df_to_insert[[col for col in cols_to_insert if col in df_to_insert.columns]]
-    
-    # --- 3. CORREÇÃO DEFINITIVA: Converte os tipos para o banco ---
-    
-    # Converte 'agendamento' (que é datetime64[ns]) para objeto,
-    # depois para python 'date' (pois a coluna no BD é DATE), tratando NaT como None
+        
+    # 1. Converte 'agendamento' (que é datetime64[ns]) para objeto Python 'date'
     if 'agendamento' in df_final.columns:
         df_final['agendamento'] = df_final['agendamento'].apply(
-            # Se for um Timestamp válido, pegue .date(), senão retorne None
-            lambda x: x.date() if pd.notna(x) and isinstance(x, pd.Timestamp) else None
+            lambda x: x.date() if pd.notna(x) and isinstance(x, (pd.Timestamp, datetime)) else None
         )
         
-    # 'data_abertura' já é um objeto 'date', então está OK.
-    
-    # Converte o DataFrame limpo para tuplas
-    # (replace({pd.NaT: None}) é um fallback para outros Nones)
-    values = [tuple(r.replace({pd.NaT: None})) for r in df_final.to_records(index=False)]
-    # --- FIM DA CORREÇÃO ---
+    # 2. Converte o DataFrame limpo para tuplas, tratando TODOS os nulos do Pandas
+    # Esta linha substitui a linha com erro
+    values = []
+    for record in df_final.to_records(index=False):
+        # Itera por cada célula no tuple
+        # Converte pd.NaT, np.nan, etc. para None
+        processed_record = [None if pd.isna(cell) else cell for cell in record]
+        values.append(tuple(processed_record))
     
     cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns)); placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
     query = sql.SQL("INSERT INTO projetos ({}) VALUES ({})").format(cols_sql, placeholders)
@@ -363,7 +360,6 @@ def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
         conn.rollback(); 
         return False, 0
 
-
 # (dataframe_to_excel_bytes - Com Prioridade)
 def dataframe_to_excel_bytes(df):
     output = io.BytesIO()
@@ -374,7 +370,6 @@ def dataframe_to_excel_bytes(df):
         if 'Prioridade' not in df_to_export.columns: df_to_export['Prioridade'] = 'Média' 
         df_to_export.to_excel(writer, index=False, sheet_name='Projetos')
     return output.getvalue()
-
 
 # --- Funções Utilitárias ---
 # (load_css - Sem alterações)
@@ -446,3 +441,4 @@ def get_color_for_name(name_str):
         color_index = hash_val % len(COLORS_LIST)
         return COLORS_LIST[color_index]
     except Exception: return "#555"
+
