@@ -326,15 +326,14 @@ import time
 import utils 
 
 # --- FUNÇÃO TELA_CADASTRO_PROJETO  ---
+# (No app.py, substitua esta função)
 def tela_cadastro_projeto():
 
     # --- Bloco de Confirmação ---
     if st.session_state.get("confirmar_duplicado_backlog", False):
         id_existente = st.session_state.get("id_projeto_backlog_existente")
         dados_pendentes = st.session_state.get("dados_novo_projeto_pendente", {})
-        
         st.warning(f"⚠️ **Atenção:** Já existe um projeto similar (mesma Agência e Projeto) no backlog com ID {id_existente}, ainda sem agendamento. O que deseja fazer?", icon="⚠️")
-        
         col1_conf, col2_conf = st.columns(2)
         with col1_conf:
             if st.button(f"🔄 Atualizar Projeto Existente (ID: {id_existente})", use_container_width=True):
@@ -344,18 +343,14 @@ def tela_cadastro_projeto():
                 if "Agendamento" in dados_atualizar: del dados_atualizar["Agendamento"]
                 if "agendamento" in dados_atualizar: del dados_atualizar["agendamento"]
                 if utils.atualizar_projeto_db(id_existente, dados_atualizar):
-                    st.success(f"Projeto ID {id_existente} atualizado!")
-                    st.session_state.confirmar_duplicado_backlog = False; st.session_state.pop("id_projeto_backlog_existente", None); st.session_state.pop("dados_novo_projeto_pendente", None); st.session_state.tela_cadastro_proj = False; time.sleep(1); st.rerun()
-
+                    st.success(f"Projeto ID {id_existente} atualizado!"); st.session_state.confirmar_duplicado_backlog = False; st.session_state.pop("id_projeto_backlog_existente", None); st.session_state.pop("dados_novo_projeto_pendente", None); st.session_state.tela_cadastro_proj = False; time.sleep(1); st.rerun()
         with col2_conf:
             if st.button("➕ Criar Novo Projeto Mesmo Assim", use_container_width=True, type="primary"):
                 dados_adicionar = {"Status": "NÃO INICIADA", "Data de Abertura": date.today(), "Analista": st.session_state.get('usuario', 'N/A'),}
                 dados_adicionar.update(dados_pendentes) 
                 if utils.adicionar_projeto_db(dados_adicionar):
-                    novo_projeto_nome = dados_adicionar.get("Projeto", "Novo Projeto")
-                    st.success(f"Novo projeto '{novo_projeto_nome}' criado!")
+                    novo_projeto_nome = dados_adicionar.get("Projeto", "Novo Projeto"); st.success(f"Novo projeto '{novo_projeto_nome}' criado!")
                     st.session_state.confirmar_duplicado_backlog = False; st.session_state.pop("id_projeto_backlog_existente", None); st.session_state.pop("dados_novo_projeto_pendente", None); st.session_state.tela_cadastro_proj = False; time.sleep(1); st.rerun()
-        
         st.divider()
         if st.button("Cancelar Cadastro"):
              st.session_state.confirmar_duplicado_backlog = False; st.session_state.pop("id_projeto_backlog_existente", None); st.session_state.pop("dados_novo_projeto_pendente", None); st.rerun()
@@ -377,6 +372,11 @@ def tela_cadastro_projeto():
         with st.form("form_cadastro_projeto"):
             respostas_customizadas = {}
             prioridade_selecionada = st.selectbox("Prioridade", options=["Baixa", "Média", "Alta"], index=1, key="nova_prioridade_cadastro")
+            
+            # --- >>> ADICIONADO: Campo de Links <<< ---
+            links_referencia = st.text_area("Links de Referência", placeholder="Cole links aqui, um por linha...", height=100)
+            # --- >>> FIM <<< ---
+
             st.divider() 
             for index, row in perguntas_customizadas.iterrows():
                 pergunta = row['Pergunta']; tipo = row.get('Tipo (texto, numero, data)', 'texto'); key = utils.clean_key(pergunta)
@@ -396,73 +396,35 @@ def tela_cadastro_projeto():
             novo_projeto_nome = respostas_customizadas.get(projeto_nome_key) if projeto_nome_key else "N/A"
             nova_agencia = respostas_customizadas.get(agencia_key) if agencia_key else "N/A"
             if (not projeto_nome_key or novo_projeto_nome == "N/A") or (not agencia_key or nova_agencia == "N/A"): st.error("ERRO: 'Projeto' e 'Agência' são campos obrigatórios."); st.stop() 
+            
+            # --- Adiciona Prioridade e Links ---
             respostas_customizadas["Prioridade"] = prioridade_selecionada 
+            respostas_customizadas["Links de Referência"] = links_referencia 
             
             # Verificação de Duplicidade
             df_backlog = utils.carregar_projetos_sem_agendamento_db() 
             projeto_existente = pd.DataFrame() 
             if not df_backlog.empty and "Agência" in df_backlog.columns and "Projeto" in df_backlog.columns:
                  projeto_existente = df_backlog[(df_backlog["Agência"].astype(str).str.lower() == nova_agencia.lower()) & (df_backlog["Projeto"].astype(str).str.lower() == novo_projeto_nome.lower())]
-
             if not projeto_existente.empty:
-                # Duplicado Encontrado -> Define flags
                 id_existente = projeto_existente.iloc[0]['ID'] 
                 st.session_state.dados_novo_projeto_pendente = respostas_customizadas
                 st.session_state.id_projeto_backlog_existente = id_existente
                 st.session_state.confirmar_duplicado_backlog = True
-                # Rerun implícito ao final do script
-            
             else: 
-                # Sem Duplicados -> Salva e Reroda
                 dados_adicionar = {"Status": "NÃO INICIADA", "Data de Abertura": date.today(), "Analista": st.session_state.get('usuario', 'N/A'),}
                 dados_adicionar.update(respostas_customizadas) 
                 if utils.adicionar_projeto_db(dados_adicionar):
                     st.success(f"Projeto '{novo_projeto_nome}' cadastrado com prioridade {prioridade_selecionada}!")
                     st.session_state["tela_cadastro_proj"] = False 
-                    time.sleep(1) 
-                    st.rerun() 
-     
+                    time.sleep(1); st.rerun()
+                    
 # --- TELA_PROJETOS --- #
-
-def get_next_stage(row, etapas_config_df):
-    """
-    Função helper para calcular a próxima etapa pendente para uma linha (um projeto).
-    Usado para calcular os KPIs de etapas.
-    """
-    projeto_nome = row.get("Projeto")
-    # Retorna "Ignorado" se o projeto não tiver nome ou já estiver finalizado/cancelado
-    if pd.isna(projeto_nome):
-        return "Ignorado"
-    if 'finalizad' in str(row.get('Status','')).lower() or 'cancelad' in str(row.get('Status','')).lower():
-        return "Ignorado"
-        
-    # Busca as etapas configuradas para este tipo de projeto
-    etapas_possiveis_df = etapas_config_df[etapas_config_df["Nome do Projeto"] == projeto_nome]
-    if etapas_possiveis_df.empty or "Etapa" not in etapas_possiveis_df.columns:
-        return "Sem Etapas" # Nenhuma etapa configurada para este tipo
-    
-    todas_etapas_lista = etapas_possiveis_df["Etapa"].astype(str).str.strip().tolist()
-    
-    # Pega as etapas já concluídas
-    etapas_concluidas_str = row.get("Etapas Concluidas", "")
-    etapas_concluidas_set = set()
-    if pd.notna(etapas_concluidas_str) and isinstance(etapas_concluidas_str, str) and etapas_concluidas_str.strip():
-         etapas_concluidas_set = set(e.strip() for e in etapas_concluidas_str.split(',') if e.strip())
-
-    # Encontra a próxima etapa
-    proxima_etapa = next((etapa for etapa in todas_etapas_lista if etapa not in etapas_concluidas_set), None)
-    
-    if proxima_etapa:
-        return proxima_etapa # Retorna o nome da próxima etapa
-    elif len(todas_etapas_lista) > 0:
-        return "Concluído" # Todas as etapas deste projeto foram marcadas
-    else:
-        return "Sem Etapas" # Fallback
 
 def tela_projetos():
     st.markdown("<div class='section-title-center'>PROJETOS</div>", unsafe_allow_html=True)
     
-    # Carrega dados
+    # (Carrega DFs)
     df = utils.carregar_projetos_db()
     df_sla = utils.carregar_config_db("sla") 
     df_etapas_config = utils.carregar_config_db("etapas_evolucao") 
@@ -470,91 +432,62 @@ def tela_projetos():
     df['Agendamento'] = pd.to_datetime(df['Agendamento'], errors='coerce') 
     df['Agendamento_str'] = df['Agendamento'].dt.strftime("%d/%m/%y").fillna('N/A')
 
-    # Filtros e Ordenação
+    # (Filtros e Ordenação)
     st.markdown("#### 🔍 Busca e Ordenação")
     col_busca, col_ordem = st.columns([3, 2])
-    with col_busca:
-        termo_busca = st.text_input("Buscar", key="termo_busca", placeholder="Digite um termo para buscar...", label_visibility="collapsed")
+    with col_busca: termo_busca = st.text_input("Buscar", key="termo_busca", placeholder="Digite um termo para buscar...", label_visibility="collapsed")
     with col_ordem:
         opcoes_ordenacao = ["Data Agendamento (Mais Recente)", "Data Agendamento (Mais Antigo)", "Prioridade (Alta > Baixa)", "SLA Restante (Menor > Maior)"]
         ordem_selecionada = st.selectbox("Ordenar por:", options=opcoes_ordenacao, key="ordem_projetos", label_visibility="collapsed")
-    
     st.markdown("#### 🎛️ Filtros")
     filtros = {} 
     col1, col2, col3, col4 = st.columns(4); campos_linha_1 = {"Status": col1, "Analista": col2, "Agência": col3, "Gestor": col4}
     for campo, col in campos_linha_1.items():
         with col:
-            if campo in df.columns: 
-                unique_values = df[campo].dropna().astype(str).unique(); opcoes = ["Todos"] + sorted(unique_values.tolist())
-                filtros[campo] = st.selectbox(f"{campo}", opcoes, key=f"filtro_{utils.clean_key(campo)}")
+            if campo in df.columns: unique_values = df[campo].dropna().astype(str).unique(); opcoes = ["Todos"] + sorted(unique_values.tolist()); filtros[campo] = st.selectbox(f"{campo}", opcoes, key=f"filtro_{utils.clean_key(campo)}")
             else: st.empty()
     col5, col6, col7, col8 = st.columns(4)
     with col5:
         campo = "Projeto"; 
-        if campo in df.columns:
-            unique_values = df[campo].dropna().astype(str).unique(); opcoes = ["Todos"] + sorted(unique_values.tolist())
-            filtros[campo] = st.selectbox(f"{campo}", opcoes, key=f"filtro_{utils.clean_key(campo)}")
+        if campo in df.columns: unique_values = df[campo].dropna().astype(str).unique(); opcoes = ["Todos"] + sorted(unique_values.tolist()); filtros[campo] = st.selectbox(f"{campo}", opcoes, key=f"filtro_{utils.clean_key(campo)}")
         else: st.empty()
     with col6:
         campo = "Técnico"; 
-        if campo in df.columns:
-            unique_values = df[campo].dropna().astype(str).unique(); opcoes = ["Todos"] + sorted(unique_values.tolist())
-            filtros[campo] = st.selectbox(f"{campo}", opcoes, key=f"filtro_{utils.clean_key(campo)}")
+        if campo in df.columns: unique_values = df[campo].dropna().astype(str).unique(); opcoes = ["Todos"] + sorted(unique_values.tolist()); filtros[campo] = st.selectbox(f"{campo}", opcoes, key=f"filtro_{utils.clean_key(campo)}")
         else: st.empty()
     with col7: data_inicio = st.date_input("Agendamento (de)", value=None, key="data_inicio_filtro", format="DD/MM/YYYY")
     with col8: data_fim = st.date_input("Agendamento (até)", value=None, key="data_fim_filtro", format="DD/MM/YYYY")
 
-    # Lógica de Filtros
+    # (Lógica de Filtros)
     df_filtrado = df.copy()
     for campo, valor in filtros.items():
         if valor != "Todos" and campo in df_filtrado.columns: df_filtrado = df_filtrado[df_filtrado[campo].astype(str) == str(valor)]
     if data_inicio: df_filtrado = df_filtrado[(df_filtrado['Agendamento'].notna()) & (df_filtrado['Agendamento'] >= pd.to_datetime(data_inicio))]
     if data_fim: df_filtrado = df_filtrado[(df_filtrado['Agendamento'].notna()) & (df_filtrado['Agendamento'] <= pd.to_datetime(data_fim).replace(hour=23, minute=59, second=59))]
-    if termo_busca:
-        termo = termo_busca.lower().strip(); mask_busca = df_filtrado.apply(lambda row: row.astype(str).str.lower().str.contains(termo, na=False, regex=False).any(), axis=1)
-        df_filtrado = df_filtrado[mask_busca]
-
+    if termo_busca: termo = termo_busca.lower().strip(); mask_busca = df_filtrado.apply(lambda row: row.astype(str).str.lower().str.contains(termo, na=False, regex=False).any(), axis=1); df_filtrado = df_filtrado[mask_busca]
     st.divider()
     
-    # --- KPIs de Status e Evolução ---
+    # (KPIs)
     st.markdown("#### 📈 Indicadores da Visão Atual")
     hoje = date.today()
-    
-    df_nao_finalizados = df_filtrado[~df_filtrado['Status'].str.contains("Finalizada|Cancelada", na=False, case=False)].copy() # Usa .copy() para evitar SettingWithCopyWarning
+    df_nao_finalizados = df_filtrado[~df_filtrado['Status'].str.contains("Finalizada|Cancelada", na=False, case=False)].copy() 
     df_agendados = df_nao_finalizados[df_nao_finalizados['Agendamento'].notna()]
     kpi_vencidos = df_agendados[df_agendados['Agendamento'].dt.date < hoje]
     kpi_hoje = df_agendados[df_agendados['Agendamento'].dt.date == hoje]
     kpi_em_andamento = df_filtrado[df_filtrado['Status'].str.lower().isin(['em andamento', 'pausado', 'pendencia'])]
     kpi_backlog = df_nao_finalizados[df_nao_finalizados['Agendamento'].isna()]
-
     col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
-    col_kpi1.metric("🚨 Vencidos", len(kpi_vencidos))
-    col_kpi2.metric("❗ Para Hoje", len(kpi_hoje))
-    col_kpi3.metric("⚙️ Em Andamento/Pendentes", len(kpi_em_andamento))
-    col_kpi4.metric("🗃️ Backlog (Sem Data)", len(kpi_backlog))
-
-    # --- CORREÇÃO: Aplicar get_next_stage a TODO o df_filtrado ---
-    # Isso garante que df_paginado (que vem de df_filtrado) tenha a coluna
-    if not df_filtrado.empty:
-        df_filtrado['proxima_etapa_calc'] = df_filtrado.apply(get_next_stage, args=(df_etapas_config,), axis=1)
-    
-    # KPIs de Evolução (agora usa a coluna de df_filtrado)
+    col_kpi1.metric("🚨 Vencidos", len(kpi_vencidos)); col_kpi2.metric("❗ Para Hoje", len(kpi_hoje)); col_kpi3.metric("⚙️ Em Andamento/Pendentes", len(kpi_em_andamento)); col_kpi4.metric("🗃️ Backlog (Sem Data)", len(kpi_backlog))
+    if not df_filtrado.empty: df_filtrado['proxima_etapa_calc'] = df_filtrado.apply(get_next_stage, args=(df_etapas_config,), axis=1)
     if not df_filtrado.empty:
         stage_counts = df_filtrado['proxima_etapa_calc'].value_counts()
         stage_counts = stage_counts.drop(labels=["Ignorado", "Sem Etapas", "Concluído"], errors='ignore')
-        
         if not stage_counts.empty:
-            st.markdown("#### 📋 Resumo das Próximas Etapas")
-            top_stages = stage_counts.head(4)
-            cols_kpi_stages = st.columns(4)
-            for i, (stage, count) in enumerate(top_stages.items()):
-                # --- CORREÇÃO: Remove "Etapa:" do label ---
-                cols_kpi_stages[i].metric(label=f"{stage}", value=count) # Remove o prefixo "Etapa:"
-    
+            st.markdown("#### 📋 Resumo das Próximas Etapas"); top_stages = stage_counts.head(4); cols_kpi_stages = st.columns(4)
+            for i, (stage, count) in enumerate(top_stages.items()): cols_kpi_stages[i].metric(label=f"{stage}", value=count)
     st.divider()
-    # --- FIM DAS CORREÇÕES DE KPI ---
 
-    # Lógica de Ordenação
+    # (Lógica de Ordenação)
     if ordem_selecionada == "Data Agendamento (Mais Recente)": df_filtrado = df_filtrado.sort_values(by="Agendamento", ascending=False, na_position='last')
     elif ordem_selecionada == "Data Agendamento (Mais Antigo)": df_filtrado = df_filtrado.sort_values(by="Agendamento", ascending=True, na_position='last')
     elif ordem_selecionada == "Prioridade (Alta > Baixa)":
@@ -573,7 +506,7 @@ def tela_projetos():
         df_filtrado['sla_dias_restantes'] = df_filtrado.apply(calculate_remaining_days, axis=1)
         df_filtrado = df_filtrado.sort_values(by="sla_dias_restantes", ascending=True)
     
-    # Exportar e Paginação 
+    # (Exportar e Paginação)
     col_info_export, col_export_btn = st.columns([4, 1.2]); total_items = len(df_filtrado)
     with col_info_export: st.info(f"Projetos encontrados (filtrados): {total_items}")
     with col_export_btn:
@@ -588,48 +521,33 @@ def tela_projetos():
     if st.session_state.page_number > current_max_page: st.session_state.page_number = 0
     start_idx = st.session_state.page_number * items_per_page; end_idx = start_idx + items_per_page
     df_paginado = df_filtrado.iloc[start_idx:end_idx] 
-    
-    # Carrega opções
     agencias_cfg = utils.carregar_config_db("agencias"); agencia_options = ["N/A"] + (agencias_cfg.iloc[:, 0].tolist() if not agencias_cfg.empty and len(agencias_cfg.columns) > 0 else [])
     tecnicos_cfg = utils.carregar_config_db("tecnicos"); tecnico_options = ["N/A"] + (tecnicos_cfg.iloc[:, 0].tolist() if not tecnicos_cfg.empty and len(tecnicos_cfg.columns) > 0 else [])
     status_options_df = utils.carregar_config_db("status"); status_options = status_options_df.iloc[:, 0].tolist() if not status_options_df.empty and len(status_options_df.columns) > 0 else []
     projetos_cfg = utils.carregar_config_db("projetos_nomes"); projeto_options = ["N/A"] + (projetos_cfg.iloc[:, 0].tolist() if not projetos_cfg.empty and len(projetos_cfg.columns) > 0 else [])
-
     limite_lembrete = hoje + timedelta(days=3)
 
     # --- Loop para exibir os cards ---
     for _, row in df_paginado.iterrows():
         project_id = row['ID']
         
-        # Sanitização
+        # (Sanitização e Lógicas de Card)
         status_raw = row.get('Status', 'N/A'); status_text = html.escape(str(status_raw))
-        analista_text = html.escape(str(row.get('Analista', 'N/A')))
-        agencia_text = html.escape(str(row.get("Agência", "N/A")))
-        projeto_nome_text = html.escape(str(row.get("Projeto", "N/A"))) 
-        agendamento_str = row.get('Agendamento_str', 'N/A') 
-        gestor_text = html.escape(str(row.get('Gestor', 'N/A')))
-        gestor_color = utils.get_color_for_name(gestor_text) 
-        
-        # Lógica Lembrete/SLA
+        analista_text = html.escape(str(row.get('Analista', 'N/A'))); agencia_text = html.escape(str(row.get("Agência", "N/A")))
+        projeto_nome_text = html.escape(str(row.get("Projeto", "N/A"))); agendamento_str = row.get('Agendamento_str', 'N/A') 
+        gestor_text = html.escape(str(row.get('Gestor', 'N/A'))); gestor_color = utils.get_color_for_name(gestor_text) 
         lembrete_ativo = False; icone_lembrete = ""; cor_lembrete = ""; texto_lembrete_html = ""
         agendamento_date_obj = row.get('Agendamento').date() if pd.notna(row.get('Agendamento')) else None
         sla_text, sla_color_real = utils.calcular_sla(row, df_sla) 
         if not ('finalizad' in status_raw.lower() or 'cancelad' in status_raw.lower()):
             if agendamento_date_obj == hoje: icone_lembrete = "❗"; cor_lembrete = "red"; texto_lembrete_html = f"<p style='color:{cor_lembrete}; font-weight:bold; margin-top: -5px;'>ATENÇÃO - DEMANDA PARA HOJE</p>"
             elif agendamento_date_obj and hoje < agendamento_date_obj <= limite_lembrete: icone_lembrete = "⚠️"; cor_lembrete = "orange"; texto_lembrete_html = f"<p style='color:{cor_lembrete}; font-weight:bold; margin-top: -5px;'>Lembrete: Próximo!</p>"
-
-        # --- CORREÇÃO: Lógica Próxima Etapa ---
-        # Pega o valor da coluna pré-calculada
-        proxima_etapa = row.get('proxima_etapa_calc', 'Sem Etapas') # Usa .get() para segurança
+        proxima_etapa = row.get('proxima_etapa_calc', 'Sem Etapas'); 
+        if proxima_etapa == "Ignorado" or proxima_etapa == "Sem Etapas": proxima_etapa_texto = "Nenhuma etapa configurada"
+        elif proxima_etapa == "Concluído": proxima_etapa_texto = "✔️ Todas concluídas"
+        else: proxima_etapa_texto = proxima_etapa
         
-        if proxima_etapa == "Ignorado" or proxima_etapa == "Sem Etapas":
-            proxima_etapa_texto = "Nenhuma etapa configurada"
-        elif proxima_etapa == "Concluído":
-            proxima_etapa_texto = "✔️ Todas concluídas"
-        else:
-            proxima_etapa_texto = proxima_etapa # Apenas o nome da etapa
-
-        # Cabeçalho do Card
+        # (Cabeçalho do Card)
         st.markdown("<div class='project-card'>", unsafe_allow_html=True)
         col_info_card, col_analista_card, col_agencia_card, col_status_card = st.columns([2.5, 2, 1.5, 2.0]) 
         with col_info_card:
@@ -644,19 +562,16 @@ def tela_projetos():
             st.markdown(f"<span style='color:{gestor_color}; font-weight: bold;'>Gestor: {gestor_text}</span>", unsafe_allow_html=True)
         with col_status_card:
             status_color_name = utils.get_status_color(str(status_raw)) 
-            st.markdown(
-                f"""<div style="height:100%; display:flex; flex-direction: column; align-items: flex-end; justify-content: center;">
-                    <span style="background-color:{status_color_name}; color:black; padding:8px 15px; border-radius:5px; font-weight:bold; font-size:0.9em; margin-bottom: 5px;">{status_text}</span>
-                    <span style="font-size: 0.95em; color: var(--primary-dark); font-weight: bold; text-align: right;">{proxima_etapa_texto}</span> 
-                </div>""",
-                unsafe_allow_html=True)
+            st.markdown(f"""<div style="height:100%; display:flex; flex-direction: column; align-items: flex-end; justify-content: center;"><span style="background-color:{status_color_name}; color:black; padding:8px 15px; border-radius:5px; font-weight:bold; font-size:0.9em; margin-bottom: 5px;">{status_text}</span><span style="font-size: 0.95em; color: var(--primary-dark); font-weight: bold; text-align: right;">{proxima_etapa_texto}</span></div>""", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
-        # --- Expander com Formulário de Edição ---
+        # --- Expander com Formulário de Edição (ATUALIZADO) ---
         with st.expander(f"Ver/Editar Detalhes - ID: {project_id}"):
             with st.form(f"form_edicao_card_{project_id}"):
-                # ... (código do formulário de edição, sem alterações) ...
+                
+                # (Evolução)
                 st.markdown("#### Evolução da Demanda")
+                # ... (código da evolução) ...
                 etapas_do_projeto = df_etapas_config[df_etapas_config["Nome do Projeto"] == row.get("Projeto", "")] if "Nome do Projeto" in df_etapas_config.columns else pd.DataFrame()
                 etapas_concluidas_str = row.get("Etapas Concluidas", ""); etapas_concluidas_lista = []
                 if pd.notna(etapas_concluidas_str) and isinstance(etapas_concluidas_str, str) and etapas_concluidas_str.strip(): etapas_concluidas_lista = [e.strip() for e in etapas_concluidas_str.split(',') if e.strip()]
@@ -669,13 +584,19 @@ def tela_projetos():
                         marcado = st.checkbox(etapa, value=(etapa in etapas_concluidas_lista), key=f"chk_{project_id}_{utils.clean_key(etapa)}")
                         if marcado: novas_etapas_marcadas.append(etapa)
                 else: st.caption("Nenhuma etapa de evolução configurada."); todas_etapas_possiveis = []; total_etapas = 0
+
+                # (Informações e Prazos)
                 st.markdown("#### Informações e Prazos")
+                # ... (código de c1 a c4) ...
                 c1,c2,c3,c4 = st.columns(4)
                 with c1: status_selecionaveis = status_options[:]; status_atual = row.get('Status'); idx_status = status_selecionaveis.index(status_atual) if status_atual in status_selecionaveis else 0; novo_status_selecionado = st.selectbox("Status", status_selecionaveis, index=idx_status, key=f"status_{project_id}")
                 with c2: abertura_default = _to_date_safe(row.get('Data de Abertura')); nova_data_abertura = st.date_input("Data Abertura", value=abertura_default, key=f"abertura_{project_id}", format="DD/MM/YYYY")
                 with c3: agendamento_default = _to_date_safe(row.get('Agendamento')); novo_agendamento = st.date_input("Agendamento", value=agendamento_default, key=f"agend_{project_id}", format="DD/MM/YYYY")
                 with c4: finalizacao_default = _to_date_safe(row.get('Data de Finalização')); nova_data_finalizacao = st.date_input("Data Finalização", value=finalizacao_default, key=f"final_{project_id}", format="DD/MM/YYYY")
+                
+                # (Detalhes do Projeto)
                 st.markdown("#### Detalhes do Projeto")
+                # ... (código de c5 a c9 e prioridade) ...
                 c5,c6,c7, c_prio = st.columns(4) 
                 with c5: projeto_val = row.get('Projeto', ''); idx_proj = projeto_options.index(projeto_val) if projeto_val in projeto_options else 0; novo_projeto = st.selectbox("Projeto", options=projeto_options, index=idx_proj, key=f"proj_{project_id}")
                 with c6: novo_analista = st.text_input("Analista", value=row.get('Analista', ''), key=f"analista_{project_id}")
@@ -687,13 +608,27 @@ def tela_projetos():
                 c8,c9 = st.columns(2)
                 with c8: agencia_val = row.get('Agência', ''); idx_ag = agencia_options.index(agencia_val) if agencia_val in agencia_options else 0; nova_agencia = st.selectbox("Agência", agencia_options, index=idx_ag, key=f"agencia_{project_id}")
                 with c9: tecnico_val = row.get('Técnico', ''); idx_tec = tecnico_options.index(tecnico_val) if tecnico_val in tecnico_options else 0; novo_tecnico = st.selectbox("Técnico", tecnico_options, index=idx_tec, key=f"tecnico_{project_id}")
+
+                # (Campos de Texto Longo e Log)
                 nova_demanda = st.text_input("Demanda", value=row.get('Demanda', ''), key=f"demanda_{project_id}")
                 nova_descricao = st.text_area("Descrição", value=row.get('Descrição', ''), key=f"desc_{project_id}")
                 nova_observacao = st.text_area("Observação / Pendências", value=row.get('Observação', ''), key=f"obs_{project_id}")
+                
+                # --- >>> ADICIONADO: Campo de Links <<< ---
+                nova_links = st.text_area("Links de Referência", 
+                                        value=row.get('Links de Referência', ''), 
+                                        key=f"links_{project_id}",
+                                        placeholder="Cole links aqui, um por linha...")
+                # --- >>> FIM <<< ---
+                
                 log_agendamento_existente = row.get("Log Agendamento", "") if pd.notna(row.get("Log Agendamento")) else ""; st.text_area("Histórico de Alterações", value=log_agendamento_existente, height=100, disabled=True, key=f"log_{project_id}")
+                
+                # (Botões)
                 _, col_save, col_delete = st.columns([3, 1.5, 1]) 
                 with col_save: btn_salvar_card = st.form_submit_button("💾 Salvar", use_container_width=True)
                 with col_delete: btn_excluir_card = st.form_submit_button("🗑️ Excluir", use_container_width=True, type="primary")
+                
+                # (Lógica dos Botões)
                 if btn_excluir_card:
                     if utils.excluir_projeto_db(project_id): st.success(f"Projeto ID {project_id} excluído."); st.rerun()
                 if btn_salvar_card:
@@ -706,11 +641,23 @@ def tela_projetos():
                     status_atual_normalizado = str(row.get('Status', '')).strip().upper(); status_final_normalizado = str(status_final).strip().upper()
                     if (status_atual_normalizado == 'NÃO INICIADA') and (len(novas_etapas_marcadas) > 0) and (status_final_normalizado == 'NÃO INICIADA'):
                         status_final = 'EM ANDAMENTO'; st.info("Status alterado para 'EM ANDAMENTO'.")
+                    
                     nova_data_abertura_date = _to_date_safe(nova_data_abertura); nova_data_finalizacao_date = _to_date_safe(nova_data_finalizacao); novo_agendamento_date = _to_date_safe(novo_agendamento)
-                    updates = {"Status": status_final, "Agendamento": novo_agendamento_date, "Analista": novo_analista,"Agência": nova_agencia if nova_agencia != "N/A" else None, "Gestor": novo_gestor, "Projeto": novo_projeto, "Técnico": novo_tecnico if novo_tecnico != "N/A" else None, "Demanda": nova_demanda, "Descrição": nova_descricao, "Observação": nova_observacao, "Data de Abertura": nova_data_abertura_date, "Data de Finalização": nova_data_finalizacao_date, "Etapas Concluidas": ",".join(novas_etapas_marcadas) if novas_etapas_marcadas else None, "Prioridade": nova_prioridade }
+                    
+                    # --- >>> ADICIONADO: 'Links de Referência' ao Updates <<< ---
+                    updates = {
+                        "Status": status_final, "Agendamento": novo_agendamento_date, "Analista": novo_analista,
+                        "Agência": nova_agencia if nova_agencia != "N/A" else None, "Gestor": novo_gestor, 
+                        "Projeto": novo_projeto, "Técnico": novo_tecnico if novo_tecnico != "N/A" else None, 
+                        "Demanda": nova_demanda, "Descrição": nova_descricao, "Observação": nova_observacao, 
+                        "Data de Abertura": nova_data_abertura_date, "Data de Finalização": nova_data_finalizacao_date, 
+                        "Etapas Concluidas": ",".join(novas_etapas_marcadas) if novas_etapas_marcadas else None, 
+                        "Prioridade": nova_prioridade,
+                        "Links de Referência": nova_links # <<< CAMPO ADICIONADO
+                    }
                     if utils.atualizar_projeto_db(project_id, updates): st.success(f"Projeto '{novo_projeto}' (ID: {project_id}) atualizado."); st.rerun()
 
-    # Paginação
+    # (Paginação)
     st.divider()
     if total_pages > 1:
         col_info_pag, col_prev_pag, col_next_pag = st.columns([5, 1.5, 1.5]) 
@@ -718,118 +665,84 @@ def tela_projetos():
         with col_prev_pag:
             if st.button("⬅️ Anterior", use_container_width=True, disabled=(st.session_state.page_number == 0)): st.session_state.page_number -= 1; st.rerun()
         with col_next_pag:
-            if st.button("Próxima ➡️", use_container_width=True, disabled=(st.session_state.page_number >= total_pages - 1)): st.session_state.page_number += 1; st.rerun()   
+            if st.button("Próxima ➡️", use_container_width=True, disabled=(st.session_state.page_number >= total_pages - 1)): st.session_state.page_number += 1; st.rerun()
                 
 # ---- Tela Kanban ---- #
 
+# (No app.py, substitua esta função)
 def tela_kanban():
     st.markdown("<div class='section-title-center'>VISÃO KANBAN</div>", unsafe_allow_html=True)
 
-    # --- 1. Carregar todos os dados ---
+    # (Carrega DFs)
     df = utils.carregar_projetos_db()
     df['Agendamento'] = pd.to_datetime(df['Agendamento'], errors='coerce') 
     df_sla = utils.carregar_config_db("sla") 
     df_etapas_config = utils.carregar_config_db("etapas_evolucao") 
-    
-    # Carrega opções
     agencias_cfg = utils.carregar_config_db("agencias"); agencia_options = ["N/A"] + (agencias_cfg.iloc[:, 0].tolist() if not agencias_cfg.empty and len(agencias_cfg.columns) > 0 else [])
     tecnicos_cfg = utils.carregar_config_db("tecnicos"); tecnico_options = ["N/A"] + (tecnicos_cfg.iloc[:, 0].tolist() if not tecnicos_cfg.empty and len(tecnicos_cfg.columns) > 0 else [])
     status_options_df = utils.carregar_config_db("status"); status_options = status_options_df.iloc[:, 0].tolist() if not status_options_df.empty and len(status_options_df.columns) > 0 else []
     projetos_cfg = utils.carregar_config_db("projetos_nomes"); projeto_options = ["N/A"] + (projetos_cfg.iloc[:, 0].tolist() if not projetos_cfg.empty and len(projetos_cfg.columns) > 0 else [])
-
     hoje = date.today(); limite_lembrete = hoje + timedelta(days=3)
 
-    # --- 2. Bloco de Filtros (Com Busca e Ordenação lado a lado) ---
+    # (Filtros e Ordenação)
     st.markdown("#### 🔍 Busca e Ordenação")
     col_busca, col_ordem = st.columns([3, 2])
-    with col_busca:
-        termo_busca = st.text_input("Buscar", key="kanban_termo_busca", placeholder="Digite um termo para buscar...", label_visibility="collapsed")
+    with col_busca: termo_busca = st.text_input("Buscar", key="kanban_termo_busca", placeholder="Digite um termo para buscar...", label_visibility="collapsed")
     with col_ordem:
         opcoes_ordenacao = ["Prioridade (Alta > Baixa)", "Data Agendamento (Mais Antigo)", "Data Agendamento (Mais Recente)"]
         ordem_selecionada = st.selectbox("Ordenar por:", options=opcoes_ordenacao, key="ordem_kanban", label_visibility="collapsed")
-    
     st.markdown("#### 🎛️ Filtros")
     filtros = {} 
     col1, col2, col3, col4 = st.columns(4); campos_linha_1 = {"Status": col1, "Analista": col2, "Agência": col3, "Gestor": col4}
     for campo, col in campos_linha_1.items():
         with col:
-            if campo in df.columns: 
-                unique_values = df[campo].dropna().astype(str).unique(); opcoes = ["Todos"] + sorted(unique_values.tolist())
-                filtros[campo] = st.selectbox(f"{campo}", opcoes, key=f"kanban_filtro_{utils.clean_key(campo)}")
+            if campo in df.columns: unique_values = df[campo].dropna().astype(str).unique(); opcoes = ["Todos"] + sorted(unique_values.tolist()); filtros[campo] = st.selectbox(f"{campo}", opcoes, key=f"kanban_filtro_{utils.clean_key(campo)}")
             else: st.empty()
     col5, col6, col7, col8 = st.columns(4)
     with col5:
         campo = "Projeto"; 
-        if campo in df.columns:
-            unique_values = df[campo].dropna().astype(str).unique(); opcoes = ["Todos"] + sorted(unique_values.tolist())
-            filtros[campo] = st.selectbox(f"{campo}", opcoes, key=f"kanban_filtro_{utils.clean_key(campo)}")
+        if campo in df.columns: unique_values = df[campo].dropna().astype(str).unique(); opcoes = ["Todos"] + sorted(unique_values.tolist()); filtros[campo] = st.selectbox(f"{campo}", opcoes, key=f"kanban_filtro_{utils.clean_key(campo)}")
         else: st.empty()
     with col6:
         campo = "Técnico"; 
-        if campo in df.columns:
-            unique_values = df[campo].dropna().astype(str).unique(); opcoes = ["Todos"] + sorted(unique_values.tolist())
-            filtros[campo] = st.selectbox(f"{campo}", opcoes, key=f"kanban_filtro_{utils.clean_key(campo)}")
+        if campo in df.columns: unique_values = df[campo].dropna().astype(str).unique(); opcoes = ["Todos"] + sorted(unique_values.tolist()); filtros[campo] = st.selectbox(f"{campo}", opcoes, key=f"kanban_filtro_{utils.clean_key(campo)}")
         else: st.empty()
     with col7: data_inicio = st.date_input("Agendamento (de)", value=None, key="kanban_data_inicio_filtro", format="DD/MM/YYYY")
     with col8: data_fim = st.date_input("Agendamento (até)", value=None, key="kanban_data_fim_filtro", format="DD/MM/YYYY")
     
-    # --- 3. Aplicar Filtros ---
+    # (Lógica de Filtros)
     df_filtrado = df.copy()
     for campo, valor in filtros.items():
         if valor != "Todos" and campo in df_filtrado.columns: df_filtrado = df_filtrado[df_filtrado[campo].astype(str) == str(valor)]
     if data_inicio: df_filtrado = df_filtrado[(df_filtrado['Agendamento'].notna()) & (df_filtrado['Agendamento'] >= pd.to_datetime(data_inicio))]
     if data_fim: df_filtrado = df_filtrado[(df_filtrado['Agendamento'].notna()) & (df_filtrado['Agendamento'] <= pd.to_datetime(data_fim).replace(hour=23, minute=59, second=59))]
-    if termo_busca:
-        termo = termo_busca.lower().strip(); mask_busca = df_filtrado.apply(lambda row: row.astype(str).str.lower().str.contains(termo, na=False, regex=False).any(), axis=1)
-        df_filtrado = df_filtrado[mask_busca]
-
+    if termo_busca: termo = termo_busca.lower().strip(); mask_busca = df_filtrado.apply(lambda row: row.astype(str).str.lower().str.contains(termo, na=False, regex=False).any(), axis=1); df_filtrado = df_filtrado[mask_busca]
     st.divider()
     
-    # --- NOVO BLOCO: PAINEL DE INDICADORES (KPIs) ---
+    # (KPIs)
     st.markdown("#### 📈 Indicadores da Visão Atual")
-    df_nao_finalizados = df_filtrado[~df_filtrado['Status'].str.contains("Finalizada|Cancelada", na=False, case=False)].copy() # Usa .copy()
+    df_nao_finalizados = df_filtrado[~df_filtrado['Status'].str.contains("Finalizada|Cancelada", na=False, case=False)].copy() 
     df_agendados = df_nao_finalizados[df_nao_finalizados['Agendamento'].notna()]
-    kpi_vencidos = df_agendados[df_agendados['Agendamento'].dt.date < hoje]
-    kpi_hoje = df_agendados[df_agendados['Agendamento'].dt.date == hoje]
-    kpi_em_andamento = df_filtrado[df_filtrado['Status'].str.lower().isin(['em andamento', 'pausado', 'pendencia'])]
-    kpi_backlog = df_nao_finalizados[df_nao_finalizados['Agendamento'].isna()]
-
+    kpi_vencidos = df_agendados[df_agendados['Agendamento'].dt.date < hoje]; kpi_hoje = df_agendados[df_agendados['Agendamento'].dt.date == hoje]
+    kpi_em_andamento = df_filtrado[df_filtrado['Status'].str.lower().isin(['em andamento', 'pausado', 'pendencia'])]; kpi_backlog = df_nao_finalizados[df_nao_finalizados['Agendamento'].isna()]
     col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
-    col_kpi1.metric("🚨 Vencidos", len(kpi_vencidos))
-    col_kpi2.metric("❗ Para Hoje", len(kpi_hoje))
-    col_kpi3.metric("⚙️ Em Andamento/Pendentes", len(kpi_em_andamento))
-    col_kpi4.metric("🗃️ Backlog (Sem Data)", len(kpi_backlog))
-
-    # --- KPIs de Evolução (Calculados com a nova função) ---
-    if not df_nao_finalizados.empty:
-        # --- CORREÇÃO: Aplicar get_next_stage ao df_filtrado ---
-        # (Para que as colunas do Kanban também tenham a info)
-        df_filtrado['proxima_etapa_calc'] = df_filtrado.apply(get_next_stage, args=(df_etapas_config,), axis=1)
-        
-        # Agora, filtre o df_nao_finalizados a partir do df_filtrado já calculado
-        df_nao_finalizados = df_filtrado[df_filtrado.index.isin(df_nao_finalizados.index)]
-        
+    col_kpi1.metric("🚨 Vencidos", len(kpi_vencidos)); col_kpi2.metric("❗ Para Hoje", len(kpi_hoje)); col_kpi3.metric("⚙️ Em Andamento/Pendentes", len(kpi_em_andamento)); col_kpi4.metric("🗃️ Backlog (Sem Data)", len(kpi_backlog))
+    if not df_filtrado.empty: df_filtrado['proxima_etapa_calc'] = df_filtrado.apply(get_next_stage, args=(df_etapas_config,), axis=1)
+    if not df_filtrado.empty:
+        df_nao_finalizados = df_filtrado[df_filtrado.index.isin(df_nao_finalizados.index)] # Re-filtra com base no df_filtrado
         stage_counts = df_nao_finalizados['proxima_etapa_calc'].value_counts()
         stage_counts = stage_counts.drop(labels=["Ignorado", "Sem Etapas", "Concluído"], errors='ignore')
-        
         if not stage_counts.empty:
-            st.markdown("#### 📋 Resumo das Próximas Etapas")
-            top_stages = stage_counts.head(4)
-            cols_kpi_stages = st.columns(4)
-            for i, (stage, count) in enumerate(top_stages.items()):
-                # --- CORREÇÃO: Remove "Etapa:" do label ---
-                cols_kpi_stages[i].metric(label=f"{stage}", value=count)
-    
+            st.markdown("#### 📋 Resumo das Próximas Etapas"); top_stages = stage_counts.head(4); cols_kpi_stages = st.columns(4)
+            for i, (stage, count) in enumerate(top_stages.items()): cols_kpi_stages[i].metric(label=f"{stage}", value=count)
     st.divider()
-    # --- FIM DO BLOCO DE KPIs ---
 
-    # --- 4. Definir as colunas e filtros (LÓGICA CORRIGIDA) ---
+    # (Lógica de Colunas Kanban e Ordenação)
     colunas_kanban = ["BACKLOG", "PENDÊNCIA", "NÃO INICIADA", "EM ANDAMENTO"] 
     f_backlog = (df_filtrado['Agendamento'].isna()) & (~df_filtrado['Status'].str.lower().isin(['finalizado', 'cancelado', 'finalizada']))
     f_pendencia = (df_filtrado['Agendamento'].notna()) & (df_filtrado['Status'].str.lower().str.contains('pendencia'))
     f_nao_iniciada = (df_filtrado['Agendamento'].notna()) & (df_filtrado['Status'].str.lower().str.contains('não iniciad')) & (~f_pendencia)
     f_em_andamento = (df_filtrado['Agendamento'].notna()) & (df_filtrado['Status'].str.lower().isin(['em andamento', 'pausado'])) & (~f_pendencia) & (~f_nao_iniciada)
-    
     def sort_df(df_col, ordem):
         if ordem == "Data Agendamento (Mais Recente)": return df_col.sort_values(by="Agendamento", ascending=False, na_position='last')
         if ordem == "Data Agendamento (Mais Antigo)": return df_col.sort_values(by="Agendamento", ascending=True, na_position='last')
@@ -837,18 +750,13 @@ def tela_kanban():
             priority_map = {"Alta": 1, "Média": 2, "Baixa": 3}; df_col['prioridade_num'] = df_col['Prioridade'].map(priority_map).fillna(2)
             return df_col.sort_values(by="prioridade_num", ascending=True).drop(columns=['prioridade_num'])
         return df_col 
-
     dfs_colunas = {
-        "BACKLOG": sort_df(df_filtrado[f_backlog], ordem_selecionada), 
-        "PENDÊNCIA": sort_df(df_filtrado[f_pendencia], ordem_selecionada), 
-        "NÃO INICIADA": sort_df(df_filtrado[f_nao_iniciada], ordem_selecionada), 
-        "EM ANDAMENTO": sort_df(df_filtrado[f_em_andamento], ordem_selecionada) 
+        "BACKLOG": sort_df(df_filtrado[f_backlog], ordem_selecionada), "PENDÊNCIA": sort_df(df_filtrado[f_pendencia], ordem_selecionada), 
+        "NÃO INICIADA": sort_df(df_filtrado[f_nao_iniciada], ordem_selecionada), "EM ANDAMENTO": sort_df(df_filtrado[f_em_andamento], ordem_selecionada) 
     }
-
-    cols_streamlit = st.columns(len(colunas_kanban))
-    pagination_details = {} 
+    cols_streamlit = st.columns(len(colunas_kanban)); pagination_details = {} 
     
-    # --- 5. LOOP 1: Desenhar os CARDS ---
+    # --- LOOP 1: Desenhar os CARDS ---
     for i, col_nome in enumerate(colunas_kanban):
         with cols_streamlit[i]:
             df_col = dfs_colunas[col_nome]; count = len(df_col)
@@ -886,6 +794,7 @@ def tela_kanban():
                         st.markdown(f"**Editando: {projeto_nome_text.upper()}**") 
                         
                         st.markdown("#### Evolução da Demanda")
+                        # ... (código da evolução) ...
                         etapas_do_projeto = df_etapas_config[df_etapas_config["Nome do Projeto"] == row.get("Projeto", "")] if "Nome do Projeto" in df_etapas_config.columns else pd.DataFrame()
                         etapas_concluidas_str = row.get("Etapas Concluidas", ""); etapas_concluidas_lista = []
                         if pd.notna(etapas_concluidas_str) and isinstance(etapas_concluidas_str, str) and etapas_concluidas_str.strip(): etapas_concluidas_lista = [e.strip() for e in etapas_concluidas_str.split(',') if e.strip()]
@@ -900,6 +809,7 @@ def tela_kanban():
                         else: st.caption("Nenhuma etapa de evolução configurada."); todas_etapas_possiveis = []; total_etapas = 0
                         
                         st.markdown("#### Informações e Prazos")
+                        # ... (código dos prazos c1-c4) ...
                         c1,c2,c3,c4 = st.columns(4)
                         with c1: status_selecionaveis = status_options[:]; status_atual = row.get('Status'); idx_status = status_selecionaveis.index(status_atual) if status_atual in status_selecionaveis else 0; novo_status_selecionado = st.selectbox("Status", status_selecionaveis, index=idx_status, key=f"status_kanban_{project_id}")
                         with c2: abertura_default = _to_date_safe(row.get('Data de Abertura')); nova_data_abertura = st.date_input("Data Abertura", value=abertura_default, key=f"abertura_kanban_{project_id}", format="DD/MM/YYYY")
@@ -907,6 +817,7 @@ def tela_kanban():
                         with c4: finalizacao_default = _to_date_safe(row.get('Data de Finalização')); nova_data_finalizacao = st.date_input("Data Finalização", value=finalizacao_default, key=f"final_kanban_{project_id}", format="DD/MM/YYYY")
                         
                         st.markdown("#### Detalhes do Projeto")
+                        # ... (código dos detalhes c5-c9 e prioridade) ...
                         c5,c6,c7, c_prio = st.columns(4) 
                         with c5: projeto_val = row.get('Projeto', ''); idx_proj = projeto_options.index(projeto_val) if projeto_val in projeto_options else 0; novo_projeto = st.selectbox("Projeto", options=projeto_options, index=idx_proj, key=f"proj_kanban_{project_id}")
                         with c6: novo_analista = st.text_input("Analista", value=row.get('Analista', ''), key=f"analista_kanban_{project_id}")
@@ -919,9 +830,18 @@ def tela_kanban():
                         with c8: agencia_val = row.get('Agência', ''); idx_ag = agencia_options.index(agencia_val) if agencia_val in agencia_options else 0; nova_agencia = st.selectbox("Agência", agencia_options, index=idx_ag, key=f"agencia_kanban_{project_id}")
                         with c9: tecnico_val = row.get('Técnico', ''); idx_tec = tecnico_options.index(tecnico_val) if tecnico_val in tecnico_options else 0; novo_tecnico = st.selectbox("Técnico", tecnico_options, index=idx_tec, key=f"tecnico_kanban_{project_id}")
                         
+                        # (Campos de Texto Longo e Log)
                         nova_demanda = st.text_input("Demanda", value=row.get('Demanda', ''), key=f"demanda_kanban_{project_id}")
                         nova_descricao = st.text_area("Descrição", value=row.get('Descrição', ''), key=f"desc_kanban_{project_id}")
                         nova_observacao = st.text_area("Observação / Pendências", value=row.get('Observação', ''), key=f"obs_kanban_{project_id}")
+                        
+                        # --- >>> ADICIONADO: Campo de Links <<< ---
+                        nova_links = st.text_area("Links de Referência", 
+                                                value=row.get('Links de Referência', ''), 
+                                                key=f"links_kanban_{project_id}",
+                                                placeholder="Cole links aqui, um por linha...")
+                        # --- >>> FIM <<< ---
+                        
                         log_agendamento_existente = row.get("Log Agendamento", "") if pd.notna(row.get("Log Agendamento")) else ""; st.text_area("Histórico de Alterações", value=log_agendamento_existente, height=100, disabled=True, key=f"log_kanban_{project_id}")
                         
                         _, col_save, col_delete = st.columns([3, 1.5, 1]) 
@@ -936,18 +856,25 @@ def tela_kanban():
                             if novo_projeto == "N/A": st.error("ERRO: 'Projeto' é obrigatório.", icon="🚨"); st.stop()
                             if nova_agencia == "N/A": st.error("ERRO: 'Agência' é obrigatória.", icon="🚨"); st.stop()
                             if 'finalizad' in status_final.lower():
-                                if total_etapas > 0 and len(novas_etapas_marcadas) < total_etapas: st.error(f"ERRO: Para 'Finalizado', todas as {total_etapas} etapas devem estar selecionadas.", icon="🚨"); st.stop() 
+                                if total_etapas > 0 and len(novas_etapas_marcadas) < total_etapas: st.error(f"ERRO: Para 'Finalizado', todas as {total_etapas} etapas devem ser selecionadas.", icon="🚨"); st.stop() 
                                 if not _to_date_safe(nova_data_finalizacao): st.error("ERRO: Se 'Finalizada', Data de Finalização é obrigatória.", icon="🚨"); st.stop() 
-                            
-                            # Lógica de Status Automático (Corrigida)
-                            status_atual_normalizado = str(row.get('Status', '')).strip().upper()
-                            status_final_normalizado = str(status_final).strip().upper()
+                            status_atual_normalizado = str(row.get('Status', '')).strip().upper(); status_final_normalizado = str(status_final).strip().upper()
                             if (status_atual_normalizado == 'NÃO INICIADA') and (len(novas_etapas_marcadas) > 0) and (status_final_normalizado == 'NÃO INICIADA'):
-                                status_final = 'EM ANDAMENTO' 
-                                st.info("Status alterado para 'EM ANDAMENTO'.")
+                                status_final = 'EM ANDAMENTO'; st.info("Status alterado para 'EM ANDAMENTO'.")
                             
                             nova_data_abertura_date = _to_date_safe(nova_data_abertura); nova_data_finalizacao_date = _to_date_safe(nova_data_finalizacao); novo_agendamento_date = _to_date_safe(novo_agendamento)
-                            updates = {"Status": status_final, "Agendamento": novo_agendamento_date, "Analista": novo_analista,"Agência": nova_agencia if nova_agencia != "N/A" else None, "Gestor": novo_gestor, "Projeto": novo_projeto, "Técnico": novo_tecnico if novo_tecnico != "N/A" else None, "Demanda": nova_demanda, "Descrição": nova_descricao, "Observação": nova_observacao, "Data de Abertura": nova_data_abertura_date, "Data de Finalização": nova_data_finalizacao_date, "Etapas Concluidas": ",".join(novas_etapas_marcadas) if novas_etapas_marcadas else None, "Prioridade": nova_prioridade }
+                            
+                            # --- >>> ADICIONADO: 'Links de Referência' ao Updates <<< ---
+                            updates = {
+                                "Status": status_final, "Agendamento": novo_agendamento_date, "Analista": novo_analista,
+                                "Agência": nova_agencia if nova_agencia != "N/A" else None, "Gestor": novo_gestor, 
+                                "Projeto": novo_projeto, "Técnico": novo_tecnico if novo_tecnico != "N/A" else None, 
+                                "Demanda": nova_demanda, "Descrição": nova_descricao, "Observação": nova_observacao, 
+                                "Data de Abertura": nova_data_abertura_date, "Data de Finalização": nova_data_finalizacao_date, 
+                                "Etapas Concluidas": ",".join(novas_etapas_marcadas) if novas_etapas_marcadas else None, 
+                                "Prioridade": nova_prioridade,
+                                "Links de Referência": nova_links # <<< CAMPO ADICIONADO
+                            }
                             if utils.atualizar_projeto_db(project_id, updates): st.success(f"Projeto '{novo_projeto}' (ID: {project_id}) atualizado."); time.sleep(1); st.rerun() 
             
             st.markdown("<div style='flex-grow: 1; min-height: 1px;'></div>", unsafe_allow_html=True) 
@@ -968,7 +895,7 @@ def tela_kanban():
                 st.markdown(f"<div style='text-align:center; padding-top: 5px;'>Pág {st.session_state[key_pagina]} de {total_paginas}</div>", unsafe_allow_html=True)
             with col_btn2:
                 if st.button("➡️", key=f"next_{col_nome}", use_container_width=True, disabled=(st.session_state[key_pagina] >= total_paginas)):
-                    st.session_state[key_pagina] += 1; st.rerun()     
+                    st.session_state[key_pagina] += 1; st.rerun()
                     
 # ----------------- FUNÇÃO MAIN ----------------- #
 
@@ -1047,6 +974,7 @@ def main():
 if __name__ == "__main__":
     utils.criar_tabelas_iniciais() 
     main()
+
 
 
 
