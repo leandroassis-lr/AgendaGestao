@@ -13,12 +13,14 @@ from PIL import Image
 
 # (image_to_base64 - Sem alterações)
 def image_to_base64(image):
+    """Converte uma imagem PIL em string Base64 para exibição no Streamlit."""
     buffered = BytesIO(); image.save(buffered, format="PNG")
     return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
 # (get_db_connection - Sem alterações)
 @st.cache_resource
 def get_db_connection():
+    """Cria e gerencia a conexão com o banco de dados PostgreSQL."""
     try:
         secrets = st.secrets["postgres"]
         conn = psycopg2.connect(host=secrets["PGHOST"], port=secrets["PGPORT"], user=secrets["PGUSER"], password=secrets["PGPASSWORD"], dbname=secrets["PGDATABASE"])
@@ -68,7 +70,7 @@ def criar_tabelas_iniciais():
     except Exception as e:
         st.error(f"Erro ao criar/verificar tabelas: {e}")
 
-# (_normalize_and_sanitize - Sem alterações)
+# (_normalize_and_sanitize - Com correção de acentos)
 def _normalize_and_sanitize(data_dict: dict):
     normalized = {}
     for key, value in data_dict.items():
@@ -81,25 +83,14 @@ def _normalize_and_sanitize(data_dict: dict):
         normalized[k] = sanitized_value
     return normalized
 
-# (carregar_projetos_db - ATUALIZADO com filtro de permissão)
+# (carregar_projetos_db - CORRIGIDO: Carrega TUDO, sem filtro)
 @st.cache_data(ttl=60) 
-def carregar_projetos_db(usuario_logado=None, permissao="Usuario"):
-    """
-    Carrega projetos. Se a permissão for 'Usuario', filtra pelo nome do analista.
-    Se for 'Admin', carrega todos.
-    """
+def carregar_projetos_db(): # Removido (usuario_logado, permissao)
+    """ Carrega TODOS os projetos. O filtro será feito no app.py """
     if not conn: return pd.DataFrame()
     try:
-        query = "SELECT * FROM projetos"
-        params = []
-        # --- LÓGICA DE PERMISSÃO ---
-        if permissao == 'Usuario' and usuario_logado:
-            query += " WHERE analista = %s" # Filtra para ver apenas os projetos do analista logado
-            params.append(usuario_logado)
-        query += " ORDER BY id DESC"
-        # --- FIM DA LÓGICA ---
-        
-        df = pd.read_sql_query(query, conn, params=params if params else None) 
+        query = "SELECT * FROM projetos ORDER BY id DESC"
+        df = pd.read_sql_query(query, conn) 
         rename_map = {'id': 'ID', 'descricao': 'Descrição', 'agencia': 'Agência', 'tecnico': 'Técnico','observacao': 'Observação', 'data_abertura': 'Data de Abertura','data_finalizacao': 'Data de Finalização', 'log_agendamento': 'Log Agendamento','etapas_concluidas': 'Etapas Concluidas', 'projeto': 'Projeto', 'status': 'Status','agendamento': 'Agendamento', 'demanda': 'Demanda', 'analista': 'Analista', 'gestor': 'Gestor', 'prioridade': 'Prioridade','links_referencia': 'Links de Referência'}
         df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
         if 'Agendamento' in df.columns: df['Agendamento_str'] = pd.to_datetime(df['Agendamento'], errors='coerce').dt.strftime('%d/%m/%Y').fillna("N/A")
@@ -109,22 +100,14 @@ def carregar_projetos_db(usuario_logado=None, permissao="Usuario"):
     except Exception as e:
         st.error(f"Erro ao carregar projetos do DB: {e}"); return pd.DataFrame() 
 
-# (carregar_projetos_sem_agendamento_db - ATUALIZADO com filtro de permissão)
+# (carregar_projetos_sem_agendamento_db - CORRIGIDO: Carrega TUDO, sem filtro)
 @st.cache_data(ttl=60)
-def carregar_projetos_sem_agendamento_db(usuario_logado=None, permissao="Usuario"):
-    """Carrega projetos do backlog. Filtra por permissão."""
+def carregar_projetos_sem_agendamento_db(): # Removido (usuario_logado, permissao)
+    """ Carrega TODOS os projetos do backlog. O filtro será feito no app.py """
     if not conn: return pd.DataFrame()
     try:
-        query = "SELECT * FROM projetos WHERE agendamento IS NULL"
-        params = []
-        # --- LÓGICA DE PERMISSÃO ---
-        if permissao == 'Usuario' and usuario_logado:
-            query += " AND analista = %s" # Filtra para ver apenas os projetos do analista logado
-            params.append(usuario_logado)
-        query += " ORDER BY id DESC"
-        # --- FIM DA LÓGICA ---
-        
-        df = pd.read_sql_query(query, conn, params=params if params else None)
+        query = "SELECT * FROM projetos WHERE agendamento IS NULL ORDER BY id DESC"
+        df = pd.read_sql_query(query, conn)
         rename_map = {'id': 'ID', 'descricao': 'Descrição', 'agencia': 'Agência', 'tecnico': 'Técnico','observacao': 'Observação', 'data_abertura': 'Data de Abertura','data_finalizacao': 'Data de Finalização', 'log_agendamento': 'Log Agendamento','etapas_concluidas': 'Etapas Concluidas', 'projeto': 'Projeto', 'status': 'Status','agendamento': 'Agendamento', 'demanda': 'Demanda', 'analista': 'Analista', 'gestor': 'Gestor', 'prioridade': 'Prioridade','links_referencia': 'Links de Referência'}
         df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
         if 'Agendamento' in df.columns: df['Agendamento_str'] = pd.to_datetime(df['Agendamento'], errors='coerce').dt.strftime('%d/%m/%Y').fillna("N/A")
@@ -229,7 +212,7 @@ def salvar_config_db(df, tab_name):
         st.cache_data.clear(); return True
     except Exception as e: st.error(f"Erro salvar config '{tab_name}': {e}"); return False
 
-# (carregar_usuarios_db - ATUALIZADO)
+# (carregar_usuarios_db - ATUALIZADO para carregar permissão)
 @st.cache_data(ttl=600)
 def carregar_usuarios_db():
     if not conn: return pd.DataFrame(columns=['id', 'nome', 'email', 'senha', 'permissao'])
@@ -246,7 +229,7 @@ def carregar_usuarios_db():
         st.error(f"Erro ao carregar usuários: {e}"); 
         return pd.DataFrame(columns=['id', 'nome', 'email', 'senha', 'permissao'])
 
-# (salvar_usuario_db - ATUALIZADO)
+# (salvar_usuario_db - ATUALIZADO para salvar permissão)
 def salvar_usuario_db(df):
     if not conn: return False
     try:
@@ -267,7 +250,7 @@ def salvar_usuario_db(df):
         st.cache_data.clear(); return True
     except Exception as e: st.error(f"Erro ao salvar usuários: {e}"); return False
         
-# (validar_usuario - ATUALIZADO)
+# (validar_usuario - ATUALIZADO para retornar permissão)
 def validar_usuario(nome, email):
     """Valida se o usuário existe e retorna (sucesso, permissao)."""
     if not nome or not email: return False, None
