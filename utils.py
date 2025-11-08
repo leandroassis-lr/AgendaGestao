@@ -28,13 +28,13 @@ def get_db_connection():
 
 conn = get_db_connection() 
 
-# (criar_tabelas_iniciais - ATUALIZADO)
+# (criar_tabelas_iniciais - ATUALIZADO para checar TODAS as colunas)
 def criar_tabelas_iniciais():
     """Cria as tabelas e adiciona colunas ausentes se não existirem."""
     if not conn: return
     try:
         with conn.cursor() as cur:
-            # 1. Tabela de projetos (sem alterações)
+            # 1. Tabela de projetos
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS projetos (
                     id SERIAL PRIMARY KEY, projeto TEXT, descricao TEXT, agencia TEXT, 
@@ -45,7 +45,10 @@ def criar_tabelas_iniciais():
                     links_referencia TEXT 
                 );
             """)
+            # 2. Tabela de configurações
             cur.execute("CREATE TABLE IF NOT EXISTS configuracoes (aba_nome TEXT PRIMARY KEY, dados_json JSONB);")
+            
+            # 3. Tabela de usuários
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS usuarios (
                     id SERIAL PRIMARY KEY, nome TEXT, email TEXT UNIQUE, senha TEXT,
@@ -53,15 +56,14 @@ def criar_tabelas_iniciais():
                 );
             """)
 
-            # --- NOVO: Tabela de Chamados ---
-            # Criada para armazenar os dados do seu Excel
+            # 4. Tabela de Chamados
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS chamados (
                     id SERIAL PRIMARY KEY,
+                    chamado_id TEXT UNIQUE, -- UNIQUE impede duplicados
                     agencia_id TEXT,
                     agencia_nome TEXT,
                     agencia_uf TEXT,
-                    chamado_id TEXT UNIQUE, -- UNIQUE impede duplicados
                     servico TEXT,
                     projeto_nome TEXT,
                     data_agendamento DATE,
@@ -70,16 +72,29 @@ def criar_tabelas_iniciais():
                     nome_equipamento TEXT,
                     quantidade INTEGER,
                     gestor TEXT,
-                    status_financeiro TEXT DEFAULT 'Pendente' -- Coluna para o futuro
+                    descricao TEXT,
+                    data_abertura DATE,
+                    data_fechamento DATE,
+                    status_chamado TEXT,
+                    valor_chamado NUMERIC(10, 2) DEFAULT 0.00,
+                    status_financeiro TEXT DEFAULT 'Pendente' 
                 );
             """)
-            # --- FIM NOVO ---
 
-            # Verifica e ADICIONA colunas se faltarem (sem alterações)
+            # --- CORREÇÃO: Verifica e Adiciona colunas FALTANTES ---
             colunas_a_verificar = {
                 'projetos': [('prioridade', "TEXT DEFAULT 'Média'"), ('links_referencia', 'TEXT')],
-                'usuarios': [('permissao', "TEXT DEFAULT 'Usuario'")]
+                'usuarios': [('permissao', "TEXT DEFAULT 'Usuario'")],
+                'chamados': [ # Adiciona verificação para todas as colunas de chamados
+                    ('agencia_id', 'TEXT'), ('agencia_nome', 'TEXT'), ('agencia_uf', 'TEXT'),
+                    ('servico', 'TEXT'), ('projeto_nome', 'TEXT'), ('data_agendamento', 'DATE'),
+                    ('sistema', 'TEXT'), ('cod_equipamento', 'TEXT'), ('nome_equipamento', 'TEXT'),
+                    ('quantidade', 'INTEGER'), ('gestor', 'TEXT'), ('descricao', 'TEXT'),
+                    ('data_abertura', 'DATE'), ('data_fechamento', 'DATE'), ('status_chamado', 'TEXT'),
+                    ('valor_chamado', 'NUMERIC(10, 2) DEFAULT 0.00'), ('status_financeiro', "TEXT DEFAULT 'Pendente'")
+                ]
             }
+            
             for tabela, colunas in colunas_a_verificar.items():
                 for coluna, tipo_coluna in colunas:
                     cur.execute(f"SELECT 1 FROM information_schema.columns WHERE table_name = '{tabela}' AND column_name = '{coluna}';")
@@ -90,10 +105,15 @@ def criar_tabelas_iniciais():
             
     except Exception as e:
         st.error(f"Erro ao criar/verificar tabelas: {e}")
+# --- FIM DA ATUALIZAÇÃO ---
 
-# (_normalize_and_sanitize - Sem alterações)
+
+# (O resto do arquivo utils.py é o mesmo que eu te enviei ontem)
+# (Cole o restante do utils.py daqui para baixo)
+
+# --- Funções do Banco (Projetos) ---
+
 def _normalize_and_sanitize(data_dict: dict):
-    # ... (código original sem alterações) ...
     normalized = {}
     for key, value in data_dict.items():
         k = str(key).lower(); k = re.sub(r'[áàâãä]', 'a', k); k = re.sub(r'[éèêë]', 'e', k); k = re.sub(r'[íìîï]', 'i', k); k = re.sub(r'[óòôõö]', 'o', k); k = re.sub(r'[úùûü]', 'u', k); k = re.sub(r'[ç]', 'c', k); k = re.sub(r'[^a-z0-9_ ]', '', k); k = k.replace(' de ', ' ').replace(' ', '_') 
@@ -105,10 +125,8 @@ def _normalize_and_sanitize(data_dict: dict):
         normalized[k] = sanitized_value
     return normalized
 
-# (carregar_projetos_db - Sem alterações)
 @st.cache_data(ttl=60) 
 def carregar_projetos_db(): 
-    # ... (código original sem alterações) ...
     if not conn: return pd.DataFrame()
     try:
         query = "SELECT * FROM projetos ORDER BY id DESC"
@@ -122,10 +140,8 @@ def carregar_projetos_db():
     except Exception as e:
         st.error(f"Erro ao carregar projetos do DB: {e}"); return pd.DataFrame() 
 
-# (carregar_projetos_sem_agendamento_db - Sem alterações)
 @st.cache_data(ttl=60)
 def carregar_projetos_sem_agendamento_db(): 
-    # ... (código original sem alterações) ...
     if not conn: return pd.DataFrame()
     try:
         query = "SELECT * FROM projetos WHERE agendamento IS NULL ORDER BY id DESC"
@@ -139,9 +155,7 @@ def carregar_projetos_sem_agendamento_db():
     except Exception as e:
         st.error(f"Erro ao carregar projetos do backlog: {e}"); return pd.DataFrame()
 
-# (adicionar_projeto_db - Sem alterações)
 def adicionar_projeto_db(data: dict):
-    # ... (código original sem alterações) ...
     if not conn: return False
     try:
         if "Prioridade" not in data or data["Prioridade"] == "N/A": data["Prioridade"] = "Média" 
@@ -154,9 +168,7 @@ def adicionar_projeto_db(data: dict):
         st.cache_data.clear(); return True
     except Exception as e: st.toast(f"Erro ao adicionar projeto: {e}", icon="🔥"); return False
 
-# (atualizar_projeto_db - Sem alterações)
 def atualizar_projeto_db(project_id, updates: dict):
-    # ... (código original sem alterações) ...
     if not conn: return False
     usuario_logado = st.session_state.get('usuario', 'Sistema') 
     try:
@@ -205,7 +217,6 @@ def atualizar_projeto_db(project_id, updates: dict):
         st.cache_data.clear(); return True
     except Exception as e: st.toast(f"Erro CRÍTICO ao atualizar projeto ID {project_id}: {e}", icon="🔥"); conn.rollback(); return False
 
-# (excluir_projeto_db - Sem alterações)
 def excluir_projeto_db(project_id):
     if not conn: return False
     try:
@@ -213,10 +224,8 @@ def excluir_projeto_db(project_id):
         st.cache_data.clear(); return True
     except Exception as e: st.toast(f"Erro ao excluir projeto: {e}", icon="🔥"); return False
 
-# (carregar_config_db - Sem alterações)
 @st.cache_data(ttl=600)
 def carregar_config_db(tab_name):
-    # ... (código original sem alterações) ...
     if not conn: return pd.DataFrame()
     try:
         query = "SELECT dados_json FROM configuracoes WHERE aba_nome = %s"
@@ -228,9 +237,7 @@ def carregar_config_db(tab_name):
         else: return pd.DataFrame()
     except Exception as e: st.error(f"Erro config '{tab_name}': {e}"); return pd.DataFrame()
 
-# (salvar_config_db - Sem alterações)
 def salvar_config_db(df, tab_name):
-    # ... (código original sem alterações) ...
     if not conn: return False
     try:
         dados_json = df.to_json(orient='records'); sql_query = "INSERT INTO configuracoes (aba_nome, dados_json) VALUES (%s, %s) ON CONFLICT (aba_nome) DO UPDATE SET dados_json = EXCLUDED.dados_json;"
@@ -238,14 +245,12 @@ def salvar_config_db(df, tab_name):
         st.cache_data.clear(); return True
     except Exception as e: st.error(f"Erro salvar config '{tab_name}': {e}"); return False
 
-# (carregar_usuarios_db - Sem alterações)
 @st.cache_data(ttl=600)
 def carregar_usuarios_db():
-    # ... (código original sem alterações) ...
     if not conn: return pd.DataFrame(columns=['id', 'nome', 'email', 'senha', 'permissao'])
     try:
         df = pd.read_sql_query("SELECT id, nome, email, senha, permissao FROM usuarios", conn)
-        expected_cols = ['id', 'nome', 'email', 'senha', 'permissao']; 
+        expected_cols = ['id', 'nome', 'email', 'senha', 'permissao'] 
         for col in expected_cols:
              if col not in df.columns: 
                   if col == 'permissao': df[col] = 'Usuario' 
@@ -256,9 +261,7 @@ def carregar_usuarios_db():
         st.error(f"Erro ao carregar usuários: {e}"); 
         return pd.DataFrame(columns=['id', 'nome', 'email', 'senha', 'permissao'])
 
-# (salvar_usuario_db - Sem alterações)
 def salvar_usuario_db(df):
-    # ... (código original sem alterações) ...
     if not conn: return False
     try:
         with conn.cursor() as cur:
@@ -278,9 +281,7 @@ def salvar_usuario_db(df):
         st.cache_data.clear(); return True
     except Exception as e: st.error(f"Erro ao salvar usuários: {e}"); return False
         
-# (validar_usuario - Sem alterações)
 def validar_usuario(nome, email):
-    # ... (código original sem alterações) ...
     if not nome or not email: return False, None
     df = carregar_usuarios_db()
     if df.empty or 'nome' not in df.columns or 'email' not in df.columns or 'permissao' not in df.columns:
@@ -293,9 +294,7 @@ def validar_usuario(nome, email):
     else:
         return False, None
 
-# (generate_excel_template_bytes - Sem alterações)
 def generate_excel_template_bytes():
-    # ... (código original sem alterações) ...
     template_columns = ["Projeto", "Descrição", "Agência", "Técnico", "Agendamento", "Demanda", "Observação", "Analista", "Gestor", "Prioridade", "Links de Referência"] 
     df_template = pd.DataFrame(columns=template_columns)
     df_template.loc[0] = ['Ex: Projeto Exemplo', 'Descrição...', 'AG 0001', 'Nome do Técnico', '2025-11-07', 'Instalação', 'Observações...', 'Nome Analista', 'Nome Gestor', 'Média', 'http://link.com'] 
@@ -303,9 +302,7 @@ def generate_excel_template_bytes():
     with pd.ExcelWriter(output, engine='openpyxl') as writer: df_template.to_excel(writer, index=False, sheet_name='Projetos')
     return output.getvalue()
 
-# (bulk_insert_projetos_db - Sem alterações)
 def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
-    # ... (código original sem alterações) ...
     if not conn: return False, 0
     column_map = {'Projeto': 'projeto', 'Descrição': 'descricao', 'Agência': 'agencia', 'Técnico': 'tecnico', 'Demanda': 'demanda', 'Observação': 'observacao', 'Analista': 'analista', 'Gestor': 'gestor', 'Prioridade': 'prioridade', 'Agendamento': 'agendamento', 'Links de Referência': 'links_referencia' }
     if 'Projeto' not in df.columns or 'Agência' not in df.columns: st.error("Erro: Planilha deve conter 'Projeto' e 'Agência'."); return False, 0
@@ -338,7 +335,6 @@ def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
         st.cache_data.clear(); return True, len(values)
     except Exception as e: st.error(f"Erro ao salvar no banco: {e}"); conn.rollback(); return False, 0
 
-# (dataframe_to_excel_bytes - Sem alterações)
 def dataframe_to_excel_bytes(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -350,13 +346,11 @@ def dataframe_to_excel_bytes(df):
         df_to_export.to_excel(writer, index=False, sheet_name='Projetos')
     return output.getvalue()
 
-# (load_css - Sem alterações)
 def load_css():
    try:
         with open("style.css") as f: st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
    except FileNotFoundError: st.warning("Arquivo 'style.css' não encontrado.")
 
-# (autenticar_direto - Sem alterações)
 def autenticar_direto(email):
     df_users = carregar_usuarios_db()
     if not df_users.empty and 'email' in df_users.columns:
@@ -364,11 +358,9 @@ def autenticar_direto(email):
         if not user.empty: return user.iloc[0]["nome"] if "nome" in user.columns else None 
     return None
 
-# (clean_key - Sem alterações)
 def clean_key(text):
     return re.sub(r'[^a-zA-Z0-9_]', '_', str(text).lower())
 
-# (get_status_color - Sem alterações)
 def get_status_color(status):
     s = str(status or "").strip().lower()
     if 'finalizad' in s: return "#66BB6A" 
@@ -378,7 +370,6 @@ def get_status_color(status):
     elif 'pausad' in s: return "#FFEE58" 
     else: return "#64B5F6"  
 
-# (calcular_sla - Sem alterações)
 def calcular_sla(projeto_row, df_sla):
     data_agendamento = pd.to_datetime(projeto_row.get("Agendamento"), errors='coerce')
     data_finalizacao = pd.to_datetime(projeto_row.get("Data de Finalização"), errors='coerce')
@@ -404,7 +395,6 @@ def calcular_sla(projeto_row, df_sla):
         elif dias_restantes == 0: return "SLA Vence Hoje!", "#FFA726" 
         else: return f"SLA: {dias_restantes}d restantes", "#66BB6F" 
 
-# (get_color_for_name - Sem alterações)
 def get_color_for_name(name_str):
     """Gera uma cor consistente de uma lista com base em um nome."""
     COLORS_LIST = ["#D32F2F", "#1976D2", "#388E3C", "#F57C00", "#7B1FA2", "#00796B", "#C2185B", "#5D4037", "#455A64"]
@@ -419,20 +409,15 @@ def get_color_for_name(name_str):
     
 # --- >>> NOVO: Funções para a Tabela de Chamados <<< ---
 @st.cache_data(ttl=60)
-def carregar_chamados_db(agencia=None):
-    """ Carrega chamados, opcionalmente filtrados por agência. """
+def carregar_chamados_db(agencia_id_filtro=None):
+    """ Carrega chamados, opcionalmente filtrados por ID de agência. """
     if not conn: return pd.DataFrame()
     try:
         query = "SELECT * FROM chamados"
         params = []
-        if agencia and agencia != "Todas":
-            # --- CORREÇÃO: Filtra pela combinação de ID e Nome ---
-            # Assume que agencia é no formato "ID - NOME"
-            if " - " in agencia:
-                agencia_id = agencia.split(" - ")[0].strip()
-                query += " WHERE agencia_id = %s"
-                params.append(agencia_id)
-            # --- FIM CORREÇÃO ---
+        if agencia_id_filtro and agencia_id_filtro != "Todas":
+            query += " WHERE agencia_id = %s"
+            params.append(agencia_id_filtro)
         query += " ORDER BY data_abertura DESC"
         
         df = pd.read_sql_query(query, conn, params=params if params else None)
@@ -453,10 +438,10 @@ def carregar_chamados_db(agencia=None):
         st.error(f"Erro ao carregar chamados: {e}"); return pd.DataFrame()
 
 def bulk_insert_chamados_db(df: pd.DataFrame):
-    """ Importa um DataFrame de chamados para o banco. """
+    """ Importa um DataFrame de chamados para o banco (UPSERT). """
     if not conn: return False, 0
     
-    # --- MAPEAMENTO ATUALIZADO (Baseado na sua lista A, B, C...) ---
+    # Mapa de colunas do Excel/CSV -> Banco (baseado no seu mapeamento A, B, C...)
     column_map = {
         'Chamado': 'chamado_id',
         'Codigo_Ponto': 'agencia_id',
@@ -465,20 +450,24 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         'Servico': 'servico',
         'Projeto': 'projeto_nome',
         'Data_Agendamento': 'data_agendamento',
-        'Tipo_De_Solicitacao': 'sistema', # Mapeamento M -> Sistema
-        'Sistema': 'cod_equipamento',     # Mapeamento N -> Cod Eq
-        'Codigo_Equipamento': 'nome_equipamento', # Mapeamento O -> Nome Eq
-        'Nome_Equipamento': 'quantidade',     # Mapeamento P -> Qtd
-        'Substitui_Outro_Equipamento_(Sim/Não)': 'gestor' # Mapeamento T -> Gestor
-        # Adicione 'Valor' se existir no seu Excel
-        # 'Valor': 'valor_chamado' 
+        'Tipo_De_Solicitacao': 'sistema', # M
+        'Sistema': 'cod_equipamento',     # N
+        'Codigo_Equipamento': 'nome_equipamento', # O
+        'Nome_Equipamento': 'quantidade',     # P
+        'Substitui_Outro_Equipamento_(Sim/Não)': 'gestor' # T
+        # (Outras colunas como 'descricao', 'data_abertura' não estavam no seu mapeamento,
+        # mas podem ser adicionadas se existirem no Excel)
     }
     
-    df_to_insert = df.rename(columns=column_map)
-    
+    # Renomeia apenas as colunas que existem no DataFrame
+    df_to_insert = df.rename(columns={k: v for k, v in column_map.items() if k in df.columns})
+
     # --- Validação Essencial ---
-    if 'agencia_id' not in df_to_insert.columns or 'chamado_id' not in df_to_insert.columns:
-        st.error("Erro: A planilha deve conter as colunas 'Codigo_Ponto' (Agência) e 'Chamado' (ID).")
+    if 'chamado_id' not in df_to_insert.columns:
+        st.error("Erro: A planilha deve conter a coluna 'Chamado' (ID do chamado).")
+        return False, 0
+    if 'agencia_id' not in df_to_insert.columns:
+        st.error("Erro: A planilha deve conter a coluna 'Codigo_Ponto' (ID da Agência).")
         return False, 0
 
     # --- Tratamento de Tipos ---
@@ -490,19 +479,19 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
                 lambda x: x.date() if pd.notna(x) and isinstance(x, (pd.Timestamp, datetime)) else None
             )
         else:
-            df_to_insert[col] = None # Garante que a coluna existe
+            df_to_insert[col] = None 
 
-    # Trata colunas numéricas
     if 'valor_chamado' in df_to_insert.columns:
          df_to_insert['valor_chamado'] = pd.to_numeric(df_to_insert['valor_chamado'], errors='coerce').fillna(0.0)
     if 'quantidade' in df_to_insert.columns:
          df_to_insert['quantidade'] = pd.to_numeric(df_to_insert['quantidade'], errors='coerce').fillna(0).astype(int)
 
     # Lista final de colunas do BD
-    cols_to_insert = ['agencia_id', 'agencia_nome', 'agencia_uf', 'chamado_id', 
-                      'servico', 'projeto_nome', 'data_agendamento', 'sistema',
-                      'cod_equipamento', 'nome_equipamento', 'quantidade', 'gestor',
-                      'data_abertura', 'data_fechamento', 'status_chamado', 'valor_chamado']
+    cols_to_insert = [
+        'chamado_id', 'agencia_id', 'agencia_nome', 'agencia_uf', 'servico', 'projeto_nome', 
+        'data_agendamento', 'sistema', 'cod_equipamento', 'nome_equipamento', 'quantidade', 'gestor',
+        'descricao', 'data_abertura', 'data_fechamento', 'status_chamado', 'valor_chamado'
+    ]
                       
     df_final = df_to_insert[[col for col in cols_to_insert if col in df_to_insert.columns]]
     
@@ -515,25 +504,17 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
     cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns)); placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
     
     # --- Lógica de UPSERT (Atualiza se o chamado_id já existir) ---
+    # Constrói a parte do "DO UPDATE SET" dinamicamente
+    update_clause = sql.SQL(', ').join(
+        sql.SQL("{} = EXCLUDED.{}").format(sql.Identifier(col), sql.Identifier(col))
+        for col in df_final.columns if col != 'chamado_id' # Não atualiza a própria chave
+    )
+    
     query = sql.SQL("""
         INSERT INTO chamados ({}) VALUES ({})
         ON CONFLICT (chamado_id) DO UPDATE SET
-            agencia_id = EXCLUDED.agencia_id,
-            agencia_nome = EXCLUDED.agencia_nome,
-            agencia_uf = EXCLUDED.agencia_uf,
-            servico = EXCLUDED.servico,
-            projeto_nome = EXCLUDED.projeto_nome,
-            data_agendamento = EXCLUDED.data_agendamento,
-            sistema = EXCLUDED.sistema,
-            cod_equipamento = EXCLUDED.cod_equipamento,
-            nome_equipamento = EXCLUDED.nome_equipamento,
-            quantidade = EXCLUDED.quantidade,
-            gestor = EXCLUDED.gestor,
-            data_abertura = EXCLUDED.data_abertura,
-            data_fechamento = EXCLUDED.data_fechamento,
-            status_chamado = EXCLUDED.status_chamado,
-            valor_chamado = EXCLUDED.valor_chamado
-    """).format(cols_sql, placeholders)
+            {}
+    """).format(cols_sql, placeholders, update_clause)
 
     try:
         with conn.cursor() as cur: cur.executemany(query, values) 
