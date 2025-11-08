@@ -13,7 +13,6 @@ except:
     pass # Ignora se falhar
 
 # --- Controle Principal de Login (Independente do app.py) ---
-# Verifica se o 'logado' existe no session_state (definido pelo app.py)
 if "logado" not in st.session_state or not st.session_state.logado:
     st.warning("Por favor, faça o login na página principal (app.py) antes de acessar esta página.")
     st.stop()
@@ -28,20 +27,34 @@ def extrair_e_mapear_colunas(df, col_map):
     df_extraido = pd.DataFrame()
     colunas_originais = df.columns.tolist()
     
-    # Validação para garantir que o arquivo não está totalmente fora do padrão
-    if len(colunas_originais) < 20: # O seu arquivo tem 20+ colunas (T)
+    if len(colunas_originais) < 20: # O seu arquivo tem 20+ colunas (T=19)
         st.error(f"Erro: O arquivo carregado parece ter apenas {len(colunas_originais)} colunas. O formato esperado não foi reconhecido.")
         return None
 
     try:
-        for col_index, db_col_name in col_map.items():
-            if col_index < len(colunas_originais):
-                # Pega a coluna pelo índice e renomeia para o nome do BD
-                df_extraido[db_col_name] = df.iloc[:, col_index]
-            else:
-                st.warning(f"Índice de coluna {col_index} (Coluna {chr(65+col_index)}) não encontrado no arquivo. Coluna '{db_col_name}' será ignorada.")
+        # Pega os nomes das colunas originais do arquivo (da linha 1)
+        # (Ex: 'Chamado', 'Codigo_Ponto', 'Nome', etc.)
+        col_nomes_originais = {
+            idx: colunas_originais[idx] for idx in col_map.keys() if idx < len(colunas_originais)
+        }
+        
+        # Pega as colunas pelos Nomes Originais
+        df_para_renomear = df[col_nomes_originais.values()].copy()
+        
+        # Mapeia o Nome Original -> Nome do BD
+        # (Ex: 'Chamado' -> 'chamado_id')
+        col_rename_map = {
+             orig_name: db_name for idx, db_name in col_map.items() 
+             if idx in col_nomes_originais and (orig_name := col_nomes_originais[idx])
+        }
+        
+        df_extraido = df_para_renomear.rename(columns=col_rename_map)
+        
+    except KeyError as e:
+        st.error(f"Erro ao mapear colunas. Coluna esperada {e} não encontrada no arquivo.")
+        return None
     except Exception as e:
-        st.error(f"Erro ao mapear colunas (Índice {col_index}, Coluna {db_col_name}): {e}")
+        st.error(f"Erro ao processar colunas: {e}")
         return None
             
     return df_extraido
@@ -49,16 +62,13 @@ def extrair_e_mapear_colunas(df, col_map):
 def formatar_agencia_excel(id_agencia, nome_agencia):
     """ Formata o ID e Nome da Agência para o padrão 'AG 0001 - NOME' """
     try:
-        # Tenta formatar o ID como 'AG 0001'
-        # Remove '.0' se for lido como float
         id_agencia_limpo = str(id_agencia).split('.')[0]
         id_str = f"AG {int(id_agencia_limpo):04d}"
     except (ValueError, TypeError):
-        id_str = str(id_agencia).strip() # Usa como string se falhar
+        id_str = str(id_agencia).strip() 
     
     nome_str = str(nome_agencia).strip()
     
-    # Remove o ID do nome se ele estiver repetido
     if nome_str.startswith(id_agencia_limpo):
          nome_str = nome_str[len(id_agencia_limpo):].strip(" -")
          
@@ -74,32 +84,26 @@ def tela_dados_agencia():
     with st.expander("📥 Importar Novos Chamados (Excel/CSV)"):
         st.info(f"""
             Arraste seu arquivo Excel de chamados (formato `.xlsx` ou `.csv` com `;`) aqui.
-            O sistema espera as colunas na seguinte ordem (baseado no arquivo 'RelatorioAnexoEmailServicoExcel_4.csv'):
-            - **A:** Chamado (ID)
-            - **B:** Codigo_Ponto (ID Agência)
-            - **C:** Nome (Nome Agência)
-            - **D:** UF
-            - **J:** Servico
-            - **K:** Projeto
-            - **L:** Data_Agendamento
-            - **M:** Tipo_De_Solicitacao (será salvo como 'Sistema')
-            - **N:** Sistema (será salvo como 'Cód. Equipamento')
-            - **O:** Codigo_Equipamento (será salvo como 'Nome Equipamento')
-            - **P:** Nome_Equipamento (será salvo como 'Quantidade')
-            - **T:** Gestor (Substitui_Outro_Equipamento...)
-            
-            Se um `Chamado` (Coluna A) já existir, ele será **atualizado**.
+            O sistema espera que a **primeira linha** contenha os cabeçalhos.
+            As colunas necessárias (A, B, C, D, J, K, etc.) serão lidas automaticamente.
         """)
         uploaded_file = st.file_uploader("Selecione o arquivo Excel/CSV de chamados", type=["xlsx", "xls", "csv"], key="chamado_uploader")
 
         if uploaded_file is not None:
             try:
-                # Determina o tipo de arquivo e lê
+                # --- CORREÇÃO: Lê o arquivo a partir da LINHA 1 (índice 0) ---
                 if uploaded_file.name.endswith('.csv'):
-                    # Pula a linha 1 (header=0) e usa a linha 2 (índice 1) como dados
                     df_raw = pd.read_csv(uploaded_file, sep=';', header=0, encoding='latin-1', keep_default_na=False) 
                 else:
-                    df_raw = pd.read_excel(uploaded_file, header=0, keep_default_na=False) # Pula linha 2 (header=0)
+                    df_raw = pd.read_excel(uploaded_file, header=0, keep_default_na=False) 
+                # --- FIM DA CORREÇÃO ---
+
+                # Remove linhas completamente vazias (se houver)
+                df_raw.dropna(how='all', inplace=True)
+
+                if df_raw.empty:
+                    st.error("Erro: O arquivo está vazio ou não foi lido corretamente.")
+                    st.stop()
 
                 # --- Mapeamento (Conforme sua solicitação A, B, C...) ---
                 # Coluna A=0, B=1, C=2, D=3, J=9, K=10, L=11, M=12, N=13, O=14, P=15, T=19
@@ -109,7 +113,6 @@ def tela_dados_agencia():
                     13: 'cod_equipamento', 14: 'nome_equipamento', 15: 'quantidade', 19: 'gestor'
                 }
                 
-                # Extrai e renomeia
                 df_para_salvar = extrair_e_mapear_colunas(df_raw, col_map)
                 
                 if df_para_salvar is not None:
@@ -122,7 +125,6 @@ def tela_dados_agencia():
                         else:
                             with st.spinner("Importando e atualizando chamados..."):
                                 # --- Renomeia colunas para o formato que 'bulk_insert_chamados_db' espera ---
-                                # (utils.py espera nomes como 'Chamado', 'Codigo_Ponto', etc.)
                                 reverse_map = {
                                     'chamado_id': 'Chamado', 'agencia_id': 'Codigo_Ponto', 'agencia_nome': 'Nome',
                                     'agencia_uf': 'UF', 'servico': 'Servico', 'projeto_nome': 'Projeto',
@@ -161,7 +163,6 @@ def tela_dados_agencia():
     else:
         st.error("Tabela de chamados parece estar incompleta (sem 'Cód. Agência'). Tente re-importar."); st.stop()
 
-    # Pega lista única de todas as agências
     lista_agencias_completa = sorted(df_chamados_raw['Agencia_Combinada'].dropna().astype(str).unique())
     lista_agencias_completa = [a for a in lista_agencias_completa if a not in ["N/A", "None", ""]]
     lista_agencias_completa.insert(0, "Todas") 
@@ -195,7 +196,7 @@ def tela_dados_agencia():
             chamados_abertos_count = len(df_chamados_filtrado[~df_chamados_filtrado['Status'].astype(str).str.lower().isin(status_fechamento)])
 
     st.markdown(f"### 📊 Resumo da Agência: {agencia_selecionada}")
-    cols_kpi = st.columns(3) # Apenas 3 KPIs agora
+    cols_kpi = st.columns(3) 
     cols_kpi[0].metric("Total de Chamados", total_chamados)
     cols_kpi[1].metric("Chamados Abertos", chamados_abertos_count)
     cols_kpi[2].metric("Financeiro Chamados (R$)", f"{valor_total_chamados:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')) 
@@ -207,22 +208,18 @@ def tela_dados_agencia():
     if df_chamados_filtrado.empty:
         st.info("Nenhum chamado encontrado para esta agência.")
     else:
-        if 'Projeto' not in df_chamados_filtrado.columns:
-            st.error("Coluna 'Projeto' não encontrada nos dados. Verifique a importação.")
-            st.stop()
-            
-        # Agrupa os chamados filtrados por 'Projeto' (o nome que veio do Excel)
+        # Trata nulos na coluna 'Projeto' antes de agrupar
+        df_chamados_filtrado['Projeto'] = df_chamados_filtrado['Projeto'].fillna('Projeto Não Especificado')
+        
+        # Agrupa os chamados filtrados por 'Projeto'
         df_chamados_por_projeto = df_chamados_filtrado.groupby('Projeto')
         
         for projeto_nome, chamados_do_projeto in df_chamados_por_projeto:
-            # Cabeçalho do Expander (Projeto)
             total_chamados_projeto = len(chamados_do_projeto)
             valor_projeto = pd.to_numeric(chamados_do_projeto['Valor (R$)'], errors='coerce').fillna(0).sum()
-            
             header = f"**{str(projeto_nome).upper()}** ({total_chamados_projeto} chamados) | **Valor Total:** R$ {valor_projeto:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
             
-            with st.expander(header, expanded=False): # Começa fechado
-                
+            with st.expander(header, expanded=False): 
                 # Acompanhamento de Fechamento (por projeto)
                 status_fechamento = ['fechado', 'concluido', 'resolvido', 'cancelado', 'encerrado']
                 chamados_abertos_proj = len(chamados_do_projeto[~chamados_do_projeto['Status'].astype(str).str.lower().isin(status_fechamento)])
@@ -233,13 +230,9 @@ def tela_dados_agencia():
                     st.success("Todos os chamados deste projeto estão fechados.")
 
                 # Tabela de Chamados
-                colunas_chamados_visiveis = [
-                    'Nº Chamado', 'Descrição', 'Status', 'Abertura', 
-                    'Fechamento', 'Sistema', 'Equipamento', 'Qtd.', 'Gestor'
-                ]
+                colunas_chamados_visiveis = ['Nº Chamado', 'Descrição', 'Status', 'Abertura', 'Fechamento', 'Equipamento', 'Qtd.', 'Gestor']
                 colunas_chamados = [col for col in colunas_chamados_visiveis if col in chamados_do_projeto.columns]
                 st.dataframe(chamados_do_projeto[colunas_chamados], use_container_width=True, hide_index=True)
-
 
 # --- Ponto de Entrada ---
 tela_dados_agencia()
