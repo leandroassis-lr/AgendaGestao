@@ -302,39 +302,104 @@ def generate_excel_template_bytes():
     with pd.ExcelWriter(output, engine='openpyxl') as writer: df_template.to_excel(writer, index=False, sheet_name='Projetos')
     return output.getvalue()
 
-def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
+def bulk_insert_chamados_db(df: pd.DataFrame):
+    """ Importa um DataFrame de chamados para o banco (UPSERT). """
     if not conn: return False, 0
-    column_map = {'Projeto': 'projeto', 'Descrição': 'descricao', 'Agência': 'agencia', 'Técnico': 'tecnico', 'Demanda': 'demanda', 'Observação': 'observacao', 'Analista': 'analista', 'Gestor': 'gestor', 'Prioridade': 'prioridade', 'Agendamento': 'agendamento', 'Links de Referência': 'links_referencia' }
-    if 'Projeto' not in df.columns or 'Agência' not in df.columns: st.error("Erro: Planilha deve conter 'Projeto' e 'Agência'."); return False, 0
-    if df[['Projeto', 'Agência']].isnull().values.any(): st.error("Erro: 'Projeto' e 'Agência' não podem ser vazios."); return False, 0
-    df_to_insert = df.rename(columns=column_map)
-    if 'agendamento' in df_to_insert.columns: df_to_insert['agendamento'] = pd.to_datetime(df_to_insert['agendamento'], errors='coerce')
-    else: df_to_insert['agendamento'] = None 
-    df_to_insert['status'] = 'NÃO INICIADA'; df_to_insert['data_abertura'] = date.today() 
-    if 'analista' not in df_to_insert or df_to_insert['analista'].isnull().all(): df_to_insert['analista'] = usuario_logado
-    else: df_to_insert['analista'] = df_to_insert['analista'].fillna(usuario_logado)
-    if 'prioridade' not in df_to_insert: df_to_insert['prioridade'] = 'Média'
-    else:
-        df_to_insert['prioridade'] = df_to_insert['prioridade'].astype(str).replace(['', 'nan', 'None'], 'Média').fillna('Média')
-        allowed_priorities = ['alta', 'média', 'baixa']; df_to_insert['prioridade'] = df_to_insert['prioridade'].str.lower()
-        invalid_priorities = df_to_insert[~df_to_insert['prioridade'].isin(allowed_priorities)]
-        if not invalid_priorities.empty: st.warning(f"Prioridades inválidas (linhas: {invalid_priorities.index.tolist()}) substituídas por 'Média'."); df_to_insert.loc[invalid_priorities.index, 'prioridade'] = 'média'
-        df_to_insert['prioridade'] = df_to_insert['prioridade'].str.capitalize()
-    cols_to_insert = ['projeto', 'descricao', 'agencia', 'tecnico', 'status','data_abertura', 'observacao', 'demanda', 'analista', 'gestor','prioridade', 'agendamento', 'links_referencia'] 
+    
+    # Mapa de colunas do Excel/CSV -> Banco (baseado no seu mapeamento A, B, C...)
+    column_map = {
+        'Chamado': 'chamado_id',
+        'Codigo_Ponto': 'agencia_id',
+        'Nome': 'agencia_nome',
+        'UF': 'agencia_uf',
+        'Servico': 'servico',
+        'Projeto': 'projeto_nome',
+        'Data_Agendamento': 'data_agendamento',
+        'Tipo_De_Solicitacao': 'sistema', # M
+        'Sistema': 'cod_equipamento',     # N
+        'Codigo_Equipamento': 'nome_equipamento', # O
+        'Nome_Equipamento': 'quantidade',     # P
+        'Substitui_Outro_Equipamento_(Sim/Não)': 'gestor' # T
+        # (Outras colunas como 'descricao', 'data_abertura' não estavam no seu mapeamento,
+        # mas podem ser adicionadas se existirem no Excel)
+    }
+    
+    # Renomeia apenas as colunas que existem no DataFrame
+    df_to_insert = df.rename(columns={k: v for k, v in column_map.items() if k in df.columns})
+
+    # --- Validação Essencial ---
+    if 'chamado_id' not in df_to_insert.columns:
+        st.error("Erro: A planilha deve conter a coluna 'Chamado' (ID do chamado).")
+        return False, 0
+    if 'agencia_id' not in df_to_insert.columns:
+        st.error("Erro: A planilha deve conter a coluna 'Codigo_Ponto' (ID da Agência).")
+        return False, 0
+
+    # --- Tratamento de Tipos ---
+    cols_data = ['data_abertura', 'data_fechamento', 'data_agendamento']
+    for col in cols_data:
+        if col in df_to_insert.columns:
+            df_to_insert[col] = pd.to_datetime(df_to_insert[col], errors='coerce')
+        else:
+            df_to_insert[col] = None 
+
+    if 'valor_chamado' in df_to_insert.columns:
+         df_to_insert['valor_chamado'] = pd.to_numeric(df_to_insert['valor_chamado'], errors='coerce').fillna(0.0)
+    if 'quantidade' in df_to_insert.columns:
+         df_to_insert['quantidade'] = pd.to_numeric(df_to_insert['quantidade'], errors='coerce').fillna(0).astype(int)
+
+    # Lista final de colunas do BD
+    cols_to_insert = [
+        'chamado_id', 'agencia_id', 'agencia_nome', 'agencia_uf', 'servico', 'projeto_nome', 
+        'data_agendamento', 'sistema', 'cod_equipamento', 'nome_equipamento', 'quantidade', 'gestor',
+        'descricao', 'data_abertura', 'data_fechamento', 'status_chamado', 'valor_chamado'
+    ]
+                      
     df_final = df_to_insert[[col for col in cols_to_insert if col in df_to_insert.columns]]
-    if 'agendamento' in df_final.columns:
-        df_final['agendamento'] = df_final['agendamento'].apply(lambda x: x.date() if pd.notna(x) and isinstance(x, (pd.Timestamp, datetime)) else None)
+        
+    # 1. Converte colunas de data (datetime64) para objetos 'date' do Python
+    for col in ['data_abertura', 'data_fechamento', 'data_agendamento']:
+        if col in df_final.columns:
+            df_final[col] = df_final[col].apply(
+                lambda x: x.date() if pd.notna(x) and isinstance(x, (pd.Timestamp, datetime)) else None
+            )
+            
+    # 2. Converte o DataFrame limpo para tuplas, tratando TODOS os nulos e tipos Numpy
     values = []
     for record in df_final.to_records(index=False):
-        processed_record = [None if pd.isna(cell) else cell for cell in record]
+        processed_record = []
+        for cell in record:
+            if pd.isna(cell):
+                processed_record.append(None) # Converte NaT, NaN, etc. para None
+            elif isinstance(cell, (pd.np.int64, pd.np.int32, pd.np.int16)):
+                processed_record.append(int(cell)) # Converte numpy.int64 para python int
+            elif isinstance(cell, (pd.np.float64, pd.np.float32)):
+                processed_record.append(float(cell)) # Converte numpy.float para python float
+            else:
+                processed_record.append(cell) # Mantém outros tipos (str, date, etc.)
         values.append(tuple(processed_record))
+    # --- >>> FIM DA CORREÇÃO <<< ---
+    
     cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns)); placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
-    query = sql.SQL("INSERT INTO projetos ({}) VALUES ({})").format(cols_sql, placeholders)
+    
+    # Lógica de UPSERT (Atualiza se o chamado_id já existir)
+    update_clause = sql.SQL(', ').join(
+        sql.SQL("{} = EXCLUDED.{}").format(sql.Identifier(col), sql.Identifier(col))
+        for col in df_final.columns if col != 'chamado_id' 
+    )
+    
+    query = sql.SQL("""
+        INSERT INTO chamados ({}) VALUES ({})
+        ON CONFLICT (chamado_id) DO UPDATE SET
+            {}
+    """).format(cols_sql, placeholders, update_clause)
+
     try:
         with conn.cursor() as cur: cur.executemany(query, values) 
         st.cache_data.clear(); return True, len(values)
-    except Exception as e: st.error(f"Erro ao salvar no banco: {e}"); conn.rollback(); return False, 0
-
+    except Exception as e: 
+        st.error(f"Erro ao salvar chamados no banco: {e}"); conn.rollback(); return False, 0
+        
 def dataframe_to_excel_bytes(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -406,8 +471,6 @@ def get_color_for_name(name_str):
         return COLORS_LIST[color_index]
     except Exception: return "#555"
     
-    
-# --- >>> NOVO: Funções para a Tabela de Chamados <<< ---
 @st.cache_data(ttl=60)
 def carregar_chamados_db(agencia_id_filtro=None):
     """ Carrega chamados, opcionalmente filtrados por ID de agência. """
@@ -455,8 +518,6 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         'Codigo_Equipamento': 'nome_equipamento', # O
         'Nome_Equipamento': 'quantidade',     # P
         'Substitui_Outro_Equipamento_(Sim/Não)': 'gestor' # T
-        # (Outras colunas como 'descricao', 'data_abertura' não estavam no seu mapeamento,
-        # mas podem ser adicionadas se existirem no Excel)
     }
     
     # Renomeia apenas as colunas que existem no DataFrame
@@ -521,3 +582,4 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         st.cache_data.clear(); return True, len(values)
     except Exception as e: 
         st.error(f"Erro ao salvar chamados no banco: {e}"); conn.rollback(); return False, 0
+
