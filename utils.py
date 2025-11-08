@@ -10,7 +10,7 @@ import io
 import base64
 from io import BytesIO
 from PIL import Image
-import numpy as np # Importa numpy
+import numpy as np # <<< IMPORTANTE: ADICIONADO NUMPY
 
 # (image_to_base64 - Sem alterações)
 def image_to_base64(image):
@@ -397,7 +397,7 @@ def get_color_for_name(name_str):
     except Exception: return "#555"
     
     
-# --- Funções para a Tabela de Chamados ---
+# --- Funções para a Tabela de Chamados (ATUALIZADAS) ---
 @st.cache_data(ttl=60)
 def carregar_chamados_db(agencia_id_filtro=None):
     """ Carrega chamados, opcionalmente filtrados por ID de agência. """
@@ -432,14 +432,9 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
     
     # Mapa de colunas do Excel/CSV -> Banco (baseado no seu mapeamento A, B, C...)
     column_map = {
-        'Chamado': 'chamado_id',
-        'Codigo_Ponto': 'agencia_id',
-        'Nome': 'agencia_nome',
-        'UF': 'agencia_uf',
-        'Servico': 'servico',
-        'Projeto': 'projeto_nome',
-        'Data_Agendamento': 'data_agendamento',
-        'Tipo_De_Solicitacao': 'sistema', # M
+        'Chamado': 'chamado_id', 'Codigo_Ponto': 'agencia_id', 'Nome': 'agencia_nome',
+        'UF': 'agencia_uf', 'Servico': 'servico', 'Projeto': 'projeto_nome',
+        'Data_Agendamento': 'data_agendamento', 'Tipo_De_Solicitacao': 'sistema', # M
         'Sistema': 'cod_equipamento',     # N
         'Codigo_Equipamento': 'nome_equipamento', # O
         'Nome_Equipamento': 'quantidade',     # P
@@ -478,7 +473,7 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
                       
     df_final = df_to_insert[[col for col in cols_to_insert if col in df_to_insert.columns]]
     
-    # --- CORREÇÃO DEFINITIVA (v5) ---
+    # --- CORREÇÃO DEFINITIVA (v5) - Trata DATAS e NÚMEROS ---
     values = []
     for record in df_final.to_records(index=False):
         processed_record = []
