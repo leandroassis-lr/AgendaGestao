@@ -10,18 +10,16 @@ import io
 import base64
 from io import BytesIO
 from PIL import Image
-import numpy as np # <<< IMPORTANTE: ADICIONADO NUMPY
+import numpy as np # Importa numpy
 
 # (image_to_base64 - Sem alterações)
 def image_to_base64(image):
-    """Converte uma imagem PIL em string Base64 para exibição no Streamlit."""
     buffered = BytesIO(); image.save(buffered, format="PNG")
     return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
 # (get_db_connection - Sem alterações)
 @st.cache_resource
 def get_db_connection():
-    """Cria e gerencia a conexão com o banco de dados PostgreSQL."""
     try:
         secrets = st.secrets["postgres"]
         conn = psycopg2.connect(host=secrets["PGHOST"], port=secrets["PGPORT"], user=secrets["PGUSER"], password=secrets["PGPASSWORD"], dbname=secrets["PGDATABASE"])
@@ -33,7 +31,6 @@ conn = get_db_connection()
 
 # (criar_tabelas_iniciais - Sem alterações)
 def criar_tabelas_iniciais():
-    """Cria as tabelas e adiciona colunas ausentes se não existirem."""
     if not conn: return
     try:
         with conn.cursor() as cur:
@@ -61,7 +58,7 @@ def criar_tabelas_iniciais():
                     sistema TEXT, cod_equipamento TEXT, nome_equipamento TEXT, quantidade INTEGER,
                     gestor TEXT, descricao TEXT, data_abertura DATE, data_fechamento DATE,
                     status_chamado TEXT, valor_chamado NUMERIC(10, 2) DEFAULT 0.00,
-                    status_financeiro TEXT DEFAULT 'Pendente'
+                    status_financeiro TEXT DEFAULT 'Pendente' 
                 );
             """)
             colunas_a_verificar = {
@@ -428,23 +425,25 @@ def carregar_chamados_db(agencia_id_filtro=None):
     except Exception as e:
         st.error(f"Erro ao carregar chamados: {e}"); return pd.DataFrame()
 
-# --- >>> AQUI ESTÁ A CORREÇÃO FINAL <<< ---
+# --- >>> FUNÇÃO DE IMPORTAÇÃO CORRIGIDA <<< ---
 def bulk_insert_chamados_db(df: pd.DataFrame):
     """ Importa um DataFrame de chamados para o banco (UPSERT). """
     if not conn: return False, 0
     
+    # Mapa de colunas do Excel/CSV -> Banco (baseado no seu mapeamento A, B, C...)
     column_map = {
-        'Chamado': 'chamado_id', 'Codigo_Ponto': 'agencia_id', 'Nome': 'agencia_nome',
-        'UF': 'agencia_uf', 'Servico': 'servico', 'Projeto': 'projeto_nome',
-        'Data_Agendamento': 'data_agendamento', 'Tipo_De_Solicitacao': 'sistema',
-        'Sistema': 'cod_equipamento', 'Codigo_Equipamento': 'nome_equipamento',
-        'Nome_Equipamento': 'quantidade', 'Substitui_Outro_Equipamento_(Sim/Não)': 'gestor'
-        # Você pode adicionar mais colunas do Excel aqui se precisar
-        # 'Descricao': 'descricao', 
-        # 'Data_Abertura': 'data_abertura',
-        # 'Data_Fechamento': 'data_fechamento',
-        # 'Status_Chamado': 'status_chamado',
-        # 'Valor_Chamado': 'valor_chamado'
+        'Chamado': 'chamado_id',
+        'Codigo_Ponto': 'agencia_id',
+        'Nome': 'agencia_nome',
+        'UF': 'agencia_uf',
+        'Servico': 'servico',
+        'Projeto': 'projeto_nome',
+        'Data_Agendamento': 'data_agendamento',
+        'Tipo_De_Solicitacao': 'sistema', # M
+        'Sistema': 'cod_equipamento',     # N
+        'Codigo_Equipamento': 'nome_equipamento', # O
+        'Nome_Equipamento': 'quantidade',     # P
+        'Substitui_Outro_Equipamento_(Sim/Não)': 'gestor' # T
     }
     
     df_to_insert = df.rename(columns={k: v for k, v in column_map.items() if k in df.columns})
@@ -460,16 +459,17 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
     cols_data = ['data_abertura', 'data_fechamento', 'data_agendamento']
     for col in cols_data:
         if col in df_to_insert.columns:
-            df_to_insert[col] = pd.to_datetime(df_to_insert[col], errors='coerce')
+            # --- CORREÇÃO: Adicionado dayfirst=True ---
+            df_to_insert[col] = pd.to_datetime(df_to_insert[col], errors='coerce', dayfirst=True)
         else:
             df_to_insert[col] = None 
 
     if 'valor_chamado' in df_to_insert.columns:
          df_to_insert['valor_chamado'] = pd.to_numeric(df_to_insert['valor_chamado'], errors='coerce').fillna(0.0)
     if 'quantidade' in df_to_insert.columns:
-         df_to_insert['quantidade'] = pd.to_numeric(df_to_insert['quantidade'], errors='coerce').fillna(0).astype('Int64') # Usa Int64 para aceitar nulos
+         # Converte para Int64 do Pandas, que aceita nulos (NaN)
+         df_to_insert['quantidade'] = pd.to_numeric(df_to_insert['quantidade'], errors='coerce').astype('Int64')
 
-    # Lista final de colunas do BD
     cols_to_insert = [
         'chamado_id', 'agencia_id', 'agencia_nome', 'agencia_uf', 'servico', 'projeto_nome', 
         'data_agendamento', 'sistema', 'cod_equipamento', 'nome_equipamento', 'quantidade', 'gestor',
@@ -478,23 +478,23 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
                       
     df_final = df_to_insert[[col for col in cols_to_insert if col in df_to_insert.columns]]
     
-    # --- Conversão de Tipos para o Banco (Robusta) ---
+    # --- CORREÇÃO DEFINITIVA (v5) ---
     values = []
     for record in df_final.to_records(index=False):
         processed_record = []
         for cell in record:
             if pd.isna(cell):
-                processed_record.append(None) # Converte NaT, NaN, etc. para None
-            elif isinstance(cell, (np.int64, np.int32, np.int16)):
+                processed_record.append(None) # Converte NaT, NaN, pd.NA para None
+            elif isinstance(cell, (np.int64, np.int32, np.int16, np.int8)):
                 processed_record.append(int(cell)) # Converte numpy int para python int
             elif isinstance(cell, (np.float64, np.float32)):
                 processed_record.append(float(cell)) # Converte numpy float para python float
             elif isinstance(cell, (pd.Timestamp, datetime)):
                 processed_record.append(cell.date()) # Converte datetime para date
             else:
-                processed_record.append(cell) # Mantém outros tipos (str, date, etc.)
+                processed_record.append(cell) 
         values.append(tuple(processed_record))
-    # --- Fim da Correção ---
+    # --- FIM DA CORREÇÃO ---
     
     cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns)); placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
     
