@@ -399,8 +399,6 @@ def get_color_for_name(name_str):
         return COLORS_LIST[color_index]
     except Exception: return "#555"
     
-    
-# --- Funções para a Tabela de Chamados (ATUALIZADAS) ---
 @st.cache_data(ttl=60)
 def carregar_chamados_db(agencia_id_filtro=None):
     """ Carrega chamados, opcionalmente filtrados por ID de agência. """
@@ -431,12 +429,14 @@ def carregar_chamados_db(agencia_id_filtro=None):
     except Exception as e:
         st.error(f"Erro ao carregar chamados: {e}"); return pd.DataFrame()
 
-# --- >>> FUNÇÃO DE IMPORTAÇÃO CORRIGIDA <<< ---
+# --- >>> FUNÇÃO DE IMPORTAÇÃO <<< ---
+
 def bulk_insert_chamados_db(df: pd.DataFrame):
     """ Importa um DataFrame de chamados para o banco (UPSERT). """
-    if not conn: return False, 0
+    if not conn:
+        return False, 0
     
-    # --- CORREÇÃO DO MAPEAMENTO (P -> Nome_Equipamento, Q -> Quantidade) ---
+    # Mapeamento do CSV -> colunas do banco
     column_map = {
         'Chamado': 'chamado_id',
         'Codigo_Ponto': 'agencia_id',
@@ -445,16 +445,17 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         'Servico': 'servico',
         'Projeto': 'projeto_nome',
         'Data_Agendamento': 'data_agendamento',
-        'Tipo_De_Solicitacao': 'sistema', # M
-        'Sistema': 'cod_equipamento',     # N
-        'Codigo_Equipamento': 'nome_equipamento', # O
-        'Nome_Equipamento': 'nome_equipamento_desc', # P (Nome do Equipamento, que estava sendo mapeado errado)
-        'Quantidade_Solicitada': 'quantidade',     # Q (A coluna de quantidade correta)
-        'Substitui_Outro_Equipamento_(Sim/Não)': 'gestor' # T
+        'Tipo_De_Solicitacao': 'sistema',
+        'Sistema': 'cod_equipamento',
+        'Codigo_Equipamento': 'nome_equipamento',
+        'Nome_Equipamento': 'quantidade',
+        'Substitui_Outro_Equipamento_(Sim/Não)': 'gestor'
     }
     
+    # Renomeia colunas conforme o banco
     df_to_insert = df.rename(columns={k: v for k, v in column_map.items() if k in df.columns})
 
+    # Validações básicas
     if 'chamado_id' not in df_to_insert.columns:
         st.error("Erro: A planilha deve conter a coluna 'Chamado' (ID do chamado).")
         return False, 0
@@ -462,57 +463,71 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         st.error("Erro: A planilha deve conter a coluna 'Codigo_Ponto' (ID da Agência).")
         return False, 0
 
-    # --- Tratamento de Tipos ---
+    # --- Tratamento de tipos (datas e números) ---
     cols_data = ['data_abertura', 'data_fechamento', 'data_agendamento']
     for col in cols_data:
         if col in df_to_insert.columns:
-            # Força o pandas a ler datas no formato brasileiro (DD/MM/AAAA)
+            # Converte para datetime, interpretando formato brasileiro
             df_to_insert[col] = pd.to_datetime(df_to_insert[col], errors='coerce', dayfirst=True)
         else:
             df_to_insert[col] = None 
 
     if 'valor_chamado' in df_to_insert.columns:
-         df_to_insert['valor_chamado'] = pd.to_numeric(df_to_insert['valor_chamado'], errors='coerce').fillna(0.0)
-    if 'quantidade' in df_to_insert.columns:
-         df_to_insert['quantidade'] = pd.to_numeric(df_to_insert['quantidade'], errors='coerce').astype('Int64') # Int64 aceita nulos
+        df_to_insert['valor_chamado'] = pd.to_numeric(df_to_insert['valor_chamado'], errors='coerce').fillna(0.0)
 
-    # Lista final de colunas do BD
+    if 'quantidade' in df_to_insert.columns:
+        df_to_insert['quantidade'] = pd.to_numeric(df_to_insert['quantidade'], errors='coerce').astype('Int64')
+
+    # Seleciona colunas que realmente existem
     cols_to_insert = [
-        'chamado_id', 'agencia_id', 'agencia_nome', 'agencia_uf', 'servico', 'projeto_nome', 
-        'data_agendamento', 'sistema', 'cod_equipamento', 'nome_equipamento', 'quantidade', 'gestor',
-        'descricao', 'data_abertura', 'data_fechamento', 'status_chamado', 'valor_chamado'
+        'chamado_id', 'agencia_id', 'agencia_nome', 'agencia_uf', 'servico',
+        'projeto_nome', 'data_agendamento', 'sistema', 'cod_equipamento',
+        'nome_equipamento', 'quantidade', 'gestor', 'descricao',
+        'data_abertura', 'data_fechamento', 'status_chamado', 'valor_chamado'
     ]
-                      
     df_final = df_to_insert[[col for col in cols_to_insert if col in df_to_insert.columns]]
-    
-    # --- CORREÇÃO DEFINITIVA (v5) - Trata DATAS e NÚMEROS ---
+
+    # --- CONVERSÃO FINAL DE DATAS E NÚMEROS (Evita erro numpy.datetime64) ---
     values = []
     for record in df_final.to_records(index=False):
         processed_record = []
         for cell in record:
             if pd.isna(cell):
-                processed_record.append(None) # Converte NaT, NaN, pd.NA para None
+                processed_record.append(None)  # Trata NaT / NaN
             elif isinstance(cell, (np.int64, np.int32, np.int16, np.int8)):
-                processed_record.append(int(cell)) # Converte numpy int para python int
+                processed_record.append(int(cell))  # Inteiro puro
             elif isinstance(cell, (np.float64, np.float32)):
-                processed_record.append(float(cell)) # Converte numpy float para python float
+                processed_record.append(float(cell))  # Float puro
             elif isinstance(cell, (pd.Timestamp, datetime, np.datetime64)):
-                processed_record.append(cell.date()) # Converte datetime para date
+                # 🔧 Converte para datetime.date
+                processed_record.append(pd.to_datetime(cell).date())
             else:
-                processed_record.append(cell) 
+                processed_record.append(cell)
         values.append(tuple(processed_record))
-    # --- FIM DA CORREÇÃO ---
-    
-    cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns)); placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
-    
+    # --- FIM DA CONVERSÃO ---
+
+    # Montagem do SQL (UPSERT)
+    cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns))
+    placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
     update_clause = sql.SQL(', ').join(
         sql.SQL("{} = EXCLUDED.{}").format(sql.Identifier(col), sql.Identifier(col))
-        for col in df_final.columns if col != 'chamado_id' 
+        for col in df_final.columns if col != 'chamado_id'
     )
-    query = sql.SQL("INSERT INTO chamados ({}) VALUES ({}) ON CONFLICT (chamado_id) DO UPDATE SET {}").format(cols_sql, placeholders, update_clause)
+    query = sql.SQL("""
+        INSERT INTO chamados ({})
+        VALUES ({})
+        ON CONFLICT (chamado_id)
+        DO UPDATE SET {}
+    """).format(cols_sql, placeholders, update_clause)
 
+    # Execução
     try:
-        with conn.cursor() as cur: cur.executemany(query, values) 
-        st.cache_data.clear(); return True, len(values)
-    except Exception as e: 
-        st.error(f"Erro ao salvar chamados no banco: {e}"); conn.rollback(); return False, 0
+        with conn.cursor() as cur:
+            cur.executemany(query, values)
+        conn.commit()
+        st.cache_data.clear()
+        return True, len(values)
+    except Exception as e:
+        conn.rollback()
+        st.error(f"Erro ao salvar chamados no banco: {e}")
+        return False, 0
