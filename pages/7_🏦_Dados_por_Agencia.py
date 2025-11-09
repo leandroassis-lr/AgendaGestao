@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import utils # Apenas para CSS e Login Check
-import utils_chamados # <<< NOSSO NOVO ARQUIVO
+import utils_chamados # <<< NOSSO ARQUIVO
 from datetime import date, datetime
 import re 
 import html 
@@ -58,7 +58,7 @@ def formatar_agencia_excel(id_agencia, nome_agencia):
     except (ValueError, TypeError): id_str = str(id_agencia).strip() 
     nome_str = str(nome_agencia).strip()
     if nome_str.startswith(id_agencia_limpo):
-         nome_str = nome_str[len(id_agencia_limpo):].strip(" -")
+          nome_str = nome_str[len(id_agencia_limpo):].strip(" -")
     return f"{id_str} - {nome_str}"
 
 
@@ -73,10 +73,10 @@ def tela_dados_agencia():
     # --- 1. Importador de Chamados ---
     with st.expander("📥 Importar Novos Chamados (Excel/CSV)"):
         st.info(f"""
-            Arraste seu arquivo Excel de chamados (formato `.xlsx` ou `.csv` com `;`) aqui.
-            O sistema espera que a **primeira linha** contenha os cabeçalhos.
-            As colunas necessárias (A, B, C, D, J, K, L, M, N, O, Q, T) serão lidas automaticamente.
-            Se um `Chamado` (Coluna A) já existir, ele será **atualizado**.
+             Arraste seu arquivo Excel de chamados (formato `.xlsx` ou `.csv` com `;`) aqui.
+             O sistema espera que a **primeira linha** contenha os cabeçalhos.
+             As colunas necessárias (A, B, C, D, J, K, L, M, N, O, Q, T) serão lidas automaticamente.
+             Se um `Chamado` (Coluna A) já existir, ele será **atualizado**.
         """)
         uploaded_file = st.file_uploader("Selecione o arquivo Excel/CSV de chamados", type=["xlsx", "xls", "csv"], key="chamado_uploader")
 
@@ -134,6 +134,7 @@ def tela_dados_agencia():
 
     # --- 2. Carregar Dados (APENAS CHAMADOS) ---
     with st.spinner("Carregando dados de chamados..."):
+        # ATENÇÃO: Carrega SEMPRE todos os dados. O filtro do 'utils' não está sendo usado.
         df_chamados_raw = utils_chamados.carregar_chamados_db()
 
     if df_chamados_raw.empty:
@@ -167,9 +168,8 @@ def tela_dados_agencia():
     if agencia_selecionada == "Todas":
         df_chamados_filtrado = df_chamados_raw
     else:
-        # Filtra pelo Cód. Agência (extrai o número)
-        agencia_id_filtro = agencia_selecionada.split(" - ")[0].replace("AG ", "").lstrip('0')
-        df_chamados_filtrado = df_chamados_raw[df_chamados_raw['Cód. Agência'].astype(str) == agencia_id_filtro]
+        # Filtra o dataframe PÓS-CARREGAMENTO
+        df_chamados_filtrado = df_chamados_raw[df_chamados_raw['Agencia_Combinada'] == agencia_selecionada]
 
 
     # --- 6. Painel Financeiro e KPIs ---
@@ -189,129 +189,129 @@ def tela_dados_agencia():
     cols_kpi[2].metric("Financeiro Chamados (R$)", f"{valor_total_chamados:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')) 
     st.divider()
 
-    # --- 7. NOVA VISÃO EM CARDS (Agrupado por Agência) ---
-    st.markdown("#### 📋 Chamados Registrados")
+
+    # --- 7. NOVA VISÃO HIERÁRQUICA (Agência -> Projeto -> Chamados) ---
+    st.markdown("#### 📋 Visão por Projetos e Chamados")
     
     if df_chamados_filtrado.empty:
-        st.info("Nenhum chamado encontrado para esta agência.")
+        st.info("Nenhum chamado encontrado para os filtros selecionados.")
+        st.stop()
+
+    # Prepara o DataFrame para agrupamento
+    try:
+        # Converte datas para string DD/MM/YYYY para poder agrupar
+        df_chamados_filtrado['Agendamento_str'] = pd.to_datetime(df_chamados_filtrado['Agendamento']).dt.strftime('%d/%m/%Y').fillna('Sem Data')
+        df_chamados_filtrado['Abertura_str'] = pd.to_datetime(df_chamados_filtrado['Abertura']).dt.strftime('%d/%m/%Y').fillna('Sem Data')
+        df_chamados_filtrado['Fechamento_str'] = pd.to_datetime(df_chamados_filtrado['Fechamento']).dt.strftime('%d/%m/%Y').fillna('N/A')
+        
+        # Garante que colunas de placeholder existam (se você não atualizou o utils)
+        if 'Analista' not in df_chamados_filtrado.columns: df_chamados_filtrado['Analista'] = 'N/A'
+        if 'Técnico' not in df_chamados_filtrado.columns: df_chamados_filtrado['Técnico'] = 'N/A'
+        
+        # Define as chaves de agrupamento
+        chave_agencia = 'Agencia_Combinada'
+        chave_projeto = ['Projeto', 'Gestor', 'Agendamento_str']
+
+    except KeyError as e:
+        st.error(f"Erro ao preparar dados: Coluna {e} não encontrada. Verifique o mapeamento da importação.")
+        st.stop()
+    except Exception as e:
+        st.error(f"Erro ao processar datas: {e}")
+        st.stop()
+
+    
+    # --- NÍVEL 1: Loop pelas Agências ---
+    # (Se 'Todas' não estiver selecionado, este loop rodará apenas 1x)
+    
+    if agencia_selecionada == "Todas":
+        agencias_agrupadas = df_chamados_filtrado.groupby(chave_agencia)
     else:
-        # Ordena os chamados pela data de agendamento mais recente
-        df_chamados_filtrado['Agendamento'] = pd.to_datetime(df_chamados_filtrado['Agendamento'], errors='coerce')
-        df_chamados_filtrado = df_chamados_filtrado.sort_values(by="Agendamento", ascending=False, na_position='last')
-        
-        # --- NÃO agrupa por projeto, mostra lista reta ---
-        
-        for _, row in df_chamados_filtrado.iterrows():
-            chamado_id_str = str(row.get('Nº Chamado', 'N/A'))
-            chamado_id_interno = row.get('ID') # ID da tabela 'chamados'
-            
-            # --- Monta o Cabeçalho (Conforme solicitado) ---
-            data_recente_str = "Sem Data"
-            if pd.notna(row.get('Agendamento')):
-                try: data_recente_str = pd.to_datetime(row.get('Agendamento')).strftime('%d/%m/%Y')
-                except: pass # Mantém "Sem Data" se falhar
-                
-            agencia_nome = row.get('Agencia_Combinada', 'N/A')
-            projeto_nome = str(row.get('Projeto', 'N/A')).upper()
-            gestor_nome = html.escape(str(row.get('Gestor', 'N/A')))
-            uf_nome = html.escape(str(row.get('UF', 'N/A')))
-            status_chamado = html.escape(str(row.get('Status', 'N/A')))
-            
-            # Usa o estilo de card do app principal
-            st.markdown(f"""
-                <div class='project-card'>
-                    <div style='display: flex; justify-content: space-between; align-items: flex-start;'>
-                        <div style='flex: 3;'>
-                            <h6 style='margin-bottom: 5px;'>📅 {data_recente_str} | {agencia_nome} ({uf_nome})</h6>
-                            <h5 style='margin:2px 0;'>{projeto_nome}</h5>
-                        </div>
-                        <div style='flex: 1; text-align: right;'>
-                            <span style='font-weight: bold; color: {utils_chamados.get_color_for_name(gestor_nome)};'>{gestor_nome}</span>
-                            <span style="background-color:{utils_chamados.get_status_color(status_chamado)}; color:black; padding:4px 8px; border-radius:5px; font-weight:bold; font-size:0.8em; margin-top: 5px; display: block;">{status_chamado}</span>
-                        </div>
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
+        # Cria um "grupo falso" para o loop funcionar da mesma forma
+        agencias_agrupadas = [(agencia_selecionada, df_chamados_filtrado)]
 
-            # --- Expander INTERNO com Formulário de Edição ---
-            with st.expander(f"Editar Chamado: {chamado_id_str}"):
+    for nome_agencia, df_agencia in agencias_agrupadas:
+        
+        # Se 'Todas' estiver ativo, cria um expander para a agência
+        if agencia_selecionada == "Todas":
+            expander_agencia = st.expander(f"🏦 {nome_agencia} ({len(df_agencia)} chamados)")
+        else:
+            # Se uma agência já foi selecionada, não precisamos de outro expander
+            expander_agencia = st.container() 
+
+        with expander_agencia:
+            
+            # --- NÍVEL 2: Loop pelos Projetos ---
+            try:
+                projetos_agrupados = df_agencia.groupby(chave_projeto)
+                if not projetos_agrupados.groups:
+                    st.info(f"Nenhum chamado encontrado para a agência {nome_agencia}.")
+                    continue # Vai para a próxima agência
+            
+            except KeyError:
+                st.error("Falha ao agrupar por Projeto/Gestor/Agendamento. Verifique se as colunas existem.")
+                continue
+
+            for (nome_projeto, nome_gestor, data_agend), df_projeto in projetos_agrupados:
                 
-                with st.form(f"form_chamado_edit_{chamado_id_interno}"):
-                    st.markdown(f"**Editando Chamado:** {chamado_id_str}")
+                # Monta o cabeçalho do Projeto
+                nome_projeto_str = str(nome_projeto).upper()
+                nome_gestor_str = html.escape(str(nome_gestor))
+                
+                header_projeto = f"Projeto: {nome_projeto_str} | Gestor: {nome_gestor_str} | Agendamento: {data_agend}"
+                
+                with st.expander(header_projeto):
                     
-                    # Colunas do Card (Conforme solicitado)
-                    col_form1, col_form2, col_form3 = st.columns(3)
-                    with col_form1:
-                        data_abertura = _to_date_safe(row.get('Abertura'))
-                        st.date_input("Data Abertura (Importado)", value=data_abertura, format="DD/MM/YYYY", disabled=True, key=f"abertura_{chamado_id_interno}")
-                        
-                        agendamento_val = _to_date_safe(row.get('Agendamento'))
-                        novo_agendamento = st.date_input("Data Agendamento (Editável)", value=agendamento_val, format="DD/MM/YYYY", key=f"agend_{chamado_id_interno}")
-                        
-                        finalizacao_val = _to_date_safe(row.get('Fechamento'))
-                        novo_fechamento = st.date_input("Data Finalização (Editável)", value=finalizacao_val, format="DD/MM/YYYY", key=f"final_{chamado_id_interno}")
-
-                    with col_form2:
-                        st.text_input("Nº Chamado", value=chamado_id_str, disabled=True, key=f"id_{chamado_id_interno}")
-                        novo_sistema = st.text_input("Sistema (Editável)", value=row.get('Sistema'), key=f"sis_{chamado_id_interno}")
-                        novo_servico = st.text_input("Serviço (Editável)", value=row.get('Serviço'), key=f"serv_{chamado_id_interno}")
-                        
-                    with col_form3:
-                        novo_equip = st.text_input("Nome Equipamento (Editável)", value=row.get('Equipamento'), key=f"equip_{chamado_id_interno}")
-                        
-                        # --- CORREÇÃO DO ERRO 'numpy.int64' / ValueError ---
-                        qtd_valor_raw = row.get('Qtd.')
-                        # 1. Verifica se não é nulo/NaN, 2. Tenta converter para float, 3. Converte para int
-                        try:
-                            qtd_valor = int(float(qtd_valor_raw)) if pd.notna(qtd_valor_raw) else 0
-                        except (ValueError, TypeError):
-                            qtd_valor = 0 # Define 0 se o valor for um texto (ex: "N/A")
-                        
-                        nova_qtd = st.number_input("Quantidade (Editável)", value=qtd_valor, min_value=0, step=1, key=f"qtd_{chamado_id_interno}")
-                        # --- FIM DA CORREÇÃO ---
-
-                        status_fin_opts = ["Pendente", "Faturado", "Concluído", "N/A"]
-                        status_fin_atual = str(row.get('Status Financeiro', 'Pendente'))
-                        idx_fin = status_fin_opts.index(status_fin_atual) if status_fin_atual in status_fin_opts else 0
-                        novo_status_financeiro = st.selectbox("Status Financeiro (Editável)", options=status_fin_opts, index=idx_fin, key=f"fin_{chamado_id_interno}")
+                    # --- NÍVEL 3: Detalhes do Projeto ---
+                    
+                    # Parte A: A "Descrição" (Resumo de Equipamentos)
+                    descricao_list = []
+                    for _, chamado_row in df_projeto.iterrows():
+                        # Converte Qtd para int, tratando nulos/erros
+                        qtd_val = pd.to_numeric(chamado_row.get('Qtd.'), errors='coerce').fillna(0)
+                        qtd_int = int(qtd_val)
+                        equip_str = str(chamado_row.get('Equipamento', 'N/A'))
+                        descricao_list.append(f"{qtd_int:02d} - {equip_str}")
+                    
+                    descricao_texto = "\n".join(descricao_list)
+                    
+                    st.text_area(
+                        "Descrição (Equipamentos do Projeto)", 
+                        value=descricao_texto, 
+                        height=150, 
+                        disabled=True,
+                        key=f"desc_proj_{nome_agencia}_{nome_projeto}_{data_agend}" # Chave única
+                    )
                     
                     st.markdown("---")
-                    nova_observacao = st.text_area(
-                        "Observações (Editável)", 
-                        value=row.get('Observação', ''),
-                        placeholder="Insira observações sobre este chamado...",
-                        key=f"obs_{chamado_id_interno}"
-                    )
-                    log_chamado = row.get('Log do Chamado', '')
-                    st.text_area(
-                        "Log de Alterações", 
-                        value=log_chamado, 
-                        disabled=True, 
-                        height=100,
-                        key=f"log_{chamado_id_interno}"
-                    )
+                    st.markdown("##### Chamados Individuais deste Projeto:")
+
+                    # Parte B: A Tabela de Chamados
                     
-                    btn_salvar_chamado = st.form_submit_button("💾 Salvar Alterações do Chamado")
+                    # Define as colunas que queremos exibir na tabela
+                    colunas_para_exibir = [
+                        'Nº Chamado', 
+                        'Status', 
+                        'Abertura_str', # Usamos a string formatada
+                        'Agendamento_str', # Usamos a string formatada
+                        'Fechamento_str', # Usamos a string formatada
+                        'Analista', 
+                        'Técnico', 
+                        'Sistema', 
+                        'Serviço'
+                    ]
                     
-                    if btn_salvar_chamado:
-                        updates = {
-                            "Data Agendamento": novo_agendamento,
-                            "Data Finalização": novo_fechamento,
-                            "Observação": nova_observacao,
-                            "Sistema": novo_sistema,
-                            "Serviço": novo_servico,
-                            "Nome Equipamento": novo_equip,
-                            "Quantidade": nova_qtd,
-                            "Status Financeiro": novo_status_financeiro
-                        }
-                        with st.spinner("Salvando..."):
-                            # Atualiza usando o ID INTERNO (único)
-                            sucesso = utils_chamados.atualizar_chamado_db(chamado_id_interno, updates) 
-                            if sucesso:
-                                st.success(f"Chamado {chamado_id_str} atualizado com sucesso!")
-                                st.rerun()
-                            else:
-                                st.error("Falha ao salvar as alterações.")
+                    # Renomeia colunas para a visualização
+                    df_display = df_projeto[colunas_para_exibir].rename(columns={
+                        'Abertura_str': 'Abertura',
+                        'Agendamento_str': 'Agendamento',
+                        'Fechamento_str': 'Finalização'
+                    })
+
+                    # Exibe os chamados em uma tabela
+                    st.dataframe(df_display, use_container_width=True)
+
+                    # NOTA: A antiga lógica de "st.form" para CADA chamado
+                    # foi removida para dar lugar a esta tabela-resumo.
 
 # --- Ponto de Entrada ---
 tela_dados_agencia()
