@@ -155,7 +155,7 @@ def run_importer_dialog():
         st.rerun()
 
 
-# --- FUNÇÃO "CÉREBRO" DE STATUS ---
+# --- FUNÇÃO "CÉREBRO" DE STATUS (COM CORREÇÃO) ---
 def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
     """
     Calcula o novo status de um projeto com base nas suas regras de negócio
@@ -164,11 +164,28 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
     has_S = df_projeto['Nº Chamado'].str.contains('-S-').any()
     has_E = df_projeto['Nº Chamado'].str.contains('-E-').any()
     
-    # Verifica o estado dos campos-gatilho em TODO o grupo
-    link_presente = df_projeto['Link Externo'].fillna('').str.strip().ne('').any()
-    pedido_presente = df_projeto['Nº Pedido'].fillna('').str.strip().ne('').any()
-    envio_presente = df_projeto['Data Envio'].notna().any()
-    tecnico_presente = df_projeto['Técnico'].fillna('').str.strip().ne('').any()
+    # --- INÍCIO DA CORREÇÃO ---
+    # Funções helper seguras para checar colunas que podem não existir
+    
+    def check_col_present(df, col_name):
+        """Verifica se algum valor 'truthy' (não-vazio) existe na coluna."""
+        if col_name in df.columns:
+            # .ne('') é 'not equal to empty string'
+            return df[col_name].fillna('').astype(str).str.strip().ne('').any()
+        return False # Se a coluna não existe, considera que não há valores
+
+    def check_date_present(df, col_name):
+        """Verifica se alguma data válida (não-nula) existe na coluna."""
+        if col_name in df.columns:
+            return df[col_name].notna().any()
+        return False # Se a coluna não existe, considera que não há datas
+    
+    # Usa as funções seguras
+    link_presente = check_col_present(df_projeto, 'Link Externo')
+    pedido_presente = check_col_present(df_projeto, 'Nº Pedido')
+    envio_presente = check_date_present(df_projeto, 'Data Envio')
+    tecnico_presente = check_col_present(df_projeto, 'Técnico')
+    # --- FIM DA CORREÇÃO ---
     
     novo_status = "Indefinido"
 
@@ -201,25 +218,18 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
         elif pedido_presente:
             novo_status = "Equipamento Solicitado"
         else:
-            # Estado base para E-Only
             novo_status = "Solicitar Equipamento"
     
-    # --- Fallback (se não for S nem E) ---
     else:
         novo_status = "Não Iniciado"
 
-    # Pega o status atual (o primeiro da lista é o representante)
     status_atual = df_projeto.iloc[0]['Status']
     
-    # Se o status calculado for diferente do atual, atualiza TODOS
     if status_atual != novo_status:
         st.info(f"Status do projeto mudou de '{status_atual}' para '{novo_status}'")
         updates = {"Status": novo_status}
         for chamado_id in ids_para_atualizar:
-            # Usamos o utils, mas sem log, para não poluir
             utils_chamados.atualizar_chamado_db(chamado_id, updates)
-        
-        # Retorna True para podermos recarregar a página
         return True
     
     return False
@@ -282,7 +292,6 @@ def tela_dados_agencia():
         df_chamados_filtrado = df_chamados_raw[df_chamados_raw['Agencia_Combinada'] == agencia_selecionada]
 
     # --- 7. Painel de KPIs ---
-    # (Omitido por brevidade, permanece o mesmo)
     total_chamados = len(df_chamados_filtrado)
     if not df_chamados_filtrado.empty:
         status_fechamento = ['fechado', 'concluido', 'resolvido', 'cancelado', 'encerrado', 'equipamento entregue - concluído']
@@ -361,13 +370,9 @@ def tela_dados_agencia():
                     first_row = df_projeto.iloc[0]
                     chamado_ids_internos_list = df_projeto['ID'].tolist()
                     
-                    # --- NOVO: Status Principal (Calculado e Read-Only) ---
-                    # Pega o status do primeiro chamado (são todos iguais)
                     status_principal_atual = first_row.get('Status', 'Não Iniciado')
                     st.info(f"**Status Principal do Projeto:** {status_principal_atual}")
                     
-                    
-                    # --- NÍVEL 2: Formulário de Edição em Lote ---
                     form_key_lote = f"form_lote_edit_{first_row['ID']}"
                     
                     with st.form(key=form_key_lote):
@@ -402,20 +407,16 @@ def tela_dados_agencia():
                             
                             st.success(f"{sucesso_count} de {len(chamado_ids_internos_list)} chamados foram atualizados!")
                             
-                            # --- Dispara o Recálculo do Status ---
-                            # Recarrega o DF com os dados salvos para o cálculo
                             df_chamados_atualizado = utils_chamados.carregar_chamados_db()
                             df_projeto_atualizado = df_chamados_atualizado[df_chamados_atualizado['ID'].isin(chamado_ids_internos_list)]
                             
                             if calcular_e_atualizar_status_projeto(df_projeto_atualizado, chamado_ids_internos_list):
                                 st.cache_data.clear()
-                                st.rerun() # Reroda a página para mostrar o novo status
+                                st.rerun()
                             else:
                                 st.cache_data.clear()
-                                st.rerun() # Reroda mesmo se não mudou, para mostrar os campos salvos
+                                st.rerun()
                     
-                    
-                    # --- NÍVEL 3 (Formulário Individual) ---
                     st.markdown("---")
                     st.markdown("##### 🔎 Detalhes por Chamado Individual")
 
@@ -428,13 +429,11 @@ def tela_dados_agencia():
                         with st.expander(f"▶️ Chamado: {chamado_id_str}"):
                             with st.form(key=form_key_ind):
                                 
-                                # Verifica o tipo de chamado
                                 is_servico = '-S-' in chamado_id_str
                                 is_equipamento = '-E-' in chamado_id_str
                                 
                                 updates_individuais = {}
                                 
-                                # --- Campos Condicionais ---
                                 if is_servico:
                                     st.markdown("**Gatilhos de Serviço (-S-)**")
                                     link_val = chamado_row.get('Link Externo', '')
@@ -473,7 +472,6 @@ def tela_dados_agencia():
                                     if utils_chamados.atualizar_chamado_db(chamado_id_interno, updates_individuais):
                                         st.success("Chamado salvo!")
                                         
-                                        # --- Dispara o Recálculo do Status ---
                                         df_chamados_atualizado = utils_chamados.carregar_chamados_db()
                                         df_projeto_atualizado = df_chamados_atualizado[df_chamados_atualizado['ID'].isin(chamado_ids_internos_list)]
                                         
@@ -485,8 +483,7 @@ def tela_dados_agencia():
                                             st.rerun()
                                     else:
                                         st.error("Falha ao salvar o chamado.")
-
-                    # --- DESCRIÇÃO AGREGADA (Final) ---
+                    
                     st.markdown("---")
                     st.markdown("##### Descrição (Total de Equipamentos do Projeto)")
                     descricao_list = []
