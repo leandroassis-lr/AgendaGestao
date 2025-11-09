@@ -215,13 +215,11 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
     else:
         novo_status = "Não Iniciado"
 
-    # --- CORREÇÃO APLICADA AQUI (para o status_atual) ---
     status_atual_val = str(df_projeto.iloc[0]['Status']).strip() # Converte para string e limpa
     if status_atual_val == "" or status_atual_val.lower() == "none" or status_atual_val.lower() == "nan":
         status_atual = "Não Iniciado"
     else:
         status_atual = status_atual_val
-    # --- FIM DA CORREÇÃO ---
     
     if status_atual != novo_status:
         st.info(f"Status do projeto mudou de '{status_atual}' para '{novo_status}'")
@@ -428,20 +426,15 @@ def tela_dados_agencia():
 
             for (nome_projeto, nome_gestor, data_agend), df_projeto in projetos_agrupados:
                 
-                # --- INÍCIO DA MUDANÇA (Layout de Card) ---
-                
                 first_row = df_projeto.iloc[0]
                 chamado_ids_internos_list = df_projeto['ID'].tolist()
                 
-                # --- CORREÇÃO APLICADA AQUI ---
-                status_val = str(first_row.get('Status', 'Não Iniciado')).strip() # Converte para string e limpa
+                status_val = str(first_row.get('Status', 'Não Iniciado')).strip()
                 if status_val == "" or status_val.lower() == "none" or status_val.lower() == "nan":
                     status_principal_atual = "Não Iniciado"
                 else:
                     status_principal_atual = status_val
-                # --- FIM DA CORREÇÃO ---
                 
-                # --- Cálculo do SLA (Placeholder) ---
                 sla_text = ""
                 try:
                     agendamento_date = pd.to_datetime(data_agend, format='%d/%m/%Y')
@@ -454,9 +447,8 @@ def tela_dados_agencia():
                 except Exception:
                     sla_text = "<span style='color: #888;'>SLA: N/D</span>"
                 
-                # --- Texto de Ação (Baseado no Status) ---
-                acao_text = "FINALIZADO" # Default
-                status_lower = status_principal_atual.lower() # Agora é seguro
+                acao_text = "FINALIZADO"
+                status_lower = status_principal_atual.lower()
                 if "não iniciado" in status_lower:
                     acao_text = "INICIAR PROJETO"
                 elif "acionar técnico" in status_lower:
@@ -470,7 +462,6 @@ def tela_dados_agencia():
                 elif "em andamento" in status_lower:
                     acao_text = "EM EXECUÇÃO"
 
-                # --- Cor do Gestor ---
                 gestor_color = utils_chamados.get_color_for_name(nome_gestor)
                 
                 def clean_val(val, default="N/A"):
@@ -488,7 +479,8 @@ def tela_dados_agencia():
                 
                 # --- Monta o HTML do Card ---
                 card_html = f"""
-                <div class="project-card"> <div class="card-grid">
+                <div class="project-card"> 
+                    <div class="card-grid">
                         
                         <div>
                             <div class="date">📅 {data_agend}</div>
@@ -518,6 +510,8 @@ def tela_dados_agencia():
                     </div>
                 """
                 
+                # --- A LINHA DA CORREÇÃO ---
+                # Garante que o parâmetro está aqui
                 st.markdown(card_html, unsafe_allow_html=True)
                 
                 expander_title = f"Ver/Editar Detalhes - ID: {first_row['ID']}"
@@ -632,7 +626,8 @@ def tela_dados_agencia():
                         label_visibility="collapsed"
                     )
                 
-                # Fecha o <div> do project-card
+                # --- A LINHA DA CORREÇÃO (Fechamento) ---
+                # Garante que o parâmetro está aqui
                 st.markdown("</div>", unsafe_allow_html=True)
 
 # --- Ponto de Entrada ---
