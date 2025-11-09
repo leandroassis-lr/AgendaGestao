@@ -262,13 +262,22 @@ def tela_dados_agencia():
                 with st.expander(header_projeto):
                     
                     # --- NÍVEL 3: Detalhes do Projeto ---
-                    
                     # Parte A: A "Descrição" (Resumo de Equipamentos)
                     descricao_list = []
                     for _, chamado_row in df_projeto.iterrows():
-                        # Converte Qtd para int, tratando nulos/erros
-                        qtd_val = pd.to_numeric(chamado_row.get('Qtd.'), errors='coerce').fillna(0)
-                        qtd_int = int(qtd_val)
+                        
+                        # --- INÍCIO DA CORREÇÃO ---
+                        
+                        # 1. Converte o valor para numérico. Se falhar, vira NaN (Not a Number)
+                        qtd_val_numeric = pd.to_numeric(chamado_row.get('Qtd.'), errors='coerce')
+                        
+                        # 2. Verifica se o resultado é NaN (nulo ou texto). Se sim, define 0.
+                        if pd.isna(qtd_val_numeric):
+                            qtd_int = 0
+                        else:
+                            # 3. Se for um número válido (ex: 5.0), converte para inteiro
+                            qtd_int = int(qtd_val_numeric)
+                        
                         equip_str = str(chamado_row.get('Equipamento', 'N/A'))
                         descricao_list.append(f"{qtd_int:02d} - {equip_str}")
                     
@@ -315,3 +324,4 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia()
+
