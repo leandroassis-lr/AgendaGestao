@@ -59,7 +59,6 @@ def formatar_agencia_excel(id_agencia, nome_agencia):
     return f"{id_str} - {nome_str}"
 
 # --- 1. DIALOG (POP-UP) DE IMPORTAÇÃO ---
-# Esta função define o conteúdo do pop-up
 @st.dialog("Importar Novos Chamados (Excel/CSV)")
 def run_importer_dialog():
     st.info(f"""
@@ -80,7 +79,7 @@ def run_importer_dialog():
             df_raw.dropna(how='all', inplace=True)
             if df_raw.empty: 
                 st.error("Erro: O arquivo está vazio.")
-                return # Para o dialog
+                return
 
             col_map = {
                 0: 'chamado_id', 1: 'agencia_id', 2: 'agencia_nome', 3: 'agencia_uf',
@@ -113,19 +112,18 @@ def run_importer_dialog():
                             if sucesso:
                                 st.success(f"🎉 {num_importados} chamados importados/atualizados com sucesso!")
                                 st.balloons()
-                                st.session_state.importer_done = True # Flag para fechar
+                                st.session_state.importer_done = True 
                             else:
                                 st.error("A importação de chamados falhou.")
         except Exception as e:
             st.error(f"Erro ao ler o arquivo: {e}")
 
-    # Se a importação terminou, o rerun() fecha o dialog
     if st.session_state.get("importer_done", False):
-        st.session_state.importer_done = False # Reseta a flag
+        st.session_state.importer_done = False 
         st.rerun()
 
     if st.button("Cancelar"):
-        st.rerun() # Fecha o dialog
+        st.rerun()
 
 
 # --- Tela Principal da Página ---
@@ -137,7 +135,7 @@ def tela_dados_agencia():
         st.markdown("<div class='section-title-center'>GESTÃO DE DADOS POR AGÊNCIA</div>", unsafe_allow_html=True)
     with c2:
         if st.button("📥 Importar Novos Chamados", use_container_width=True):
-            run_importer_dialog() # Chama o pop-up
+            run_importer_dialog()
     
     st.write(" ")
     utils_chamados.criar_tabela_chamados()
@@ -164,8 +162,6 @@ def tela_dados_agencia():
     status_options = ["Não iniciada", "Em andamento", "Concluído", "Pendencia de infra", "Pendencia de equipamento", "Pausado", "Cancelado"]
     prioridade_options = ["Baixa", "Média", "Alta", "Crítica"]
     
-    analista_list = sorted([str(a) for a in df_chamados_raw['Analista'].dropna().unique() if a])
-    tecnico_list = sorted([str(t) for t in df_chamados_raw['Técnico'].dropna().unique() if t])
     projeto_list = sorted([str(p) for p in df_chamados_raw['Projeto'].dropna().unique() if p])
     gestor_list = sorted([str(g) for g in df_chamados_raw['Gestor'].dropna().unique() if g])
     
@@ -214,7 +210,10 @@ def tela_dados_agencia():
 
     # Prepara o DataFrame para agrupamento
     try:
-        df_chamados_filtrado['Agendamento_str'] = pd.to_datetime(df_chamados_filtrado['Agendamento']).dt.strftime('%d/%m/%Y').fillna('Sem Data')
+        # Garante que 'Agendamento' seja datetime para o cálculo da data mínima
+        df_chamados_filtrado['Agendamento'] = pd.to_datetime(df_chamados_filtrado['Agendamento'], errors='coerce')
+        df_chamados_filtrado['Agendamento_str'] = df_chamados_filtrado['Agendamento'].dt.strftime('%d/%m/%Y').fillna('Sem Data')
+        
         if 'Analista' not in df_chamados_filtrado.columns: df_chamados_filtrado['Analista'] = 'N/A'
         if 'Técnico' not in df_chamados_filtrado.columns: df_chamados_filtrado['Técnico'] = 'N/A'
         if 'Prioridade' not in df_chamados_filtrado.columns: df_chamados_filtrado['Prioridade'] = 'Média'
@@ -235,8 +234,18 @@ def tela_dados_agencia():
 
     for nome_agencia, df_agencia in agencias_agrupadas:
         
+        # --- NOVO: Cálculo da Data Mais Próxima ---
+        hoje = pd.Timestamp.now().normalize()
+        proximas_datas = df_agencia[df_agencia['Agendamento'] >= hoje]['Agendamento']
+        
+        header_agencia = f"🏦 {nome_agencia} ({len(df_agencia)} chamados)"
+        if not proximas_datas.empty:
+            prox_data_str = proximas_datas.min().strftime('%d/%m/%Y')
+            header_agencia = f"🏦 {nome_agencia} ({len(df_agencia)} chamados) | 🗓️ Próximo Ag: {prox_data_str}"
+        # --- FIM DA MUDANÇA ---
+
         if agencia_selecionada == "Todas":
-            expander_agencia = st.expander(f"🏦 {nome_agencia} ({len(df_agencia)} chamados)")
+            expander_agencia = st.expander(header_agencia) # Usa o novo header
         else:
             expander_agencia = st.container() 
 
@@ -266,7 +275,14 @@ def tela_dados_agencia():
                     form_key = f"form_bulk_edit_{first_row['ID']}"
                     
                     with st.form(key=form_key):
-                        st.markdown(f"**Editar todos os {len(df_projeto)} chamados deste projeto:**")
+                        
+                        # --- NOVO: Botão Salvar no Topo ---
+                        c_title, c_btn = st.columns([3, 1])
+                        with c_title:
+                            st.markdown(f"**Editar todos os {len(df_projeto)} chamados deste projeto:**")
+                        with c_btn:
+                            btn_salvar_bulk = st.form_submit_button("💾 Salvar Lote", use_container_width=True)
+                        # --- FIM DA MUDANÇA ---
                         
                         st.markdown("<h6>Informações e Prazos</h6>", unsafe_allow_html=True)
                         c1, c2, c3, c4 = st.columns(4)
@@ -291,9 +307,10 @@ def tela_dados_agencia():
                         proj_idx = projeto_list.index(proj_val) if proj_val in projeto_list else 0
                         novo_projeto = c1.selectbox("Projeto", options=projeto_list, index=proj_idx, key=f"{form_key}_proj")
                         
+                        # --- NOVO: Campo Analista Editável ---
                         analista_val = first_row.get('Analista', '')
-                        analista_idx = analista_list.index(analista_val) if analista_val in analista_list else 0
-                        novo_analista = c2.selectbox("Analista", options=analista_list, index=analista_idx, key=f"{form_key}_analista")
+                        novo_analista = c2.text_input("Analista", value=analista_val, key=f"{form_key}_analista")
+                        # --- FIM DA MUDANÇA ---
 
                         gestor_val = first_row.get('Gestor', '')
                         gestor_idx = gestor_list.index(gestor_val) if gestor_val in gestor_list else 0
@@ -303,7 +320,8 @@ def tela_dados_agencia():
                         prior_idx = prioridade_options.index(prior_val) if prior_val in prioridade_options else 1
                         nova_prioridade = c4.selectbox("Prioridade", options=prioridade_options, index=prior_idx, key=f"{form_key}_prior")
 
-                        c1, c2, c3 = st.columns([2, 2, 1])
+                        # --- Layout da Linha 3 Ajustado (Botão saiu) ---
+                        c1, c2 = st.columns(2)
                         
                         ag_val = first_row.get('Agencia_Combinada', '')
                         ag_id_num = str(ag_val).split(" - ")[0].replace("AG ", "").lstrip('0')
@@ -311,11 +329,10 @@ def tela_dados_agencia():
                         nova_agencia_selecionada = c1.selectbox("Agência", options=agencia_list_no_todas, index=ag_idx, key=f"{form_key}_ag")
                         nova_agencia_id = str(nova_agencia_selecionada).split(" - ")[0].replace("AG ", "").lstrip('0')
                         
+                        # --- NOVO: Campo Técnico Editável ---
                         tec_val = first_row.get('Técnico', '')
-                        tec_idx = tecnico_list.index(tec_val) if tec_val in tecnico_list else 0
-                        novo_tecnico = c2.selectbox("Técnico", options=tecnico_list, index=tec_idx, key=f"{form_key}_tec")
-
-                        btn_salvar_bulk = c3.form_submit_button("💾 Salvar Lote")
+                        novo_tecnico = c2.text_input("Técnico", value=tec_val, key=f"{form_key}_tec")
+                        # --- FIM DA MUDANÇA ---
 
                     if btn_salvar_bulk:
                         updates = {
