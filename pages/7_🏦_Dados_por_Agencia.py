@@ -120,7 +120,6 @@ def tela_dados_agencia():
                                 }
                                 df_final_para_salvar = df_para_salvar.rename(columns=reverse_map)
 
-                                # --- CHAMA A FUNÇÃO DO NOVO UTILS ---
                                 sucesso, num_importados = utils_chamados.bulk_insert_chamados_db(df_final_para_salvar)
                                 if sucesso:
                                     st.success(f"🎉 {num_importados} chamados importados/atualizados com sucesso!")
@@ -171,7 +170,6 @@ def tela_dados_agencia():
         agencia_id_filtro = agencia_selecionada.split(" - ")[0].replace("AG ", "").lstrip('0')
         df_chamados_filtrado = df_chamados_raw[df_chamados_raw['Cód. Agência'].astype(str) == agencia_id_filtro]
 
-
     # --- 6. Painel Financeiro e KPIs ---
     total_chamados = len(df_chamados_filtrado)
     valor_total_chamados = 0.0; chamados_abertos_count = 0
@@ -198,12 +196,10 @@ def tela_dados_agencia():
         df_chamados_filtrado['Agendamento'] = pd.to_datetime(df_chamados_filtrado['Agendamento'], errors='coerce')
         df_chamados_filtrado = df_chamados_filtrado.sort_values(by="Agendamento", ascending=False, na_position='last')
         
-        # Agrupa pelo nome do PROJETO
         df_chamados_filtrado['Projeto'] = df_chamados_filtrado['Projeto'].fillna('Projeto Não Especificado')
         df_chamados_por_projeto = df_chamados_filtrado.groupby('Projeto')
         
         for projeto_nome, chamados_do_projeto in df_chamados_por_projeto:
-            
             total_chamados_projeto = len(chamados_do_projeto)
             data_recente_projeto = chamados_do_projeto['Agendamento'].max()
             if pd.isna(data_recente_projeto): data_header = "Sem Agendamento"
@@ -212,7 +208,6 @@ def tela_dados_agencia():
             header = f"**{str(projeto_nome).upper()}** ({total_chamados_projeto} chamados) | **Último Agendamento:** {data_header}"
             
             with st.expander(header, expanded=True): 
-                
                 for _, row in chamados_do_projeto.iterrows():
                     chamado_id_str = str(row.get('Nº Chamado', 'N/A'))
                     chamado_id_interno = row.get('ID') 
@@ -267,10 +262,13 @@ def tela_dados_agencia():
                             with col_form3:
                                 novo_equip = st.text_input("Nome Equipamento (Editável)", value=row.get('Equipamento'), key=f"equip_{chamado_id_interno}")
                                 
-                                # --- >>> CORREÇÃO DO ERRO <<< ---
-                                # Converte o valor para int, tratando None/NaN com 'or 0'
-                                qtd_valor = int(row.get('Qtd.') or 0) 
-                                novo_qtd = st.number_input("Quantidade (Editável)", value=qtd_valor, min_value=0, step=1, key=f"qtd_{chamado_id_interno}")
+                                # --- >>> CORREÇÃO DO ERRO (v3) <<< ---
+                                # 1. Pega o valor (pode ser float, int, None, ou NaN)
+                                qtd_valor_raw = row.get('Qtd.')
+                                # 2. Converte para int (0 se for None ou NaN)
+                                qtd_valor = int(qtd_valor_raw) if pd.notna(qtd_valor_raw) else 0
+                                # 3. Passa o int para o number_input
+                                nova_qtd = st.number_input("Quantidade (Editável)", value=qtd_valor, min_value=0, step=1, key=f"qtd_{chamado_id_interno}")
                                 # --- >>> FIM DA CORREÇÃO <<< ---
 
                                 status_fin_opts = ["Pendente", "Faturado", "Concluído", "N/A"]
@@ -298,17 +296,18 @@ def tela_dados_agencia():
                             
                             if btn_salvar_chamado:
                                 updates = {
-                                    "data_agendamento": novo_agendamento,
-                                    "data_fechamento": novo_fechamento,
-                                    "observacao": nova_observacao,
-                                    "sistema": novo_sistema,
-                                    "servico": novo_servico,
-                                    "nome_equipamento": novo_equip,
-                                    "quantidade": nova_qtd,
-                                    "status_financeiro": novo_status_financeiro
+                                    "Data Agendamento": novo_agendamento,
+                                    "Data Finalização": novo_fechamento,
+                                    "Observação": nova_observacao,
+                                    "Sistema": novo_sistema,
+                                    "Serviço": novo_servico,
+                                    "Nome Equipamento": novo_equip,
+                                    "Quantidade": nova_qtd,
+                                    "Status Financeiro": novo_status_financeiro
                                 }
                                 with st.spinner("Salvando..."):
-                                    sucesso = utils_chamados.atualizar_chamado_db(chamado_id_interno, updates) # Usa o ID interno
+                                    # Atualiza usando o ID INTERNO (único)
+                                    sucesso = utils_chamados.atualizar_chamado_db(chamado_id_interno, updates) 
                                     if sucesso:
                                         st.success(f"Chamado {chamado_id_str} atualizado com sucesso!")
                                         st.rerun()
