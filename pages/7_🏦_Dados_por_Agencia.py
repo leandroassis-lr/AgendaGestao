@@ -21,10 +21,8 @@ if "logado" not in st.session_state or not st.session_state.logado:
 # Função Helper para converter datas (evita erros)
 def _to_date_safe(val):
     if val is None or pd.isna(val): return None
-    # Se já for um objeto 'date' (não datetime), retorna direto
     if isinstance(val, date) and not isinstance(val, datetime): return val
     try:
-        # Tenta converter
         ts = pd.to_datetime(val, errors='coerce', dayfirst=True) 
         if pd.isna(ts): return None
         return ts.date()
@@ -60,67 +58,89 @@ def formatar_agencia_excel(id_agencia, nome_agencia):
           nome_str = nome_str[len(id_agencia_limpo):].strip(" -")
     return f"{id_str} - {nome_str}"
 
+# --- 1. DIALOG (POP-UP) DE IMPORTAÇÃO ---
+# Esta função define o conteúdo do pop-up
+@st.dialog("Importar Novos Chamados (Excel/CSV)")
+def run_importer_dialog():
+    st.info(f"""
+            Arraste seu arquivo Excel de chamados (formato `.xlsx` ou `.csv` com `;`) aqui.
+            O sistema espera que a **primeira linha** contenha os cabeçalhos.
+            As colunas necessárias (A, B, C, D, J, K, L, M, N, O, Q, T) serão lidas automaticamente.
+            Se um `Chamado` (Coluna A) já existir, ele será **atualizado**.
+    """)
+    uploaded_file = st.file_uploader("Selecione o arquivo Excel/CSV de chamados", type=["xlsx", "xls", "csv"], key="chamado_uploader_dialog")
+
+    if uploaded_file is not None:
+        try:
+            if uploaded_file.name.endswith('.csv'):
+                df_raw = pd.read_csv(uploaded_file, sep=';', header=0, encoding='latin-1', keep_default_na=False, dtype=str) 
+            else:
+                df_raw = pd.read_excel(uploaded_file, header=0, keep_default_na=False, dtype=str) 
+
+            df_raw.dropna(how='all', inplace=True)
+            if df_raw.empty: 
+                st.error("Erro: O arquivo está vazio.")
+                return # Para o dialog
+
+            col_map = {
+                0: 'chamado_id', 1: 'agencia_id', 2: 'agencia_nome', 3: 'agencia_uf',
+                9: 'servico', 10: 'projeto_nome', 11: 'data_agendamento', 12: 'sistema',
+                13: 'cod_equipamento', 14: 'nome_equipamento', 
+                16: 'quantidade', # Coluna Q (Quantidade_Solicitada)
+                19: 'gestor'
+            }
+            df_para_salvar = extrair_e_mapear_colunas(df_raw, col_map)
+            
+            if df_para_salvar is not None:
+                st.success("Arquivo lido. Pré-visualização dos dados extraídos:")
+                st.dataframe(df_para_salvar.head(), use_container_width=True)
+                
+                if st.button("▶️ Iniciar Importação de Chamados"):
+                    if df_para_salvar.empty: 
+                        st.error("Planilha vazia ou colunas não encontradas.")
+                    else:
+                        with st.spinner("Importando e atualizando chamados..."):
+                            reverse_map = {
+                                'chamado_id': 'Chamado', 'agencia_id': 'Codigo_Ponto', 'agencia_nome': 'Nome',
+                                'agencia_uf': 'UF', 'servico': 'Servico', 'projeto_nome': 'Projeto',
+                                'data_agendamento': 'Data_Agendamento', 'sistema': 'Tipo_De_Solicitacao',
+                                'cod_equipamento': 'Sistema', 'nome_equipamento': 'Codigo_Equipamento',
+                                'quantidade': 'Quantidade_Solicitada', 
+                                'gestor': 'Substitui_Outro_Equipamento_(Sim/Não)'
+                            }
+                            df_final_para_salvar = df_para_salvar.rename(columns=reverse_map)
+                            sucesso, num_importados = utils_chamados.bulk_insert_chamados_db(df_final_para_salvar)
+                            if sucesso:
+                                st.success(f"🎉 {num_importados} chamados importados/atualizados com sucesso!")
+                                st.balloons()
+                                st.session_state.importer_done = True # Flag para fechar
+                            else:
+                                st.error("A importação de chamados falhou.")
+        except Exception as e:
+            st.error(f"Erro ao ler o arquivo: {e}")
+
+    # Se a importação terminou, o rerun() fecha o dialog
+    if st.session_state.get("importer_done", False):
+        st.session_state.importer_done = False # Reseta a flag
+        st.rerun()
+
+    if st.button("Cancelar"):
+        st.rerun() # Fecha o dialog
+
 
 # --- Tela Principal da Página ---
 def tela_dados_agencia():
-    st.markdown("<div class='section-title-center'>GESTÃO DE DADOS POR AGÊNCIA</div>", unsafe_allow_html=True)
-    st.write(" ")
     
+    # --- TÍTULO E BOTÃO DE IMPORTAR (NOVO LAYOUT) ---
+    c1, c2 = st.columns([3, 1])
+    with c1:
+        st.markdown("<div class='section-title-center'>GESTÃO DE DADOS POR AGÊNCIA</div>", unsafe_allow_html=True)
+    with c2:
+        if st.button("📥 Importar Novos Chamados", use_container_width=True):
+            run_importer_dialog() # Chama o pop-up
+    
+    st.write(" ")
     utils_chamados.criar_tabela_chamados()
-
-    # --- 1. Importador de Chamados ---
-    with st.expander("📥 Importar Novos Chamados (Excel/CSV)"):
-        # (O código do importador permanece o mesmo - omitido por brevidade)
-        st.info(f"""
-             Arraste seu arquivo Excel de chamados (formato `.xlsx` ou `.csv` com `;`) aqui.
-             O sistema espera que a **primeira linha** contenha os cabeçalhos.
-             As colunas necessárias (A, B, C, D, J, K, L, M, N, O, Q, T) serão lidas automaticamente.
-             Se um `Chamado` (Coluna A) já existir, ele será **atualizado**.
-        """)
-        uploaded_file = st.file_uploader("Selecione o arquivo Excel/CSV de chamados", type=["xlsx", "xls", "csv"], key="chamado_uploader")
-        if uploaded_file is not None:
-            try:
-                if uploaded_file.name.endswith('.csv'):
-                    df_raw = pd.read_csv(uploaded_file, sep=';', header=0, encoding='latin-1', keep_default_na=False, dtype=str) 
-                else:
-                    df_raw = pd.read_excel(uploaded_file, header=0, keep_default_na=False, dtype=str) 
-
-                df_raw.dropna(how='all', inplace=True)
-                if df_raw.empty: st.error("Erro: O arquivo está vazio."); st.stop()
-                
-                col_map = {
-                    0: 'chamado_id', 1: 'agencia_id', 2: 'agencia_nome', 3: 'agencia_uf',
-                    9: 'servico', 10: 'projeto_nome', 11: 'data_agendamento', 12: 'sistema',
-                    13: 'cod_equipamento', 14: 'nome_equipamento', 
-                    16: 'quantidade', 19: 'gestor'
-                }
-                df_para_salvar = extrair_e_mapear_colunas(df_raw, col_map)
-                
-                if df_para_salvar is not None:
-                    st.success("Arquivo lido. Pré-visualização dos dados extraídos:")
-                    st.dataframe(df_para_salvar.head(), use_container_width=True)
-                    if st.button("▶️ Iniciar Importação de Chamados"):
-                        if df_para_salvar.empty: st.error("Planilha vazia ou colunas não encontradas.")
-                        else:
-                            with st.spinner("Importando e atualizando chamados..."):
-                                reverse_map = {
-                                    'chamado_id': 'Chamado', 'agencia_id': 'Codigo_Ponto', 'agencia_nome': 'Nome',
-                                    'agencia_uf': 'UF', 'servico': 'Servico', 'projeto_nome': 'Projeto',
-                                    'data_agendamento': 'Data_Agendamento', 'sistema': 'Tipo_De_Solicitacao',
-                                    'cod_equipamento': 'Sistema', 'nome_equipamento': 'Codigo_Equipamento',
-                                    'quantidade': 'Quantidade_Solicitada', 
-                                    'gestor': 'Substitui_Outro_Equipamento_(Sim/Não)'
-                                }
-                                df_final_para_salvar = df_para_salvar.rename(columns=reverse_map)
-                                sucesso, num_importados = utils_chamados.bulk_insert_chamados_db(df_final_para_salvar)
-                                if sucesso:
-                                    st.success(f"🎉 {num_importados} chamados importados/atualizados com sucesso!")
-                                    st.balloons(); st.rerun() 
-                                else:
-                                    st.error("A importação de chamados falhou.")
-            except Exception as e:
-                st.error(f"Erro ao ler o arquivo: {e}")
-
     st.divider()
 
     # --- 2. Carregar Dados ---
@@ -132,7 +152,7 @@ def tela_dados_agencia():
         st.stop()
 
     # --- 3. Criar Campo Combinado de Agência ---
-    if not df_chamados_raw.empty and 'Cód. Agência' in df_chamados_raw.columns:
+    if 'Cód. Agência' in df_chamados_raw.columns:
         df_chamados_raw['Agencia_Combinada'] = df_chamados_raw.apply(
             lambda row: formatar_agencia_excel(row['Cód. Agência'], row['Nome Agência']), 
             axis=1
@@ -144,7 +164,6 @@ def tela_dados_agencia():
     status_options = ["Não iniciada", "Em andamento", "Concluído", "Pendencia de infra", "Pendencia de equipamento", "Pausado", "Cancelado"]
     prioridade_options = ["Baixa", "Média", "Alta", "Crítica"]
     
-    # Listas dinâmicas do BD
     analista_list = sorted([str(a) for a in df_chamados_raw['Analista'].dropna().unique() if a])
     tecnico_list = sorted([str(t) for t in df_chamados_raw['Técnico'].dropna().unique() if t])
     projeto_list = sorted([str(p) for p in df_chamados_raw['Projeto'].dropna().unique() if p])
@@ -196,8 +215,6 @@ def tela_dados_agencia():
     # Prepara o DataFrame para agrupamento
     try:
         df_chamados_filtrado['Agendamento_str'] = pd.to_datetime(df_chamados_filtrado['Agendamento']).dt.strftime('%d/%m/%Y').fillna('Sem Data')
-        
-        # Garante que colunas de placeholder existam
         if 'Analista' not in df_chamados_filtrado.columns: df_chamados_filtrado['Analista'] = 'N/A'
         if 'Técnico' not in df_chamados_filtrado.columns: df_chamados_filtrado['Técnico'] = 'N/A'
         if 'Prioridade' not in df_chamados_filtrado.columns: df_chamados_filtrado['Prioridade'] = 'Média'
@@ -244,16 +261,13 @@ def tela_dados_agencia():
                 
                 with st.expander(header_projeto):
                     
-                    # Pega a primeira linha como representante
                     first_row = df_projeto.iloc[0]
-                    chamado_ids_internos_list = df_projeto['ID'].tolist() # IDs para o bulk update
-                    
-                    # --- NOVO FORMULÁRIO DE EDIÇÃO EM LOTE (NÍVEL 2) ---
+                    chamado_ids_internos_list = df_projeto['ID'].tolist()
                     form_key = f"form_bulk_edit_{first_row['ID']}"
+                    
                     with st.form(key=form_key):
                         st.markdown(f"**Editar todos os {len(df_projeto)} chamados deste projeto:**")
                         
-                        # --- LINHA 1: Informações e Prazos ---
                         st.markdown("<h6>Informações e Prazos</h6>", unsafe_allow_html=True)
                         c1, c2, c3, c4 = st.columns(4)
                         
@@ -270,7 +284,6 @@ def tela_dados_agencia():
                         final_val = _to_date_safe(first_row.get('Fechamento'))
                         nova_finalizacao = c4.date_input("Data Finalização", value=final_val, format="DD/MM/YYYY", key=f"{form_key}_final")
 
-                        # --- LINHA 2: Detalhes do Projeto ---
                         st.markdown("<h6>Detalhes do Projeto</h6>", unsafe_allow_html=True)
                         c1, c2, c3, c4 = st.columns(4)
                         
@@ -290,15 +303,12 @@ def tela_dados_agencia():
                         prior_idx = prioridade_options.index(prior_val) if prior_val in prioridade_options else 1
                         nova_prioridade = c4.selectbox("Prioridade", options=prioridade_options, index=prior_idx, key=f"{form_key}_prior")
 
-                        # --- LINHA 3: Detalhes do Projeto (cont.) ---
                         c1, c2, c3 = st.columns([2, 2, 1])
                         
                         ag_val = first_row.get('Agencia_Combinada', '')
-                        # Precisamos extrair o ID numérico para salvar no BD
                         ag_id_num = str(ag_val).split(" - ")[0].replace("AG ", "").lstrip('0')
                         ag_idx = agencia_list_no_todas.index(ag_val) if ag_val in agencia_list_no_todas else 0
                         nova_agencia_selecionada = c1.selectbox("Agência", options=agencia_list_no_todas, index=ag_idx, key=f"{form_key}_ag")
-                        # Extrai o ID da agência selecionada para salvar
                         nova_agencia_id = str(nova_agencia_selecionada).split(" - ")[0].replace("AG ", "").lstrip('0')
                         
                         tec_val = first_row.get('Técnico', '')
@@ -309,15 +319,9 @@ def tela_dados_agencia():
 
                     if btn_salvar_bulk:
                         updates = {
-                            "Status": novo_status,
-                            "Data Abertura": nova_abertura,
-                            "Data Agendamento": novo_agendamento,
-                            "Data Finalização": nova_finalizacao,
-                            "Projeto": novo_projeto,
-                            "Analista": novo_analista,
-                            "Gestor": novo_gestor,
-                            "Prioridade": nova_prioridade,
-                            "Agência": nova_agencia_id, # Salva o ID
+                            "Status": novo_status, "Data Abertura": nova_abertura, "Data Agendamento": novo_agendamento,
+                            "Data Finalização": nova_finalizacao, "Projeto": novo_projeto, "Analista": novo_analista,
+                            "Gestor": novo_gestor, "Prioridade": nova_prioridade, "Agência": nova_agencia_id,
                             "Técnico": novo_tecnico
                         }
                         
@@ -327,7 +331,7 @@ def tela_dados_agencia():
                                 if utils_chamados.atualizar_chamado_db(chamado_id, updates):
                                     sucesso_count += 1
                             
-                            st.cache_data.clear() # Limpa o cache APÓS o loop
+                            st.cache_data.clear()
                             st.success(f"{sucesso_count} de {len(chamado_ids_internos_list)} chamados foram atualizados!")
                             st.rerun()
                     
@@ -344,7 +348,6 @@ def tela_dados_agencia():
                             c1.text_input("Serviço", value=chamado_row.get('Serviço', 'N/A'), disabled=True, key=f"serv_{chamado_id_interno}")
                             c2.text_input("Sistema", value=chamado_row.get('Sistema', 'N/A'), disabled=True, key=f"sist_{chamado_id_interno}")
 
-                            # Descrição individual
                             qtd_val_numeric_ind = pd.to_numeric(chamado_row.get('Qtd.'), errors='coerce')
                             qtd_int_ind = int(qtd_val_numeric_ind) if pd.notna(qtd_val_numeric_ind) else 0
                             equip_str_ind = str(chamado_row.get('Equipamento', 'N/A'))
@@ -356,7 +359,7 @@ def tela_dados_agencia():
                                 key=f"desc_ind_{chamado_id_interno}"
                             )
                     
-                    # --- DESCRIÇÃO AGREGADA (Movida para o final) ---
+                    # --- DESCRIÇÃO AGREGADA (Final) ---
                     st.markdown("---")
                     descricao_list = []
                     for _, chamado_row_desc in df_projeto.iterrows():
@@ -369,7 +372,7 @@ def tela_dados_agencia():
                     st.text_area(
                         "Descrição (Total de Equipamentos do Projeto)", 
                         value=descricao_texto, 
-                        height=max(50, len(descricao_list) * 25 + 25), # Altura dinâmica
+                        height=max(50, len(descricao_list) * 25 + 25),
                         disabled=True,
                         key=f"desc_proj_{nome_agencia}_{nome_projeto}_{data_agend}"
                     )
