@@ -44,7 +44,10 @@ def criar_tabela_chamados():
                 'status_chamado': 'TEXT', 'valor_chamado': 'NUMERIC(10, 2) DEFAULT 0.00',
                 'status_financeiro': "TEXT DEFAULT 'Pendente'",
                 'observacao': 'TEXT', 
-                'log_chamado': 'TEXT'
+                'log_chamado': 'TEXT',
+                # --- NOVAS COLUNAS ADICIONADAS ---
+                'analista': 'TEXT',
+                'tecnico': 'TEXT'
             }
             
             # Pega colunas que já existem
@@ -89,9 +92,17 @@ def carregar_chamados_db(agencia_id_filtro=None):
             'descricao': 'Descrição', 'data_abertura': 'Abertura', 'data_fechamento': 'Fechamento',
             'status_chamado': 'Status', 'valor_chamado': 'Valor (R$)',
             'status_financeiro': 'Status Financeiro',
-            'observacao': 'Observação', 'log_chamado': 'Log do Chamado'
+            'observacao': 'Observação', 'log_chamado': 'Log do Chamado',
+            # --- NOVAS COLUNAS ADICIONADAS ---
+            'analista': 'Analista',
+            'tecnico': 'Técnico'
         }
         df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
+        
+        # Garante que as colunas existam no DF mesmo que vazias (para evitar erros na Pagina_7)
+        if 'Analista' not in df.columns: df['Analista'] = None
+        if 'Técnico' not in df.columns: df['Técnico'] = None
+
         return df
     except Exception as e:
         st.error(f"Erro ao carregar chamados: {e}"); return pd.DataFrame()
@@ -144,9 +155,11 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
     cols_to_insert = [
         'chamado_id', 'agencia_id', 'agencia_nome', 'agencia_uf', 'servico', 'projeto_nome', 
         'data_agendamento', 'sistema', 'cod_equipamento', 'nome_equipamento', 'quantidade', 'gestor',
-        'descricao', 'data_abertura', 'data_fechamento', 'status_chamado', 'valor_chamado'
+        'descricao', 'data_abertura', 'data_fechamento', 'status_chamado', 'valor_chamado',
+        # --- NOVAS COLUNAS ADICIONADAS (Elas não vêm do Excel, mas a função suporta) ---
+        'analista', 'tecnico' 
     ]
-                      
+                       
     df_final = df_to_insert[[col for col in cols_to_insert if col in df_to_insert.columns]]
     
     # --- CORREÇÃO DEFINITIVA (v5) - Trata DATAS e NÚMEROS ---
@@ -195,7 +208,8 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
             # Pega todos os campos editáveis para comparação
             cur.execute("""
                 SELECT data_agendamento, data_fechamento, observacao, log_chamado,
-                       sistema, servico, nome_equipamento, quantidade, status_financeiro
+                       sistema, servico, nome_equipamento, quantidade, status_financeiro,
+                       analista, tecnico 
                 FROM chamados WHERE id = %s
             """, (chamado_id_interno,))
             current_data_tuple = cur.fetchone()
@@ -204,7 +218,9 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
                 return False
 
             (current_agendamento, current_fechamento, current_obs, current_log,
-             current_sistema, current_servico, current_equip, current_qtd, current_fin) = current_data_tuple
+             current_sistema, current_servico, current_equip, current_qtd, current_fin,
+             current_analista, current_tecnico) = current_data_tuple
+             
             current_log = current_log or "" 
 
             # Normaliza os nomes das colunas
@@ -219,6 +235,9 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
                 elif "equipamento" in k: k = "nome_equipamento"
                 elif "quantidade" in k: k = "quantidade"
                 elif "financeiro" in k: k = "status_financeiro"
+                # --- NOVAS COLUNAS ADICIONADAS ---
+                elif "analista" in k: k = "analista"
+                elif "tecnico" in k: k = "tecnico"
                 
                 if isinstance(value, (datetime, date)): db_updates_raw[k] = value.strftime('%Y-%m-%d')
                 elif pd.isna(value): db_updates_raw[k] = None
@@ -239,7 +258,7 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
                         new_str = new_val_date.strftime('%d/%m/%Y') if isinstance(new_val_date, date) else "N/A"
                         log_entries.append(f"Em {hoje_str} por {usuario_logado}: {field_name} de '{old_str}' para '{new_str}'.")
                 elif str(new_val).strip() != str(old_val).strip():
-                     log_entries.append(f"Em {hoje_str} por {usuario_logado}: {field_name} de '{old_val}' para '{new_val}'.")
+                       log_entries.append(f"Em {hoje_str} por {usuario_logado}: {field_name} de '{old_val}' para '{new_val}'.")
 
             log_change("Agendamento", db_updates_raw.get('data_agendamento'), current_agendamento, is_date=True)
             log_change("Fechamento", db_updates_raw.get('data_fechamento'), current_fechamento, is_date=True)
@@ -249,6 +268,9 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
             log_change("Equipamento", db_updates_raw.get('nome_equipamento'), current_equip)
             log_change("Quantidade", db_updates_raw.get('quantidade'), current_qtd)
             log_change("Status Financeiro", db_updates_raw.get('status_financeiro'), current_fin)
+            # --- NOVAS COLUNAS ADICIONADAS ---
+            log_change("Analista", db_updates_raw.get('analista'), current_analista)
+            log_change("Técnico", db_updates_raw.get('tecnico'), current_tecnico)
             
             log_final = current_log; 
             if log_entries: log_final += ("\n" if current_log else "") + "\n".join(log_entries)
