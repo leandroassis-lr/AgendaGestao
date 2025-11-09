@@ -27,13 +27,13 @@ def extrair_e_mapear_colunas(df, col_map):
     df_extraido = pd.DataFrame()
     colunas_originais = df.columns.tolist()
     
+    # Validação para garantir que o arquivo não está totalmente fora do padrão
     if len(colunas_originais) < 20: # O seu arquivo tem 20+ colunas (T=19)
         st.error(f"Erro: O arquivo carregado parece ter apenas {len(colunas_originais)} colunas. O formato esperado não foi reconhecido.")
         return None
 
     try:
         # Pega os nomes das colunas originais do arquivo (da linha 1)
-        # (Ex: 'Chamado', 'Codigo_Ponto', 'Nome', etc.)
         col_nomes_originais = {
             idx: colunas_originais[idx] for idx in col_map.keys() if idx < len(colunas_originais)
         }
@@ -42,7 +42,6 @@ def extrair_e_mapear_colunas(df, col_map):
         df_para_renomear = df[col_nomes_originais.values()].copy()
         
         # Mapeia o Nome Original -> Nome do BD
-        # (Ex: 'Chamado' -> 'chamado_id')
         col_rename_map = {
              orig_name: db_name for idx, db_name in col_map.items() 
              if idx in col_nomes_originais and (orig_name := col_nomes_originais[idx])
@@ -52,6 +51,7 @@ def extrair_e_mapear_colunas(df, col_map):
         
     except KeyError as e:
         st.error(f"Erro ao mapear colunas. Coluna esperada {e} não encontrada no arquivo.")
+        st.error(f"Colunas encontradas: {colunas_originais}")
         return None
     except Exception as e:
         st.error(f"Erro ao processar colunas: {e}")
@@ -85,32 +85,45 @@ def tela_dados_agencia():
         st.info(f"""
             Arraste seu arquivo Excel de chamados (formato `.xlsx` ou `.csv` com `;`) aqui.
             O sistema espera que a **primeira linha** contenha os cabeçalhos.
-            As colunas necessárias (A, B, C, D, J, K, etc.) serão lidas automaticamente.
+            As colunas necessárias (baseado no arquivo 'RelatorioAnexo...'):
+            - **A:** Chamado (ID)
+            - **B:** Codigo_Ponto (ID Agência)
+            - **C:** Nome (Nome Agência)
+            - **D:** UF
+            - **J:** Servico
+            - **K:** Projeto
+            - **L:** Data_Agendamento
+            - **M:** Tipo_De_Solicitacao (será salvo como 'Sistema')
+            - **N:** Sistema (será salvo como 'Cód. Equipamento')
+            - **O:** Codigo_Equipamento (será salvo como 'Nome Equipamento')
+            - **Q:** Quantidade_Solicitada (será salvo como 'Quantidade')
+            - **T:** Gestor
+            
+            Se um `Chamado` (Coluna A) já existir, ele será **atualizado**.
         """)
         uploaded_file = st.file_uploader("Selecione o arquivo Excel/CSV de chamados", type=["xlsx", "xls", "csv"], key="chamado_uploader")
 
         if uploaded_file is not None:
             try:
-                # --- CORREÇÃO: Lê o arquivo a partir da LINHA 1 (índice 0) ---
+                # Lê o arquivo a partir da LINHA 1 (índice 0)
                 if uploaded_file.name.endswith('.csv'):
                     df_raw = pd.read_csv(uploaded_file, sep=';', header=0, encoding='latin-1', keep_default_na=False) 
                 else:
                     df_raw = pd.read_excel(uploaded_file, header=0, keep_default_na=False) 
-                # --- FIM DA CORREÇÃO ---
 
-                # Remove linhas completamente vazias (se houver)
                 df_raw.dropna(how='all', inplace=True)
-
                 if df_raw.empty:
                     st.error("Erro: O arquivo está vazio ou não foi lido corretamente.")
                     st.stop()
 
-                # --- Mapeamento (Conforme sua solicitação A, B, C...) ---
-                # Coluna A=0, B=1, C=2, D=3, J=9, K=10, L=11, M=12, N=13, O=14, P=15, T=19
+                # --- >>> CORREÇÃO DO MAPEAMENTO <<< ---
+                # Coluna A=0, B=1, C=2, D=3, J=9, K=10, L=11, M=12, N=13, O=14, Q=16, T=19
                 col_map = {
                     0: 'chamado_id', 1: 'agencia_id', 2: 'agencia_nome', 3: 'agencia_uf',
                     9: 'servico', 10: 'projeto_nome', 11: 'data_agendamento', 12: 'sistema',
-                    13: 'cod_equipamento', 14: 'nome_equipamento', 15: 'quantidade', 19: 'gestor'
+                    13: 'cod_equipamento', 14: 'nome_equipamento', 
+                    16: 'quantidade', # <<< CORRIGIDO: P (15) -> Q (16)
+                    19: 'gestor'
                 }
                 
                 df_para_salvar = extrair_e_mapear_colunas(df_raw, col_map)
@@ -124,13 +137,14 @@ def tela_dados_agencia():
                             st.error("Planilha vazia ou colunas não encontradas.")
                         else:
                             with st.spinner("Importando e atualizando chamados..."):
-                                # --- Renomeia colunas para o formato que 'bulk_insert_chamados_db' espera ---
+                                # Renomeia colunas para o formato que 'bulk_insert_chamados_db' espera
                                 reverse_map = {
                                     'chamado_id': 'Chamado', 'agencia_id': 'Codigo_Ponto', 'agencia_nome': 'Nome',
                                     'agencia_uf': 'UF', 'servico': 'Servico', 'projeto_nome': 'Projeto',
                                     'data_agendamento': 'Data_Agendamento', 'sistema': 'Tipo_De_Solicitacao',
                                     'cod_equipamento': 'Sistema', 'nome_equipamento': 'Codigo_Equipamento',
-                                    'quantidade': 'Nome_Equipamento', 'gestor': 'Substitui_Outro_Equipamento_(Sim/Não)'
+                                    'quantidade': 'Quantidade_Solicitada', # <<< CORRIGIDO
+                                    'gestor': 'Substitui_Outro_Equipamento_(Sim/Não)'
                                 }
                                 df_final_para_salvar = df_para_salvar.rename(columns=reverse_map)
 
@@ -181,7 +195,9 @@ def tela_dados_agencia():
     if agencia_selecionada == "Todas":
         df_chamados_filtrado = df_chamados_raw
     else:
-        df_chamados_filtrado = df_chamados_raw[df_chamados_raw['Agencia_Combinada'] == agencia_selecionada]
+        # Filtra pelo Cód. Agência, não pelo nome combinado, para ser mais preciso
+        agencia_id_filtro = agencia_selecionada.split(" - ")[0].replace("AG ", "").lstrip('0')
+        df_chamados_filtrado = df_chamados_raw[df_chamados_raw['Cód. Agência'].astype(str) == agencia_id_filtro]
 
     # --- 6. Painel Financeiro e KPIs ---
     total_chamados = len(df_chamados_filtrado)
@@ -208,10 +224,7 @@ def tela_dados_agencia():
     if df_chamados_filtrado.empty:
         st.info("Nenhum chamado encontrado para esta agência.")
     else:
-        # Trata nulos na coluna 'Projeto' antes de agrupar
         df_chamados_filtrado['Projeto'] = df_chamados_filtrado['Projeto'].fillna('Projeto Não Especificado')
-        
-        # Agrupa os chamados filtrados por 'Projeto'
         df_chamados_por_projeto = df_chamados_filtrado.groupby('Projeto')
         
         for projeto_nome, chamados_do_projeto in df_chamados_por_projeto:
@@ -220,7 +233,6 @@ def tela_dados_agencia():
             header = f"**{str(projeto_nome).upper()}** ({total_chamados_projeto} chamados) | **Valor Total:** R$ {valor_projeto:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
             
             with st.expander(header, expanded=False): 
-                # Acompanhamento de Fechamento (por projeto)
                 status_fechamento = ['fechado', 'concluido', 'resolvido', 'cancelado', 'encerrado']
                 chamados_abertos_proj = len(chamados_do_projeto[~chamados_do_projeto['Status'].astype(str).str.lower().isin(status_fechamento)])
                 
@@ -229,7 +241,6 @@ def tela_dados_agencia():
                 else:
                     st.success("Todos os chamados deste projeto estão fechados.")
 
-                # Tabela de Chamados
                 colunas_chamados_visiveis = ['Nº Chamado', 'Descrição', 'Status', 'Abertura', 'Fechamento', 'Equipamento', 'Qtd.', 'Gestor']
                 colunas_chamados = [col for col in colunas_chamados_visiveis if col in chamados_do_projeto.columns]
                 st.dataframe(chamados_do_projeto[colunas_chamados], use_container_width=True, hide_index=True)
