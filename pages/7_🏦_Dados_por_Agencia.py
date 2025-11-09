@@ -155,7 +155,7 @@ def run_importer_dialog():
         st.rerun()
 
 
-# --- FUNÇÃO "CÉREBRO" DE STATUS (COM CORREÇÃO) ---
+# --- FUNÇÃO "CÉREBRO" DE STATUS ---
 def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
     """
     Calcula o novo status de um projeto com base nas suas regras de negócio
@@ -164,28 +164,20 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
     has_S = df_projeto['Nº Chamado'].str.contains('-S-').any()
     has_E = df_projeto['Nº Chamado'].str.contains('-E-').any()
     
-    # --- INÍCIO DA CORREÇÃO ---
-    # Funções helper seguras para checar colunas que podem não existir
-    
     def check_col_present(df, col_name):
-        """Verifica se algum valor 'truthy' (não-vazio) existe na coluna."""
         if col_name in df.columns:
-            # .ne('') é 'not equal to empty string'
             return df[col_name].fillna('').astype(str).str.strip().ne('').any()
-        return False # Se a coluna não existe, considera que não há valores
+        return False
 
     def check_date_present(df, col_name):
-        """Verifica se alguma data válida (não-nula) existe na coluna."""
         if col_name in df.columns:
             return df[col_name].notna().any()
-        return False # Se a coluna não existe, considera que não há datas
+        return False
     
-    # Usa as funções seguras
     link_presente = check_col_present(df_projeto, 'Link Externo')
     pedido_presente = check_col_present(df_projeto, 'Nº Pedido')
     envio_presente = check_date_present(df_projeto, 'Data Envio')
     tecnico_presente = check_col_present(df_projeto, 'Técnico')
-    # --- FIM DA CORREÇÃO ---
     
     novo_status = "Indefinido"
 
@@ -237,6 +229,76 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
 
 # --- Tela Principal da Página ---
 def tela_dados_agencia():
+    
+    # --- NOVO: CSS customizado para o Card (Layout da Foto 1) ---
+    st.markdown("""
+        <style>
+            /* Injeta os estilos do card */
+            .card-grid {
+                display: grid;
+                grid-template-columns: 2.5fr 2fr 2.5fr 2.5fr; /* 4 colunas */
+                gap: 16px;
+                align-items: start;
+            }
+            .card-grid h5 { /* Título do Projeto */
+                margin-top: 5px;
+                margin-bottom: 0;
+                font-size: 1.15rem;
+                font-weight: 700;
+                color: var(--gray-darkest);
+            }
+            .card-grid .date {
+                font-weight: 600;
+                font-size: 0.95rem;
+                color: var(--gray-dark);
+            }
+            .card-grid .label {
+                font-size: 0.85rem;
+                color: #555;
+                margin-bottom: 0;
+            }
+            .card-grid .value {
+                font-size: 0.95rem;
+                font-weight: 500;
+                color: var(--gray-darkest);
+                margin-bottom: 8px; /* Espaço entre linhas */
+            }
+            .card-grid .sla {
+                font-size: 0.9rem;
+                font-weight: 600;
+                margin-top: 5px;
+            }
+            .card-status-badge {
+                background-color: #B0BEC5; /* Cor padrão 'Não Iniciado' */
+                color: white;
+                padding: 6px 12px;
+                border-radius: 20px;
+                font-weight: bold;
+                font-size: 0.85em;
+                display: inline-block;
+                width: 100%;
+                text-align: center;
+            }
+            .card-action-text {
+                text-align: center;
+                font-size: 0.9em;
+                font-weight: 600;
+                margin-top: 8px;
+                color: var(--primary-dark);
+            }
+            
+            /* Ajuste para o expander "Ver/Editar" ficar alinhado */
+            .project-card [data-testid="stExpander"] {
+                border: 1px solid var(--gray-border);
+                border-radius: var(--std-radius);
+                margin-top: 15px;
+            }
+            .project-card [data-testid="stExpander"] > summary {
+                font-weight: 600;
+                font-size: 0.95rem;
+            }
+        </style>
+    """, unsafe_allow_html=True)
     
     c1, c2 = st.columns([3, 1])
     with c1:
@@ -360,78 +422,132 @@ def tela_dados_agencia():
 
             for (nome_projeto, nome_gestor, data_agend), df_projeto in projetos_agrupados:
                 
-                nome_projeto_str = str(nome_projeto).upper()
-                nome_gestor_str = html.escape(str(nome_gestor))
+                # --- INÍCIO DA MUDANÇA (Layout de Card) ---
                 
-                header_projeto = f"Projeto: {nome_projeto_str} | Gestor: {nome_gestor_str} | Agendamento: {data_agend}"
+                first_row = df_projeto.iloc[0]
+                chamado_ids_internos_list = df_projeto['ID'].tolist()
+                status_principal_atual = first_row.get('Status', 'Não Iniciado')
                 
-                with st.expander(header_projeto):
+                # --- Cálculo do SLA (Placeholder) ---
+                sla_text = ""
+                try:
+                    agendamento_date = pd.to_datetime(data_agend, format='%d/%m/%Y')
+                    hoje = pd.Timestamp.now().normalize()
+                    dias_restantes = (agendamento_date - hoje).days
+                    if dias_restantes < 0:
+                        sla_text = f"<span style='color: var(--red-alert); font-weight: bold;'>SLA: {dias_restantes}d (Atrasado)</span>"
+                    else:
+                        sla_text = f"<span style='color: var(--primary-color);'>SLA: {dias_restantes}d restantes</span>"
+                except Exception:
+                    sla_text = "<span style='color: #888;'>SLA: N/D</span>"
+                
+                # --- Texto de Ação (Baseado no Status) ---
+                acao_text = "FINALIZADO" # Default
+                status_lower = status_principal_atual.lower()
+                if "não iniciado" in status_lower:
+                    acao_text = "INICIAR PROJETO"
+                elif "acionar técnico" in status_lower:
+                    acao_text = "ATRIBUIR TÉCNICO"
+                elif "solicitar equipamento" in status_lower:
+                    acao_text = "SOLICITAR EQUIPAMENTO"
+                elif "equipamento solicitado" in status_lower:
+                    acao_text = "REGISTRAR ENTREGA"
+                elif "equipamento entregue - acionar" in status_lower:
+                    acao_text = "ATRIBUIR TÉCNICO"
+                elif "em andamento" in status_lower:
+                    acao_text = "EM EXECUÇÃO"
+
+                # --- Cor do Gestor ---
+                gestor_color = utils_chamados.get_color_for_name(nome_gestor)
+                gestor_html = f"<span style='color: {gestor_color}; font-weight: 500;'>{html.escape(nome_gestor)}</span>"
+                
+                # --- Cor do Status ---
+                status_color = utils_chamados.get_status_color(status_principal_atual)
+                
+                # --- Monta o HTML do Card ---
+                card_html = f"""
+                <div class="project-card"> <div class="card-grid">
+                        
+                        <div>
+                            <div class="date">📅 {data_agend}</div>
+                            <h5>{html.escape(nome_projeto.upper())}</h5>
+                        </div>
+                        
+                        <div>
+                            <div class="label">Analista:</div>
+                            <div class="value">{html.escape(first_row.get('Analista', 'N/A'))}</div>
+                            <div class="sla">{sla_text}</div>
+                        </div>
+                        
+                        <div>
+                            <div class="label">Agência:</div>
+                            <div class="value">{html.escape(first_row.get('Agencia_Combinada', 'N/A'))}</div>
+                            <div class="label">Gestor:</div>
+                            <div class="value">{gestor_html}</div>
+                        </div>
+                        
+                        <div>
+                            <div class="card-status-badge" style="background-color: {status_color};">
+                                {html.escape(status_principal_atual.upper())}
+                            </div>
+                            <div class="card-action-text">{acao_text}</div>
+                        </div>
+                        
+                    </div>
+                """
+                
+                # Escreve o HTML do card
+                st.markdown(card_html, unsafe_allow_html=True)
+                
+                # --- Nível 3 (Expander com formulários) ---
+                # Agora o expander vai DENTRO do card
+                expander_title = f"Ver/Editar Detalhes - ID: {first_row['ID']}"
+                with st.expander(expander_title):
                     
-                    first_row = df_projeto.iloc[0]
-                    chamado_ids_internos_list = df_projeto['ID'].tolist()
-                    
-                    status_principal_atual = first_row.get('Status', 'Não Iniciado')
-                    st.info(f"**Status Principal do Projeto:** {status_principal_atual}")
-                    
+                    # --- Nível 2: Formulário de Edição em Lote (Igual antes) ---
                     form_key_lote = f"form_lote_edit_{first_row['ID']}"
-                    
                     with st.form(key=form_key_lote):
                         st.markdown(f"**Editar campos comuns (para {len(df_projeto)} chamados):**")
-                        
                         c1, c2, c3, c_btn = st.columns([2, 2, 1, 1])
                         
                         analista_val = first_row.get('Analista', '')
                         novo_analista = c1.text_input("Analista", value=analista_val, key=f"{form_key_lote}_analista")
-
                         tec_val = first_row.get('Técnico', '')
                         novo_tecnico = c2.text_input("Técnico", value=tec_val, key=f"{form_key_lote}_tec")
-                        
                         prior_val = first_row.get('Prioridade', 'Média')
                         prior_idx = prioridade_options.index(prior_val) if prior_val in prioridade_options else 1
                         nova_prioridade = c3.selectbox("Prioridade", options=prioridade_options, index=prior_idx, key=f"{form_key_lote}_prior")
-
                         btn_salvar_lote = c_btn.form_submit_button("💾 Salvar Lote", use_container_width=True)
 
                     if btn_salvar_lote:
-                        updates = {
-                            "Analista": novo_analista,
-                            "Técnico": novo_tecnico,
-                            "Prioridade": nova_prioridade
-                        }
-                        
+                        updates = {"Analista": novo_analista, "Técnico": novo_tecnico, "Prioridade": nova_prioridade}
                         with st.spinner(f"Atualizando {len(chamado_ids_internos_list)} chamados..."):
                             sucesso_count = 0
                             for chamado_id in chamado_ids_internos_list:
                                 if utils_chamados.atualizar_chamado_db(chamado_id, updates):
                                     sucesso_count += 1
-                            
                             st.success(f"{sucesso_count} de {len(chamado_ids_internos_list)} chamados foram atualizados!")
                             
                             df_chamados_atualizado = utils_chamados.carregar_chamados_db()
                             df_projeto_atualizado = df_chamados_atualizado[df_chamados_atualizado['ID'].isin(chamado_ids_internos_list)]
                             
                             if calcular_e_atualizar_status_projeto(df_projeto_atualizado, chamado_ids_internos_list):
-                                st.cache_data.clear()
-                                st.rerun()
+                                st.cache_data.clear(); st.rerun()
                             else:
-                                st.cache_data.clear()
-                                st.rerun()
+                                st.cache_data.clear(); st.rerun()
                     
+                    # --- Nível 3: Formulário Individual (Igual antes) ---
                     st.markdown("---")
                     st.markdown("##### 🔎 Detalhes por Chamado Individual")
-
                     for _, chamado_row in df_projeto.iterrows():
                         chamado_id_interno = chamado_row['ID']
                         chamado_id_str = chamado_row['Nº Chamado']
-                        
                         form_key_ind = f"form_ind_edit_{chamado_id_interno}"
                         
                         with st.expander(f"▶️ Chamado: {chamado_id_str}"):
                             with st.form(key=form_key_ind):
-                                
                                 is_servico = '-S-' in chamado_id_str
                                 is_equipamento = '-E-' in chamado_id_str
-                                
                                 updates_individuais = {}
                                 
                                 if is_servico:
@@ -447,7 +563,6 @@ def tela_dados_agencia():
                                 if is_equipamento:
                                     st.markdown("**Gatilhos de Equipamento (-E-)**")
                                     c1, c2 = st.columns(2)
-                                    
                                     pedido_val = chamado_row.get('Nº Pedido', '')
                                     novo_pedido = c1.text_input("Nº Pedido", value=pedido_val, key=f"{form_key_ind}_pedido")
                                     updates_individuais['Nº Pedido'] = novo_pedido
@@ -455,11 +570,11 @@ def tela_dados_agencia():
                                     envio_val = _to_date_safe(chamado_row.get('Data Envio'))
                                     nova_data_envio = c2.date_input("Data Envio", value=envio_val, format="DD/MM/YYYY", key=f"{form_key_ind}_envio")
                                     updates_individuais['Data Envio'] = nova_data_envio
-
+                                    
                                     obs_val = chamado_row.get('Obs. Equipamento', '')
                                     nova_obs_equip = st.text_area("Obs. Equipamento", value=obs_val, height=100, key=f"{form_key_ind}_obs_equip")
                                     updates_individuais['Obs. Equipamento'] = nova_obs_equip
-
+                                
                                 st.markdown("**Informações do Chamado**")
                                 c1, c2 = st.columns(2)
                                 c1.text_input("Serviço", value=chamado_row.get('Serviço', 'N/A'), disabled=True)
@@ -471,19 +586,17 @@ def tela_dados_agencia():
                                 with st.spinner(f"Salvando chamado {chamado_id_str}..."):
                                     if utils_chamados.atualizar_chamado_db(chamado_id_interno, updates_individuais):
                                         st.success("Chamado salvo!")
-                                        
                                         df_chamados_atualizado = utils_chamados.carregar_chamados_db()
                                         df_projeto_atualizado = df_chamados_atualizado[df_chamados_atualizado['ID'].isin(chamado_ids_internos_list)]
                                         
                                         if calcular_e_atualizar_status_projeto(df_projeto_atualizado, chamado_ids_internos_list):
-                                            st.cache_data.clear()
-                                            st.rerun()
+                                            st.cache_data.clear(); st.rerun()
                                         else:
-                                            st.cache_data.clear()
-                                            st.rerun()
+                                            st.cache_data.clear(); st.rerun()
                                     else:
                                         st.error("Falha ao salvar o chamado.")
                     
+                    # --- Descrição Agregada (Igual antes) ---
                     st.markdown("---")
                     st.markdown("##### Descrição (Total de Equipamentos do Projeto)")
                     descricao_list = []
@@ -502,6 +615,9 @@ def tela_dados_agencia():
                         key=f"desc_proj_{nome_agencia}_{nome_projeto}_{data_agend}",
                         label_visibility="collapsed"
                     )
+                
+                # Fecha o <div> do project-card
+                st.markdown("</div>", unsafe_allow_html=True)
 
 # --- Ponto de Entrada ---
 tela_dados_agencia()
