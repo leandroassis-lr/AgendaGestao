@@ -45,9 +45,10 @@ def criar_tabela_chamados():
                 'status_financeiro': "TEXT DEFAULT 'Pendente'",
                 'observacao': 'TEXT', 
                 'log_chamado': 'TEXT',
-                # --- NOVAS COLUNAS ADICIONADAS ---
                 'analista': 'TEXT',
-                'tecnico': 'TEXT'
+                'tecnico': 'TEXT',
+                # --- NOVA COLUNA ADICIONADA ---
+                'prioridade': "TEXT DEFAULT 'Média'"
             }
             
             # Pega colunas que já existem
@@ -73,7 +74,6 @@ def carregar_chamados_db(agencia_id_filtro=None):
         query = "SELECT * FROM chamados"
         params = []
         if agencia_id_filtro and agencia_id_filtro != "Todas":
-            # Extrai o ID (ex: "AG 0001 - NOME" -> "0001" ou "5099")
             match = re.search(r'(\d+)', agencia_id_filtro)
             agencia_id_num = match.group(1).lstrip('0') if match else agencia_id_filtro
             query += " WHERE agencia_id = %s"
@@ -82,7 +82,6 @@ def carregar_chamados_db(agencia_id_filtro=None):
         
         df = pd.read_sql_query(query, conn, params=params if params else None)
         
-        # Renomeia colunas do BD para nomes amigáveis
         rename_map = {
             'id': 'ID', 'chamado_id': 'Nº Chamado', 'agencia_id': 'Cód. Agência', 
             'agencia_nome': 'Nome Agência', 'agencia_uf': 'UF', 'servico': 'Serviço',
@@ -93,41 +92,34 @@ def carregar_chamados_db(agencia_id_filtro=None):
             'status_chamado': 'Status', 'valor_chamado': 'Valor (R$)',
             'status_financeiro': 'Status Financeiro',
             'observacao': 'Observação', 'log_chamado': 'Log do Chamado',
-            # --- NOVAS COLUNAS ADICIONADAS ---
             'analista': 'Analista',
-            'tecnico': 'Técnico'
+            'tecnico': 'Técnico',
+            # --- NOVA COLUNA ADICIONADA ---
+            'prioridade': 'Prioridade'
         }
         df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
         
-        # Garante que as colunas existam no DF mesmo que vazias (para evitar erros na Pagina_7)
+        # Garante que as colunas existam no DF (para evitar erros na Pagina_7)
         if 'Analista' not in df.columns: df['Analista'] = None
         if 'Técnico' not in df.columns: df['Técnico'] = None
+        if 'Prioridade' not in df.columns: df['Prioridade'] = 'Média' # Define um Padrão
 
         return df
     except Exception as e:
         st.error(f"Erro ao carregar chamados: {e}"); return pd.DataFrame()
 
-# --- 4. FUNÇÃO PARA IMPORTAR CHAMADOS (A que funcionou) ---
+# --- 4. FUNÇÃO PARA IMPORTAR CHAMADOS ---
 def bulk_insert_chamados_db(df: pd.DataFrame):
     """ Importa um DataFrame de chamados para o banco (UPSERT). """
     if not conn: return False, 0
     
-    # Mapeamento do Excel/CSV -> colunas do banco
     column_map = {
-        'Chamado': 'chamado_id',
-        'Codigo_Ponto': 'agencia_id',
-        'Nome': 'agencia_nome',
-        'UF': 'agencia_uf',
-        'Servico': 'servico',
-        'Projeto': 'projeto_nome',
-        'Data_Agendamento': 'data_agendamento',
-        'Tipo_De_Solicitacao': 'sistema', # M
-        'Sistema': 'cod_equipamento',     # N
-        'Codigo_Equipamento': 'nome_equipamento', # O
-        'Quantidade_Solicitada': 'quantidade',     # Q
-        'Substitui_Outro_Equipamento_(Sim/Não)': 'gestor' # T
+        'Chamado': 'chamado_id', 'Codigo_Ponto': 'agencia_id', 'Nome': 'agencia_nome',
+        'UF': 'agencia_uf', 'Servico': 'servico', 'Projeto': 'projeto_nome',
+        'Data_Agendamento': 'data_agendamento', 'Tipo_De_Solicitacao': 'sistema',
+        'Sistema': 'cod_equipamento', 'Codigo_Equipamento': 'nome_equipamento',
+        'Quantidade_Solicitada': 'quantidade', 'Substitui_Outro_Equipamento_(Sim/Não)': 'gestor'
     }
-    
     df_to_insert = df.rename(columns={k: v for k, v in column_map.items() if k in df.columns})
 
     if 'chamado_id' not in df_to_insert.columns:
@@ -137,11 +129,9 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         st.error("Erro: A planilha deve conter a coluna 'Codigo_Ponto' (ID da Agência).")
         return False, 0
 
-    # --- Tratamento de Tipos ---
     cols_data = ['data_abertura', 'data_fechamento', 'data_agendamento']
     for col in cols_data:
         if col in df_to_insert.columns:
-            # Força o pandas a ler datas no formato brasileiro (DD/MM/AAAA)
             df_to_insert[col] = pd.to_datetime(df_to_insert[col], errors='coerce', dayfirst=True)
         else:
             df_to_insert[col] = None 
@@ -149,36 +139,27 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
     if 'valor_chamado' in df_to_insert.columns:
          df_to_insert['valor_chamado'] = pd.to_numeric(df_to_insert['valor_chamado'], errors='coerce').fillna(0.0)
     if 'quantidade' in df_to_insert.columns:
-         # Converte para Int64 do Pandas, que aceita nulos (NaN)
          df_to_insert['quantidade'] = pd.to_numeric(df_to_insert['quantidade'], errors='coerce').astype('Int64')
 
     cols_to_insert = [
         'chamado_id', 'agencia_id', 'agencia_nome', 'agencia_uf', 'servico', 'projeto_nome', 
         'data_agendamento', 'sistema', 'cod_equipamento', 'nome_equipamento', 'quantidade', 'gestor',
         'descricao', 'data_abertura', 'data_fechamento', 'status_chamado', 'valor_chamado',
-        # --- NOVAS COLUNAS ADICIONADAS (Elas não vêm do Excel, mas a função suporta) ---
-        'analista', 'tecnico' 
+        'analista', 'tecnico', 'prioridade' # Adicionado aqui
     ]
                        
     df_final = df_to_insert[[col for col in cols_to_insert if col in df_to_insert.columns]]
     
-    # --- CORREÇÃO DEFINITIVA (v5) - Trata DATAS e NÚMEROS ---
     values = []
     for record in df_final.to_records(index=False):
         processed_record = []
         for cell in record:
-            if pd.isna(cell) or cell is pd.NaT:
-                processed_record.append(None) # Converte NaT, NaN, pd.NA para None
-            elif isinstance(cell, (np.int64, np.int32, np.int16, np.int8, pd.Int64Dtype.type)):
-                processed_record.append(int(cell)) # Converte numpy int/Int64 para python int
-            elif isinstance(cell, (np.float64, np.float32)):
-                processed_record.append(float(cell)) # Converte numpy float para python float
-            elif isinstance(cell, (pd.Timestamp, datetime, np.datetime64)):
-                processed_record.append(cell.date()) # Converte datetime para date
-            else:
-                processed_record.append(str(cell) if cell is not None else None) 
+            if pd.isna(cell) or cell is pd.NaT: processed_record.append(None)
+            elif isinstance(cell, (np.int64, np.int32, np.int16, np.int8, pd.Int64Dtype.type)): processed_record.append(int(cell))
+            elif isinstance(cell, (np.float64, np.float32)): processed_record.append(float(cell))
+            elif isinstance(cell, (pd.Timestamp, datetime, np.datetime64)): processed_record.append(cell.date())
+            else: processed_record.append(str(cell) if cell is not None else None) 
         values.append(tuple(processed_record))
-    # --- FIM DA CORREÇÃO ---
     
     cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns)); placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
     
@@ -199,17 +180,15 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
     """ Atualiza um chamado existente no banco de dados e gera log. """
     if not conn: return False
     
-    usuario_logado = "Usuario" 
-    if "usuario" in st.session_state:
-        usuario_logado = st.session_state.get('usuario', 'Sistema') 
+    usuario_logado = st.session_state.get('usuario', 'Sistema') 
     
     try:
         with conn.cursor() as cur:
-            # Pega todos os campos editáveis para comparação
             cur.execute("""
                 SELECT data_agendamento, data_fechamento, observacao, log_chamado,
                        sistema, servico, nome_equipamento, quantidade, status_financeiro,
-                       analista, tecnico 
+                       analista, tecnico, prioridade, status_chamado, projeto_nome, gestor,
+                       agencia_id, data_abertura
                 FROM chamados WHERE id = %s
             """, (chamado_id_interno,))
             current_data_tuple = cur.fetchone()
@@ -219,14 +198,14 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
 
             (current_agendamento, current_fechamento, current_obs, current_log,
              current_sistema, current_servico, current_equip, current_qtd, current_fin,
-             current_analista, current_tecnico) = current_data_tuple
+             current_analista, current_tecnico, current_prioridade, current_status,
+             current_projeto, current_gestor, current_agencia_id, current_abertura) = current_data_tuple
              
             current_log = current_log or "" 
 
-            # Normaliza os nomes das colunas
             db_updates_raw = {}
             for key, value in updates.items():
-                k = str(key).lower()
+                k = str(key).lower().replace(" ", "_")
                 if "agendamento" in k: k = "data_agendamento"
                 elif "finalizacao" in k or "fechamento" in k: k = "data_fechamento"
                 elif "observacao" in k: k = "observacao"
@@ -235,9 +214,14 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
                 elif "equipamento" in k: k = "nome_equipamento"
                 elif "quantidade" in k: k = "quantidade"
                 elif "financeiro" in k: k = "status_financeiro"
-                # --- NOVAS COLUNAS ADICIONADAS ---
                 elif "analista" in k: k = "analista"
                 elif "tecnico" in k: k = "tecnico"
+                elif "prioridade" in k: k = "prioridade"
+                elif "status" in k: k = "status_chamado" # Mapeia "Status" (do form)
+                elif "projeto" in k: k = "projeto_nome"
+                elif "gestor" in k: k = "gestor"
+                elif "agencia" in k: k = "agencia_id" # Mapeia "Agência" (do form)
+                elif "abertura" in k: k = "data_abertura"
                 
                 if isinstance(value, (datetime, date)): db_updates_raw[k] = value.strftime('%Y-%m-%d')
                 elif pd.isna(value): db_updates_raw[k] = None
@@ -245,7 +229,6 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
 
             log_entries = []; hoje_str = date.today().strftime('%d/%m/%Y')
             
-            # Função helper para comparar e logar
             def log_change(field_name, new_val, old_val, is_date=False):
                 if new_val is None: new_val = "" 
                 if old_val is None: old_val = "" 
@@ -260,7 +243,9 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
                 elif str(new_val).strip() != str(old_val).strip():
                        log_entries.append(f"Em {hoje_str} por {usuario_logado}: {field_name} de '{old_val}' para '{new_val}'.")
 
+            # Log para todos os campos do form
             log_change("Agendamento", db_updates_raw.get('data_agendamento'), current_agendamento, is_date=True)
+            log_change("Abertura", db_updates_raw.get('data_abertura'), current_abertura, is_date=True)
             log_change("Fechamento", db_updates_raw.get('data_fechamento'), current_fechamento, is_date=True)
             log_change("Observação", db_updates_raw.get('observacao'), current_obs)
             log_change("Sistema", db_updates_raw.get('sistema'), current_sistema)
@@ -268,17 +253,33 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
             log_change("Equipamento", db_updates_raw.get('nome_equipamento'), current_equip)
             log_change("Quantidade", db_updates_raw.get('quantidade'), current_qtd)
             log_change("Status Financeiro", db_updates_raw.get('status_financeiro'), current_fin)
-            # --- NOVAS COLUNAS ADICIONADAS ---
             log_change("Analista", db_updates_raw.get('analista'), current_analista)
             log_change("Técnico", db_updates_raw.get('tecnico'), current_tecnico)
+            log_change("Prioridade", db_updates_raw.get('prioridade'), current_prioridade)
+            log_change("Status", db_updates_raw.get('status_chamado'), current_status)
+            log_change("Projeto", db_updates_raw.get('projeto_nome'), current_projeto)
+            log_change("Gestor", db_updates_raw.get('gestor'), current_gestor)
+            log_change("Agência ID", db_updates_raw.get('agencia_id'), current_agencia_id)
             
             log_final = current_log; 
             if log_entries: log_final += ("\n" if current_log else "") + "\n".join(log_entries)
-            db_updates_raw['log_chamado'] = log_final if log_final else None 
             
-            # Permite salvar valores vazios (None)
-            updates_final = {k: v for k, v in db_updates_raw.items()}
-            # Adiciona o log
+            # --- ATUALIZAÇÃO IMPORTANTE ---
+            # Pega apenas as chaves que REALMENTE estão no 'updates'
+            # E adiciona o log
+            updates_final = {}
+            for k in db_updates_raw:
+                if k in [
+                    'data_agendamento', 'data_fechamento', 'observacao', 'sistema', 
+                    'servico', 'nome_equipamento', 'quantidade', 'status_financeiro',
+                    'analista', 'tecnico', 'prioridade', 'status_chamado', 'projeto_nome',
+                    'gestor', 'agencia_id', 'data_abertura'
+                ]:
+                    updates_final[k] = db_updates_raw[k]
+
+            if not updates_final and not log_entries:
+                return True # Nada para atualizar
+
             updates_final['log_chamado'] = log_final if log_final else None
             
             set_clause = sql.SQL(', ').join(sql.SQL("{} = {}").format(sql.Identifier(k), sql.Placeholder()) for k in updates_final.keys())
@@ -287,7 +288,8 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
             
             cur.execute(query, vals)
 
-        st.cache_data.clear(); return True
+        # REMOVIDO: st.cache_data.clear() - Isso agora é feito na Pagina_7
+        return True
     except Exception as e:
         st.toast(f"Erro CRÍTICO ao atualizar chamado ID {chamado_id_interno}: {e}", icon="🔥"); conn.rollback(); return False
 
@@ -302,7 +304,6 @@ def get_status_color(status):
     else: return "#64B5F6"  
 
 def get_color_for_name(name_str):
-    """Gera uma cor consistente de uma lista com base em um nome."""
     COLORS_LIST = ["#D32F2F", "#1976D2", "#388E3C", "#F57C00", "#7B1FA2", "#00796B", "#C2185B", "#5D4037", "#455A64"]
     if name_str is None or name_str == "N/A": return "#555" 
     name_normalized = str(name_str).strip().upper() 
