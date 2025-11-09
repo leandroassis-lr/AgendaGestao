@@ -29,11 +29,13 @@ def get_db_connection():
 
 conn = get_db_connection() 
 
-# (criar_tabelas_iniciais - Sem alterações)
+# (criar_tabelas_iniciais - ATUALIZADO)
 def criar_tabelas_iniciais():
+    """Cria as tabelas e adiciona colunas ausentes se não existirem."""
     if not conn: return
     try:
         with conn.cursor() as cur:
+            # 1. Tabela de projetos (sem alterações)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS projetos (
                     id SERIAL PRIMARY KEY, projeto TEXT, descricao TEXT, agencia TEXT, 
@@ -51,6 +53,8 @@ def criar_tabelas_iniciais():
                     permissao TEXT DEFAULT 'Usuario'
                 );
             """)
+
+            # --- Tabela de Chamados (ATUALIZADA) ---
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS chamados (
                     id SERIAL PRIMARY KEY, agencia_id TEXT, agencia_nome TEXT, agencia_uf TEXT,
@@ -58,37 +62,51 @@ def criar_tabelas_iniciais():
                     sistema TEXT, cod_equipamento TEXT, nome_equipamento TEXT, quantidade INTEGER,
                     gestor TEXT, descricao TEXT, data_abertura DATE, data_fechamento DATE,
                     status_chamado TEXT, valor_chamado NUMERIC(10, 2) DEFAULT 0.00,
-                    status_financeiro TEXT DEFAULT 'Pendente' 
+                    status_financeiro TEXT DEFAULT 'Pendente',
+                    observacao TEXT, -- <<< NOVA COLUNA
+                    log_chamado TEXT  -- <<< NOVA COLUNA
                 );
             """)
+            # --- FIM ---
+
+            # Verifica e ADICIONA colunas se faltarem
             colunas_a_verificar = {
                 'projetos': [('prioridade', "TEXT DEFAULT 'Média'"), ('links_referencia', 'TEXT')],
                 'usuarios': [('permissao', "TEXT DEFAULT 'Usuario'")],
-                'chamados': [ 
+                'chamados': [ # <<< ADICIONADO ESTE BLOCO
                     ('agencia_id', 'TEXT'), ('agencia_nome', 'TEXT'), ('agencia_uf', 'TEXT'),
                     ('servico', 'TEXT'), ('projeto_nome', 'TEXT'), ('data_agendamento', 'DATE'),
                     ('sistema', 'TEXT'), ('cod_equipamento', 'TEXT'), ('nome_equipamento', 'TEXT'),
                     ('quantidade', 'INTEGER'), ('gestor', 'TEXT'), ('descricao', 'TEXT'),
                     ('data_abertura', 'DATE'), ('data_fechamento', 'DATE'), ('status_chamado', 'TEXT'),
-                    ('valor_chamado', 'NUMERIC(10, 2) DEFAULT 0.00'), ('status_financeiro', "TEXT DEFAULT 'Pendente'")
+                    ('valor_chamado', 'NUMERIC(10, 2) DEFAULT 0.00'), ('status_financeiro', "TEXT DEFAULT 'Pendente'"),
+                    ('observacao', 'TEXT'), 
+                    ('log_chamado', 'TEXT') 
                 ]
             }
+            
             for tabela, colunas in colunas_a_verificar.items():
+                cur.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{tabela}';")
+                colunas_existentes = [row[0] for row in cur.fetchall()]
                 for coluna, tipo_coluna in colunas:
-                    cur.execute(f"SELECT 1 FROM information_schema.columns WHERE table_name = '{tabela}' AND column_name = '{coluna}';")
-                    if not cur.fetchone():
+                    if coluna not in colunas_existentes:
                         st.warning(f"Atualizando BD: Adicionando coluna '{coluna}' à tabela '{tabela}'...")
                         cur.execute(f"ALTER TABLE {tabela} ADD COLUMN {coluna} {tipo_coluna};")
                         st.success(f"Coluna '{coluna}' adicionada.")
+            
     except Exception as e:
         st.error(f"Erro ao criar/verificar tabelas: {e}")
+# --- >>> FIM DA ATUALIZAÇÃO <<< ---
 
-# (_normalize_and_sanitize - Sem alterações)
+
+# (_normalize_and_sanitize - ATUALIZADO)
 def _normalize_and_sanitize(data_dict: dict):
     normalized = {}
     for key, value in data_dict.items():
         k = str(key).lower(); k = re.sub(r'[áàâãä]', 'a', k); k = re.sub(r'[éèêë]', 'e', k); k = re.sub(r'[íìîï]', 'i', k); k = re.sub(r'[óòôõö]', 'o', k); k = re.sub(r'[úùûü]', 'u', k); k = re.sub(r'[ç]', 'c', k); k = re.sub(r'[^a-z0-9_ ]', '', k); k = k.replace(' de ', ' ').replace(' ', '_') 
         if 'links' in k and 'referencia' in k: k = 'links_referencia'
+        if 'log' in k and 'chamado' in k: k = 'log_chamado' # Garante nome correto
+        
         if value is None or (isinstance(value, float) and pd.isna(value)): sanitized_value = None
         elif isinstance(value, (datetime, date)): sanitized_value = value.strftime('%Y-%m-%d')
         elif k == 'prioridade' and value == 'N/A': sanitized_value = None 
@@ -284,21 +302,15 @@ def generate_excel_template_bytes():
     with pd.ExcelWriter(output, engine='openpyxl') as writer: df_template.to_excel(writer, index=False, sheet_name='Projetos')
     return output.getvalue()
 
+# (bulk_insert_projetos_db - Sem alterações)
 def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
     if not conn: return False, 0
-    column_map = {
-        'Projeto': 'projeto', 'Descrição': 'descricao', 'Agência': 'agencia', 'Técnico': 'tecnico',
-        'Demanda': 'demanda', 'Observação': 'observacao', 'Analista': 'analista', 'Gestor': 'gestor',
-        'Prioridade': 'prioridade', 'Agendamento': 'agendamento',
-        'Links de Referência': 'links_referencia' 
-    }
+    column_map = {'Projeto': 'projeto', 'Descrição': 'descricao', 'Agência': 'agencia', 'Técnico': 'tecnico', 'Demanda': 'demanda', 'Observação': 'observacao', 'Analista': 'analista', 'Gestor': 'gestor', 'Prioridade': 'prioridade', 'Agendamento': 'agendamento', 'Links de Referência': 'links_referencia' }
     if 'Projeto' not in df.columns or 'Agência' not in df.columns: st.error("Erro: Planilha deve conter 'Projeto' e 'Agência'."); return False, 0
     if df[['Projeto', 'Agência']].isnull().values.any(): st.error("Erro: 'Projeto' e 'Agência' não podem ser vazios."); return False, 0
     df_to_insert = df.rename(columns=column_map)
-    if 'agendamento' in df_to_insert.columns:
-        df_to_insert['agendamento'] = pd.to_datetime(df_to_insert['agendamento'], errors='coerce')
-    else:
-        df_to_insert['agendamento'] = None 
+    if 'agendamento' in df_to_insert.columns: df_to_insert['agendamento'] = pd.to_datetime(df_to_insert['agendamento'], errors='coerce')
+    else: df_to_insert['agendamento'] = None 
     df_to_insert['status'] = 'NÃO INICIADA'; df_to_insert['data_abertura'] = date.today() 
     if 'analista' not in df_to_insert or df_to_insert['analista'].isnull().all(): df_to_insert['analista'] = usuario_logado
     else: df_to_insert['analista'] = df_to_insert['analista'].fillna(usuario_logado)
@@ -309,25 +321,35 @@ def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
         invalid_priorities = df_to_insert[~df_to_insert['prioridade'].isin(allowed_priorities)]
         if not invalid_priorities.empty: st.warning(f"Prioridades inválidas (linhas: {invalid_priorities.index.tolist()}) substituídas por 'Média'."); df_to_insert.loc[invalid_priorities.index, 'prioridade'] = 'média'
         df_to_insert['prioridade'] = df_to_insert['prioridade'].str.capitalize()
-    cols_to_insert = ['projeto', 'descricao', 'agencia', 'tecnico', 'status',
-                      'data_abertura', 'observacao', 'demanda', 'analista', 'gestor',
-                      'prioridade', 'agendamento', 'links_referencia'] 
+    cols_to_insert = ['projeto', 'descricao', 'agencia', 'tecnico', 'status','data_abertura', 'observacao', 'demanda', 'analista', 'gestor','prioridade', 'agendamento', 'links_referencia'] 
     df_final = df_to_insert[[col for col in cols_to_insert if col in df_to_insert.columns]]
-    if 'agendamento' in df_final.columns:
-        df_final['agendamento'] = df_final['agendamento'].apply(
-            lambda x: x.date() if pd.notna(x) and isinstance(x, (pd.Timestamp, datetime)) else None
-        )
     values = []
     for record in df_final.to_records(index=False):
-        processed_record = [None if pd.isna(cell) else cell for cell in record]
+        processed_record = []
+        for cell in record:
+            if pd.isna(cell): processed_record.append(None) 
+            elif isinstance(cell, (np.int64, np.int32, np.int16, np.int8)): processed_record.append(int(cell))
+INTRODUÇÃO
+
+O presente trabalho acadêmico tem como objetivo principal analisar a importância da implementação de um sistema de controle de acesso em ambientes de Data Center, com foco na mitigação de riscos e na garantia da segurança física e lógica dos dados. A crescente dependência das organizações em infraestruturas de TI robustas e seguras torna o Data Center um ativo crítico, cujo comprometimento pode resultar em perdas financeiras significativas, danos à reputação e violações de conformidade regulatória.
+
+A segurança em Data Centers é um tema multidimensional, abrangendo desde a proteção contra ameaças físicas (como acesso não autorizado, roubo, vandalismo e desastres ambientais) até a segurança lógica (proteção contra ataques cibernéticos, violação de dados e malware). Dentro deste espectro, o controle de acesso físico emerge como uma das primeiras e mais cruciais linhas de defesa. Um sistema de controle de acesso eficaz não se limita a trancar as portas; ele envolve a autenticação rigorosa de indivíduos, o monitoramento de entradas e saídas, e a definição de permissões granulares que ditam quem pode acessar o quê e quando.
+
+Este estudo explorará as diversas tecnologias empregadas em sistemas de controle de acesso modernos, incluindo biometria (reconhecimento facial, impressão digital, leitura de íris), cartões de proximidade (RFID/NFC), autenticação multifator (MFA) e o uso de "gaiolas" (cages) e racks seguros dentro do ambiente. Além disso, será analisada a integração desses sistemas com outras plataformas de segurança, como videomonitoramento (CFTV) e sistemas de detecção de intrusão (IDS), para criar uma postura de segurança coesa e em camadas.
+
+A metodologia adotada envolverá a revisão de literatura especializada, incluindo normas internacionais como a ISO/IEC 27001 (que trata da gestão da segurança da informação) e a TIA-942 (que define os padrões de infraestrutura para Data Centers). Serão também analisados estudos de caso e relatórios de incidentes de segurança para ilustrar as vulnerabilidades exploradas por falhas no controle de acesso e as melhores práticas para preveni-las.
+
+Por fim, o trabalho buscará demonstrar que o investimento em um sistema de controle de acesso avançado não é apenas um custo operacional, mas um componente estratégico essencial para a resiliência dos negócios, a proteção da propriedade intelectual e a manutenção da confiança dos clientes e parceiros.
+elif isinstance(cell, (np.float64, np.float32)): processed_record.append(float(cell))
+            elif isinstance(cell, (pd.Timestamp, datetime, np.datetime64)): processed_record.append(cell.date()) 
+            else: processed_record.append(cell) 
         values.append(tuple(processed_record))
     cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns)); placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
     query = sql.SQL("INSERT INTO projetos ({}) VALUES ({})").format(cols_sql, placeholders)
     try:
         with conn.cursor() as cur: cur.executemany(query, values) 
         st.cache_data.clear(); return True, len(values)
-    except Exception as e: 
-        st.error(f"Erro ao salvar no banco: {e}"); conn.rollback(); return False, 0
+    except Exception as e: st.error(f"Erro ao salvar no banco: {e}"); conn.rollback(); return False, 0
 
 # (dataframe_to_excel_bytes - Sem alterações)
 def dataframe_to_excel_bytes(df):
@@ -407,6 +429,8 @@ def get_color_for_name(name_str):
         return COLORS_LIST[color_index]
     except Exception: return "#555"
     
+    
+# --- Funções para a Tabela de Chamados ---
 @st.cache_data(ttl=60)
 def carregar_chamados_db(agencia_id_filtro=None):
     """ Carrega chamados, opcionalmente filtrados por ID de agência. """
@@ -430,21 +454,20 @@ def carregar_chamados_db(agencia_id_filtro=None):
             'quantidade': 'Qtd.', 'gestor': 'Gestor',
             'descricao': 'Descrição', 'data_abertura': 'Abertura', 'data_fechamento': 'Fechamento',
             'status_chamado': 'Status', 'valor_chamado': 'Valor (R$)',
-            'status_financeiro': 'Status Financeiro'
+            'status_financeiro': 'Status Financeiro',
+            'observacao': 'Observação', 'log_chamado': 'Log do Chamado' # Adiciona novas colunas
         }
         df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
         return df
     except Exception as e:
         st.error(f"Erro ao carregar chamados: {e}"); return pd.DataFrame()
 
-# --- >>> FUNÇÃO DE IMPORTAÇÃO <<< ---
-
+# --- >>> FUNÇÃO DE IMPORTAÇÃO CORRIGIDA <<< ---
 def bulk_insert_chamados_db(df: pd.DataFrame):
     """ Importa um DataFrame de chamados para o banco (UPSERT). """
-    if not conn:
-        return False, 0
+    if not conn: return False, 0
     
-    # Mapeamento do CSV -> colunas do banco
+    # --- CORREÇÃO DO MAPEAMENTO (P -> Nome_Equipamento, Q -> Quantidade) ---
     column_map = {
         'Chamado': 'chamado_id',
         'Codigo_Ponto': 'agencia_id',
@@ -453,17 +476,16 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         'Servico': 'servico',
         'Projeto': 'projeto_nome',
         'Data_Agendamento': 'data_agendamento',
-        'Tipo_De_Solicitacao': 'sistema',
-        'Sistema': 'cod_equipamento',
-        'Codigo_Equipamento': 'nome_equipamento',
-        'Nome_Equipamento': 'quantidade',
-        'Substitui_Outro_Equipamento_(Sim/Não)': 'gestor'
+        'Tipo_De_Solicitacao': 'sistema', # M
+        'Sistema': 'cod_equipamento',     # N
+        'Codigo_Equipamento': 'nome_equipamento', # O
+        # P (Nome_Equipamento) é ignorado, pois O (Codigo_Equipamento) é 'nome_equipamento' no BD
+        'Quantidade_Solicitada': 'quantidade',     # Q (A coluna de quantidade correta)
+        'Substitui_Outro_Equipamento_(Sim/Não)': 'gestor' # T
     }
     
-    # Renomeia colunas conforme o banco
     df_to_insert = df.rename(columns={k: v for k, v in column_map.items() if k in df.columns})
 
-    # Validações básicas
     if 'chamado_id' not in df_to_insert.columns:
         st.error("Erro: A planilha deve conter a coluna 'Chamado' (ID do chamado).")
         return False, 0
@@ -471,72 +493,129 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         st.error("Erro: A planilha deve conter a coluna 'Codigo_Ponto' (ID da Agência).")
         return False, 0
 
-    # --- Tratamento de tipos (datas e números) ---
+    # --- Tratamento de Tipos ---
     cols_data = ['data_abertura', 'data_fechamento', 'data_agendamento']
     for col in cols_data:
         if col in df_to_insert.columns:
-            # Converte para datetime, interpretando formato brasileiro
+            # --- CORREÇÃO: Adicionado dayfirst=True ---
             df_to_insert[col] = pd.to_datetime(df_to_insert[col], errors='coerce', dayfirst=True)
         else:
             df_to_insert[col] = None 
 
     if 'valor_chamado' in df_to_insert.columns:
-        df_to_insert['valor_chamado'] = pd.to_numeric(df_to_insert['valor_chamado'], errors='coerce').fillna(0.0)
-
+         df_to_insert['valor_chamado'] = pd.to_numeric(df_to_insert['valor_chamado'], errors='coerce').fillna(0.0)
     if 'quantidade' in df_to_insert.columns:
-        df_to_insert['quantidade'] = pd.to_numeric(df_to_insert['quantidade'], errors='coerce').astype('Int64')
+         # Converte para Int64 do Pandas, que aceita nulos (NaN)
+         df_to_insert['quantidade'] = pd.to_numeric(df_to_insert['quantidade'], errors='coerce').astype('Int64')
 
-    # Seleciona colunas que realmente existem
     cols_to_insert = [
-        'chamado_id', 'agencia_id', 'agencia_nome', 'agencia_uf', 'servico',
-        'projeto_nome', 'data_agendamento', 'sistema', 'cod_equipamento',
-        'nome_equipamento', 'quantidade', 'gestor', 'descricao',
-        'data_abertura', 'data_fechamento', 'status_chamado', 'valor_chamado'
+        'chamado_id', 'agencia_id', 'agencia_nome', 'agencia_uf', 'servico', 'projeto_nome', 
+        'data_agendamento', 'sistema', 'cod_equipamento', 'nome_equipamento', 'quantidade', 'gestor',
+        'descricao', 'data_abertura', 'data_fechamento', 'status_chamado', 'valor_chamado'
     ]
+                      
     df_final = df_to_insert[[col for col in cols_to_insert if col in df_to_insert.columns]]
-
-    # --- CONVERSÃO FINAL DE DATAS E NÚMEROS (Evita erro numpy.datetime64) ---
+    
+    # --- CORREÇÃO DEFINITIVA (v5) - Trata DATAS e NÚMEROS ---
     values = []
     for record in df_final.to_records(index=False):
         processed_record = []
         for cell in record:
             if pd.isna(cell):
-                processed_record.append(None)  # Trata NaT / NaN
+                processed_record.append(None) # Converte NaT, NaN, pd.NA para None
             elif isinstance(cell, (np.int64, np.int32, np.int16, np.int8)):
-                processed_record.append(int(cell))  # Inteiro puro
+                processed_record.append(int(cell)) # Converte numpy int para python int
             elif isinstance(cell, (np.float64, np.float32)):
-                processed_record.append(float(cell))  # Float puro
+                processed_record.append(float(cell)) # Converte numpy float para python float
             elif isinstance(cell, (pd.Timestamp, datetime, np.datetime64)):
-                # 🔧 Converte para datetime.date
-                processed_record.append(pd.to_datetime(cell).date())
+                processed_record.append(cell.date()) # Converte datetime para date
             else:
-                processed_record.append(cell)
+                processed_record.append(cell) 
         values.append(tuple(processed_record))
-    # --- FIM DA CONVERSÃO ---
-
-    # Montagem do SQL (UPSERT)
-    cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns))
-    placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
+    # --- FIM DA CORREÇÃO ---
+    
+    cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns)); placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
+    
     update_clause = sql.SQL(', ').join(
         sql.SQL("{} = EXCLUDED.{}").format(sql.Identifier(col), sql.Identifier(col))
-        for col in df_final.columns if col != 'chamado_id'
+        for col in df_final.columns if col != 'chamado_id' 
     )
-    query = sql.SQL("""
-        INSERT INTO chamados ({})
-        VALUES ({})
-        ON CONFLICT (chamado_id)
-        DO UPDATE SET {}
-    """).format(cols_sql, placeholders, update_clause)
+    query = sql.SQL("INSERT INTO chamados ({}) VALUES ({}) ON CONFLICT (chamado_id) DO UPDATE SET {}").format(cols_sql, placeholders, update_clause)
 
-    # Execução
+    try:
+        with conn.cursor() as cur: cur.executemany(query, values) 
+        st.cache_data.clear(); return True, len(values)
+    except Exception as e: 
+        st.error(f"Erro ao salvar chamados no banco: {e}"); conn.rollback(); return False, 0
+
+# --- >>> NOVA FUNÇÃO PARA SALVAR EDIÇÕES DE CHAMADOS <<< ---
+def atualizar_chamado_db(chamado_id, updates: dict):
+    """ Atualiza um chamado existente no banco de dados e gera log. """
+    if not conn: return False
+    
+    usuario_logado = st.session_state.get('usuario', 'Sistema') 
+    
     try:
         with conn.cursor() as cur:
-            cur.executemany(query, values)
-        conn.commit()
-        st.cache_data.clear()
-        return True, len(values)
-    except Exception as e:
-        conn.rollback()
-        st.error(f"Erro ao salvar chamados no banco: {e}")
-        return False, 0
+            # 1. Buscar dados atuais
+            cur.execute("""
+                SELECT data_agendamento, data_fechamento, observacao, log_chamado 
+                FROM chamados WHERE chamado_id = %s
+            """, (chamado_id,))
+            current_data_tuple = cur.fetchone()
+            if not current_data_tuple:
+                st.error(f"Erro: Chamado com ID {chamado_id} não encontrado.")
+                return False
 
+            current_agendamento, current_fechamento, current_obs, current_log = current_data_tuple
+            current_log = current_log or "" 
+
+            # Prepara dados da atualização
+            db_updates_raw = _normalize_and_sanitize(updates)
+            
+            # --- Geração do Log ---
+            log_entries = []; hoje_str = date.today().strftime('%d/%m/%Y')
+            
+            # Compara Data Agendamento
+            new_agendamento_str = db_updates_raw.get('data_agendamento')
+            new_agendamento_date = None
+            if new_agendamento_str:
+                try: new_agendamento_date = datetime.strptime(new_agendamento_str, '%Y-%m-%d').date()
+                except ValueError: new_agendamento_date = current_agendamento
+            if new_agendamento_date != current_agendamento:
+                data_antiga_str = current_agendamento.strftime('%d/%m/%Y') if isinstance(current_agendamento, date) else "N/A"
+                data_nova_str = new_agendamento_date.strftime('%d/%m/%Y') if isinstance(new_agendamento_date, date) else "N/A"
+                log_entries.append(f"Em {hoje_str} por {usuario_logado}: Agendamento de '{data_antiga_str}' para '{data_nova_str}'.")
+
+            # Compara Data Fechamento
+            new_fechamento_str = db_updates_raw.get('data_fechamento')
+            new_fechamento_date = None
+            if new_fechamento_str:
+                try: new_fechamento_date = datetime.strptime(new_fechamento_str, '%Y-%m-%d').date()
+                except ValueError: new_fechamento_date = current_fechamento
+            if new_fechamento_date != current_fechamento:
+                data_antiga_str = current_fechamento.strftime('%d/%m/%Y') if isinstance(current_fechamento, date) else "N/A"
+                data_nova_str = new_fechamento_date.strftime('%d/%m/%Y') if isinstance(new_fechamento_date, date) else "N/A"
+                log_entries.append(f"Em {hoje_str} por {usuario_logado}: Fechamento de '{data_antiga_str}' para '{data_nova_str}'.")
+
+            # Compara Observação
+            new_obs = db_updates_raw.get('observacao')
+            if new_obs is not None and new_obs != (current_obs or ""):
+                log_entries.append(f"Em {hoje_str} por {usuario_logado}: Observações atualizadas.")
+            
+            # Monta log final
+            log_final = current_log; 
+            if log_entries: log_final += ("\n" if current_log else "") + "\n".join(log_entries)
+            db_updates_raw['log_chamado'] = log_final if log_final else None 
+            
+            # Prepara query
+            updates_final = {k: v for k, v in db_updates_raw.items() if v is not None or k == 'log_chamado' or k == 'observacao'} 
+            set_clause = sql.SQL(', ').join(sql.SQL("{} = {}").format(sql.Identifier(k), sql.Placeholder()) for k in updates_final.keys())
+            query = sql.SQL("UPDATE chamados SET {} WHERE chamado_id = {}").format(set_clause, sql.Placeholder())
+            vals = list(updates_final.values()) + [chamado_id]
+            
+            cur.execute(query, vals)
+
+        st.cache_data.clear(); return True
+    except Exception as e:
+        st.toast(f"Erro CRÍTICO ao atualizar chamado ID {chamado_id}: {e}", icon="🔥"); conn.rollback(); return False
