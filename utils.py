@@ -288,20 +288,13 @@ def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
         return False, 0
 
     column_map = {
-        'Projeto': 'projeto',
-        'Descrição': 'descricao',
-        'Agência': 'agencia',
-        'Técnico': 'tecnico',
-        'Demanda': 'demanda',
-        'Observação': 'observacao',
-        'Analista': 'analista',
-        'Gestor': 'gestor',
-        'Prioridade': 'prioridade',
-        'Agendamento': 'agendamento',
-        'Links de Referência': 'links_referencia'
+        'Projeto': 'projeto', 'Descrição': 'descricao', 'Agência': 'agencia', 
+        'Técnico': 'tecnico', 'Demanda': 'demanda', 'Observação': 'observacao', 
+        'Analista': 'analista', 'Gestor': 'gestor', 'Prioridade': 'prioridade', 
+        'Agendamento': 'agendamento', 'Links de Referência': 'links_referencia'
     }
 
-    # 🧩 Validação de colunas obrigatórias
+    # Validações
     if 'Projeto' not in df.columns or 'Agência' not in df.columns:
         st.error("Erro: Planilha deve conter 'Projeto' e 'Agência'.")
         return False, 0
@@ -310,79 +303,54 @@ def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
         st.error("Erro: 'Projeto' e 'Agência' não podem ser vazios.")
         return False, 0
 
-    # 🧱 Mapeia e trata colunas
     df_to_insert = df.rename(columns=column_map)
 
-    # Converte a coluna agendamento para datetime (se existir)
+    # Converter coluna de agendamento
     if 'agendamento' in df_to_insert.columns:
         df_to_insert['agendamento'] = pd.to_datetime(df_to_insert['agendamento'], errors='coerce')
     else:
         df_to_insert['agendamento'] = None
 
-    # Campos padrão
     df_to_insert['status'] = 'NÃO INICIADA'
     df_to_insert['data_abertura'] = date.today()
 
-    # Analista padrão
     if 'analista' not in df_to_insert or df_to_insert['analista'].isnull().all():
         df_to_insert['analista'] = usuario_logado
     else:
         df_to_insert['analista'] = df_to_insert['analista'].fillna(usuario_logado)
 
-    # Prioridade padrão e validação
     if 'prioridade' not in df_to_insert:
         df_to_insert['prioridade'] = 'Média'
     else:
-        df_to_insert['prioridade'] = (
-            df_to_insert['prioridade']
-            .astype(str)
-            .replace(['', 'nan', 'None'], 'Média')
-            .fillna('Média')
-        )
+        df_to_insert['prioridade'] = df_to_insert['prioridade'].astype(str).replace(['', 'nan', 'None'], 'Média').fillna('Média')
         allowed_priorities = ['alta', 'média', 'baixa']
         df_to_insert['prioridade'] = df_to_insert['prioridade'].str.lower()
         invalid_priorities = df_to_insert[~df_to_insert['prioridade'].isin(allowed_priorities)]
-
         if not invalid_priorities.empty:
-            st.warning(
-                f"Prioridades inválidas (linhas: {invalid_priorities.index.tolist()}) substituídas por 'Média'."
-            )
+            st.warning(f"Prioridades inválidas (linhas: {invalid_priorities.index.tolist()}) substituídas por 'Média'.")
             df_to_insert.loc[invalid_priorities.index, 'prioridade'] = 'média'
-
         df_to_insert['prioridade'] = df_to_insert['prioridade'].str.capitalize()
 
-    # Define colunas a inserir
     cols_to_insert = [
-        'projeto', 'descricao', 'agencia', 'tecnico', 'status', 'data_abertura',
-        'observacao', 'demanda', 'analista', 'gestor', 'prioridade',
+        'projeto', 'descricao', 'agencia', 'tecnico', 'status', 'data_abertura', 
+        'observacao', 'demanda', 'analista', 'gestor', 'prioridade', 
         'agendamento', 'links_referencia'
     ]
     
     df_final = df_to_insert[[col for col in cols_to_insert if col in df_to_insert.columns]]
 
-    # 🔧 Converte todas as colunas datetime64 para datetime.date
-    for col in df_final.columns:
-        if np.issubdtype(df_final[col].dtype, np.datetime64):
-            df_final[col] = df_final[col].apply(lambda x: x.date() if pd.notna(x) else None)
+    # 🔧 CONVERSÃO DEFINITIVA DE DATAS (para evitar o erro numpy.datetime64)
+    for col in ['agendamento', 'data_abertura']:
+        if col in df_final.columns:
+            df_final[col] = df_final[col].apply(
+                lambda x: x.date() if isinstance(x, (pd.Timestamp, datetime)) 
+                else (pd.to_datetime(x).date() if isinstance(x, np.datetime64) and not pd.isna(x) 
+                      else (x if isinstance(x, date) else None))
+            )
 
-    # 🧩 Prepara valores para inserção
-    values = []
-    for record in df_final.to_records(index=False):
-        processed_record = []
-        for cell in record:
-            if pd.isna(cell):
-                processed_record.append(None)
-            elif isinstance(cell, np.datetime64):
-                processed_record.append(pd.to_datetime(cell).date())
-            elif isinstance(cell, pd.Timestamp):
-                processed_record.append(cell.date())
-            elif isinstance(cell, datetime):
-                processed_record.append(cell.date())
-            else:
-                processed_record.append(cell)
-        values.append(tuple(processed_record))
+    # Monta os valores para inserir
+    values = [tuple(None if pd.isna(c) else c for c in row) for row in df_final.to_numpy()]
 
-    # 🧱 Monta e executa o SQL
     cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns))
     placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
     query = sql.SQL("INSERT INTO projetos ({}) VALUES ({})").format(cols_sql, placeholders)
@@ -394,8 +362,8 @@ def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
         st.cache_data.clear()
         return True, len(values)
     except Exception as e:
-        st.error(f"Erro ao salvar no banco: {e}")
         conn.rollback()
+        st.error(f"Erro ao salvar no banco: {e}")
         return False, 0
 
 def dataframe_to_excel_bytes(df):
@@ -583,5 +551,6 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         st.cache_data.clear(); return True, len(values)
     except Exception as e: 
         st.error(f"Erro ao salvar chamados no banco: {e}"); conn.rollback(); return False, 0
+
 
 
