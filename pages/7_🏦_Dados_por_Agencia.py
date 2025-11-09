@@ -215,11 +215,13 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
     else:
         novo_status = "Não Iniciado"
 
-    status_atual_val = df_projeto.iloc[0]['Status']
-    if pd.isna(status_atual_val) or status_atual_val == "":
+    # --- CORREÇÃO APLICADA AQUI (para o status_atual) ---
+    status_atual_val = str(df_projeto.iloc[0]['Status']).strip() # Converte para string e limpa
+    if status_atual_val == "" or status_atual_val.lower() == "none" or status_atual_val.lower() == "nan":
         status_atual = "Não Iniciado"
     else:
-        status_atual = str(status_atual_val)
+        status_atual = status_atual_val
+    # --- FIM DA CORREÇÃO ---
     
     if status_atual != novo_status:
         st.info(f"Status do projeto mudou de '{status_atual}' para '{novo_status}'")
@@ -431,11 +433,13 @@ def tela_dados_agencia():
                 first_row = df_projeto.iloc[0]
                 chamado_ids_internos_list = df_projeto['ID'].tolist()
                 
-                status_val = first_row.get('Status')
-                if pd.isna(status_val) or status_val == "":
-                    status_principal_atual = 'Não Iniciado'
+                # --- CORREÇÃO APLICADA AQUI ---
+                status_val = str(first_row.get('Status', 'Não Iniciado')).strip() # Converte para string e limpa
+                if status_val == "" or status_val.lower() == "none" or status_val.lower() == "nan":
+                    status_principal_atual = "Não Iniciado"
                 else:
-                    status_principal_atual = str(status_val)
+                    status_principal_atual = status_val
+                # --- FIM DA CORREÇÃO ---
                 
                 # --- Cálculo do SLA (Placeholder) ---
                 sla_text = ""
@@ -469,8 +473,6 @@ def tela_dados_agencia():
                 # --- Cor do Gestor ---
                 gestor_color = utils_chamados.get_color_for_name(nome_gestor)
                 
-                # --- INÍCIO DA CORREÇÃO ---
-                # Função helper interna para limpar valores 'None' ou 'NaN'
                 def clean_val(val, default="N/A"):
                     if val is None or pd.isna(val) or str(val).lower() == "none" or str(val).lower() == "nan":
                         return default
@@ -481,7 +483,6 @@ def tela_dados_agencia():
                 analista_html = html.escape(clean_val(first_row.get('Analista')))
                 agencia_html = html.escape(clean_val(first_row.get('Agencia_Combinada')))
                 status_html = html.escape(clean_val(status_principal_atual, "Não Iniciado").upper())
-                # --- FIM DA CORREÇÃO ---
                 
                 status_color = utils_chamados.get_status_color(status_principal_atual)
                 
