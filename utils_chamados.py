@@ -7,14 +7,20 @@ import psycopg2
 from psycopg2 import sql
 import numpy as np 
 
-# Importa a conexão de banco de dados do utils original
-try:
-    from utils import conn, get_color_for_name, _to_date_safe
-except ImportError:
-    st.error("ERRO CRÍTICO: O arquivo principal utils.py não foi encontrado.")
-    st.stop()
+# --- 1. FUNÇÃO DE CONEXÃO (Cópia do utils.py) ---
+@st.cache_resource
+def get_db_connection_chamados():
+    """Cria uma conexão SÓ PARA ESTA PÁGINA."""
+    try:
+        secrets = st.secrets["postgres"]
+        conn = psycopg2.connect(host=secrets["PGHOST"], port=secrets["PGPORT"], user=secrets["PGUSER"], password=secrets["PGPASSWORD"], dbname=secrets["PGDATABASE"])
+        conn.autocommit = True; return conn
+    except KeyError as e: st.error(f"Erro Crítico: Credencial '{e}' não encontrada."); return None
+    except Exception as e: st.error(f"Erro ao conectar ao DB: {e}"); return None
 
-# --- 1. FUNÇÃO PARA CRIAR/ATUALIZAR A TABELA 'chamados' ---
+conn = get_db_connection_chamados() 
+
+# --- 2. FUNÇÃO PARA CRIAR/ATUALIZAR A TABELA 'chamados' ---
 def criar_tabela_chamados():
     """Cria a tabela 'chamados' e adiciona colunas ausentes se não existirem."""
     if not conn: return
@@ -34,8 +40,8 @@ def criar_tabela_chamados():
                 'servico': 'TEXT', 'projeto_nome': 'TEXT', 'data_agendamento': 'DATE',
                 'sistema': 'TEXT', 'cod_equipamento': 'TEXT', 'nome_equipamento': 'TEXT',
                 'quantidade': 'INTEGER', 'gestor': 'TEXT', 'descricao': 'TEXT',
-                'data_abertura': 'DATE', 'data_fechamento': 'DATE', 'status_chamado': 'TEXT',
-                'valor_chamado': 'NUMERIC(10, 2) DEFAULT 0.00',
+                'data_abertura': 'DATE', 'data_fechamento': 'DATE',
+                'status_chamado': 'TEXT', 'valor_chamado': 'NUMERIC(10, 2) DEFAULT 0.00',
                 'status_financeiro': "TEXT DEFAULT 'Pendente'",
                 'observacao': 'TEXT', 
                 'log_chamado': 'TEXT'
@@ -50,13 +56,12 @@ def criar_tabela_chamados():
                 if coluna not in colunas_existentes:
                     st.warning(f"Atualizando BD (Chamados): Adicionando coluna '{coluna}'...")
                     cur.execute(f"ALTER TABLE chamados ADD COLUMN {coluna} {tipo_coluna};")
-                    st.success(f"Coluna '{coluna}' adicionada.")
             
     except Exception as e:
         st.error(f"Erro ao criar/verificar tabela 'chamados': {e}")
 
 
-# --- 2. FUNÇÃO PARA CARREGAR CHAMADOS ---
+# --- 3. FUNÇÃO PARA CARREGAR CHAMADOS ---
 @st.cache_data(ttl=60)
 def carregar_chamados_db(agencia_id_filtro=None):
     """ Carrega chamados, opcionalmente filtrados por ID de agência. """
@@ -90,7 +95,7 @@ def carregar_chamados_db(agencia_id_filtro=None):
     except Exception as e:
         st.error(f"Erro ao carregar chamados: {e}"); return pd.DataFrame()
 
-# --- 3. FUNÇÃO PARA IMPORTAR CHAMADOS (COM CORREÇÃO DE TIPO) ---
+# --- 4. FUNÇÃO PARA IMPORTAR CHAMADOS (COM CORREÇÃO DE TIPO) ---
 def bulk_insert_chamados_db(df: pd.DataFrame):
     """ Importa um DataFrame de chamados para o banco (UPSERT). """
     if not conn: return False, 0
@@ -124,6 +129,7 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
     cols_data = ['data_abertura', 'data_fechamento', 'data_agendamento']
     for col in cols_data:
         if col in df_to_insert.columns:
+            # Força o pandas a ler datas no formato brasileiro (DD/MM/AAAA)
             df_to_insert[col] = pd.to_datetime(df_to_insert[col], errors='coerce', dayfirst=True)
         else:
             df_to_insert[col] = None 
@@ -141,7 +147,7 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
                       
     df_final = df_to_insert[[col for col in cols_to_insert if col in df_to_insert.columns]]
     
-    # --- CORREÇÃO DEFINITIVA (v6) - Trata DATAS e NÚMEROS ---
+    # --- CORREÇÃO DEFINITIVA (v5) - Trata DATAS e NÚMEROS ---
     values = []
     for record in df_final.to_records(index=False):
         processed_record = []
@@ -173,21 +179,18 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
     except Exception as e: 
         st.error(f"Erro ao salvar chamados no banco: {e}"); conn.rollback(); return False, 0
 
-# --- 4. FUNÇÃO PARA SALVAR EDIÇÕES DE CHAMADOS ---
+# --- 5. FUNÇÃO PARA SALVAR EDIÇÕES DE CHAMADOS ---
 def atualizar_chamado_db(chamado_id, updates: dict):
     """ Atualiza um chamado existente no banco de dados e gera log. """
     if not conn: return False
     
-    # Esta função usa o session_state, então o login é necessário
-    usuario_logado = st.session_state.get('usuario', 'Sistema') 
+    usuario_logado = "Usuario" # Padrão, já que não temos o state
+    if "usuario" in st.session_state:
+        usuario_logado = st.session_state.get('usuario', 'Sistema') 
     
     try:
         with conn.cursor() as cur:
-            # 1. Buscar dados atuais
-            cur.execute("""
-                SELECT data_agendamento, data_fechamento, observacao, log_chamado 
-                FROM chamados WHERE chamado_id = %s
-            """, (chamado_id,))
+            cur.execute("SELECT data_agendamento, data_fechamento, observacao, log_chamado FROM chamados WHERE chamado_id = %s", (chamado_id,))
             current_data_tuple = cur.fetchone()
             if not current_data_tuple:
                 st.error(f"Erro: Chamado com ID {chamado_id} não encontrado.")
@@ -196,10 +199,22 @@ def atualizar_chamado_db(chamado_id, updates: dict):
             current_agendamento, current_fechamento, current_obs, current_log = current_data_tuple
             current_log = current_log or "" 
 
-            # Prepara dados da atualização (usa a função do utils.py)
-            db_updates_raw = utils._normalize_and_sanitize(updates)
-            
-            # --- Geração do Log ---
+            # Normaliza os nomes das colunas (Ex: "Observações (Editável)" -> "observacao")
+            db_updates_raw = {}
+            for key, value in updates.items():
+                k = str(key).lower()
+                if "agendamento" in k: k = "data_agendamento"
+                if "finalizacao" in k or "fechamento" in k: k = "data_fechamento"
+                if "observacao" in k: k = "observacao"
+                
+                # Sanitiza o valor
+                if isinstance(value, (datetime, date)):
+                    db_updates_raw[k] = value.strftime('%Y-%m-%d')
+                elif pd.isna(value):
+                    db_updates_raw[k] = None
+                else:
+                    db_updates_raw[k] = str(value)
+
             log_entries = []; hoje_str = date.today().strftime('%d/%m/%Y')
             
             # Compara Data Agendamento
@@ -229,12 +244,10 @@ def atualizar_chamado_db(chamado_id, updates: dict):
             if new_obs is not None and new_obs != (current_obs or ""):
                 log_entries.append(f"Em {hoje_str} por {usuario_logado}: Observações atualizadas.")
             
-            # Monta log final
             log_final = current_log; 
             if log_entries: log_final += ("\n" if current_log else "") + "\n".join(log_entries)
             db_updates_raw['log_chamado'] = log_final if log_final else None 
             
-            # Prepara query
             updates_final = {k: v for k, v in db_updates_raw.items() if v is not None or k == 'log_chamado' or k == 'observacao'} 
             set_clause = sql.SQL(', ').join(sql.SQL("{} = {}").format(sql.Identifier(k), sql.Placeholder()) for k in updates_final.keys())
             query = sql.SQL("UPDATE chamados SET {} WHERE chamado_id = {}").format(set_clause, sql.Placeholder())
@@ -245,3 +258,24 @@ def atualizar_chamado_db(chamado_id, updates: dict):
         st.cache_data.clear(); return True
     except Exception as e:
         st.toast(f"Erro CRÍTICO ao atualizar chamado ID {chamado_id}: {e}", icon="🔥"); conn.rollback(); return False
+
+# --- 6. Funções de Cor (Copiadas do utils.py para independência) ---
+def get_status_color(status):
+    s = str(status or "").strip().lower()
+    if 'finalizad' in s or 'fechado' in s or 'concluido' in s: return "#66BB6A" 
+    elif 'pendencia' in s or 'pendência' in s: return "#FFA726" 
+    elif 'nao iniciad' in s or 'não iniciad' in s: return "#B0BEC5" 
+    elif 'cancelad' in s: return "#EF5350" 
+    elif 'pausad' in s: return "#FFEE58" 
+    else: return "#64B5F6"  
+
+def get_color_for_name(name_str):
+    """Gera uma cor consistente de uma lista com base em um nome."""
+    COLORS_LIST = ["#D32F2F", "#1976D2", "#388E3C", "#F57C00", "#7B1FA2", "#00796B", "#C2185B", "#5D4037", "#455A64"]
+    if name_str is None or name_str == "N/A": return "#555" 
+    name_normalized = str(name_str).strip().upper() 
+    if not name_normalized: return "#555"
+    try:
+        hash_val = hash(name_normalized); color_index = hash_val % len(COLORS_LIST)
+        return COLORS_LIST[color_index]
+    except Exception: return "#555"
