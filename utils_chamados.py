@@ -21,7 +21,7 @@ def get_db_connection_chamados():
 
 conn = get_db_connection_chamados() 
 
-# --- VARIÁVEL GLOBAL DE COLUNAS (CORREÇÃO) ---
+# --- VARIÁVEL GLOBAL DE COLUNAS (A GARANTIA DA CORREÇÃO) ---
 # Dicionário de todas as colunas que a tabela DEVE ter
 colunas_necessarias = {
     'agencia_id': 'TEXT', 'agencia_nome': 'TEXT', 'agencia_uf': 'TEXT',
@@ -42,12 +42,13 @@ colunas_necessarias = {
     'data_envio': 'DATE',
     'observacao_equipamento': 'TEXT'
 }
-# --- FIM DA CORREÇÃO ---
+# --- FIM DA VARIÁVEL GLOBAL ---
 
 
 # --- 2. FUNÇÃO PARA CRIAR/ATUALIZAR A TABELA 'chamados' ---
 def criar_tabela_chamados():
     """Cria a tabela 'chamados' e adiciona colunas ausentes se não existirem."""
+    global colunas_necessarias # Garante que está usando a global
     if not conn: return
     try:
         with conn.cursor() as cur:
@@ -61,7 +62,6 @@ def criar_tabela_chamados():
             cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'chamados';")
             colunas_existentes = [row[0] for row in cur.fetchall()]
             
-            # Agora lê a variável global 'colunas_necessarias'
             for coluna, tipo_coluna in colunas_necessarias.items():
                 if coluna not in colunas_existentes:
                     st.warning(f"Atualizando BD (Chamados): Adicionando coluna '{coluna}'...")
@@ -191,6 +191,7 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
 # --- 5. FUNÇÃO PARA SALVAR EDIÇÕES DE CHAMADOS ---
 def atualizar_chamado_db(chamado_id_interno, updates: dict):
     """ Atualiza um chamado existente no banco de dados e gera log. """
+    global colunas_necessarias # Garante que está usando a global
     if not conn: return False
     
     usuario_logado = st.session_state.get('usuario', 'Sistema') 
@@ -285,9 +286,7 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
             
             updates_final = {}
             for k in db_updates_raw:
-                # --- CORREÇÃO APLICADA AQUI ---
-                # Agora lê a variável global 'colunas_necessarias'
-                if k in colunas_necessarias: 
+                if k in colunas_necessarias: # Valida contra a variável global
                     updates_final[k] = db_updates_raw[k]
 
             if not updates_final and not log_entries:
