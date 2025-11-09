@@ -58,7 +58,7 @@ def formatar_agencia_excel(id_agencia, nome_agencia):
           nome_str = nome_str[len(id_agencia_limpo):].strip(" -")
     return f"{id_str} - {nome_str}"
 
-# --- 1. DIALOG (POP-UP) DE IMPORTAÇÃO ---
+# --- 1. DIALOG (POP-UP) DE IMPORTAÇÃO (COM MULTI-UPLOAD) ---
 @st.dialog("Importar Novos Chamados (Excel/CSV)")
 def run_importer_dialog():
     st.info(f"""
@@ -67,20 +67,53 @@ def run_importer_dialog():
             As colunas necessárias (A, B, C, D, J, K, L, M, N, O, Q, T) serão lidas automaticamente.
             Se um `Chamado` (Coluna A) já existir, ele será **atualizado**.
     """)
-    uploaded_file = st.file_uploader("Selecione o arquivo Excel/CSV de chamados", type=["xlsx", "xls", "csv"], key="chamado_uploader_dialog")
+    
+    # --- MUDANÇA 1: Habilitado multi-upload ---
+    uploaded_files = st.file_uploader(
+        "Selecione o(s) arquivo(s) Excel/CSV de chamados", 
+        type=["xlsx", "xls", "csv"], 
+        key="chamado_uploader_dialog",
+        accept_multiple_files=True # <<< Habilitado
+    )
 
-    if uploaded_file is not None:
-        try:
-            if uploaded_file.name.endswith('.csv'):
-                df_raw = pd.read_csv(uploaded_file, sep=';', header=0, encoding='latin-1', keep_default_na=False, dtype=str) 
-            else:
-                df_raw = pd.read_excel(uploaded_file, header=0, keep_default_na=False, dtype=str) 
+    # --- MUDANÇA 2: Lógica de loop e concatenação ---
+    if uploaded_files: # Se a lista não estiver vazia
+        
+        dfs_list = [] # Lista para guardar os dataframes
+        all_files_ok = True
+        
+        with st.spinner("Lendo e processando arquivos..."):
+            for uploaded_file in uploaded_files: # Loop nos arquivos
+                try:
+                    if uploaded_file.name.endswith('.csv'):
+                        df_individual = pd.read_csv(uploaded_file, sep=';', header=0, encoding='latin-1', keep_default_na=False, dtype=str) 
+                    else:
+                        df_individual = pd.read_excel(uploaded_file, header=0, keep_default_na=False, dtype=str) 
 
-            df_raw.dropna(how='all', inplace=True)
-            if df_raw.empty: 
-                st.error("Erro: O arquivo está vazio.")
+                    df_individual.dropna(how='all', inplace=True)
+                    if not df_individual.empty:
+                        dfs_list.append(df_individual)
+                    else:
+                        st.warning(f"Arquivo '{uploaded_file.name}' está vazio e será ignorado.")
+                
+                except Exception as e:
+                    st.error(f"Erro ao ler o arquivo '{uploaded_file.name}': {e}")
+                    all_files_ok = False
+                    break # Para o loop se um arquivo falhar
+
+        # Se a lista de dataframes não estiver vazia e não houve erros
+        if dfs_list and all_files_ok:
+            try:
+                # Combina todos os dataframes em um só
+                df_raw = pd.concat(dfs_list, ignore_index=True)
+                if df_raw.empty:
+                    st.error("Erro: Nenhum dado válido encontrado nos arquivos.")
+                    return # Para o dialog
+            except Exception as e:
+                st.error(f"Erro ao combinar arquivos: {e}")
                 return
 
+            # --- Daqui para baixo, a lógica é a mesma, mas aplicada ao df_raw combinado ---
             col_map = {
                 0: 'chamado_id', 1: 'agencia_id', 2: 'agencia_nome', 3: 'agencia_uf',
                 9: 'servico', 10: 'projeto_nome', 11: 'data_agendamento', 12: 'sistema',
@@ -91,7 +124,7 @@ def run_importer_dialog():
             df_para_salvar = extrair_e_mapear_colunas(df_raw, col_map)
             
             if df_para_salvar is not None:
-                st.success("Arquivo lido. Pré-visualização dos dados extraídos:")
+                st.success(f"Sucesso! {len(df_raw)} linhas lidas de {len(uploaded_files)} arquivo(s). Pré-visualização:")
                 st.dataframe(df_para_salvar.head(), use_container_width=True)
                 
                 if st.button("▶️ Iniciar Importação de Chamados"):
@@ -115,15 +148,18 @@ def run_importer_dialog():
                                 st.session_state.importer_done = True 
                             else:
                                 st.error("A importação de chamados falhou.")
-        except Exception as e:
-            st.error(f"Erro ao ler o arquivo: {e}")
+        elif not all_files_ok:
+            st.error("Processamento interrompido devido a erro na leitura de um arquivo.")
+        elif not dfs_list:
+            st.info("Nenhum dado válido encontrado nos arquivos selecionados.")
 
+    # Se a importação terminou, o rerun() fecha o dialog
     if st.session_state.get("importer_done", False):
         st.session_state.importer_done = False 
         st.rerun()
 
     if st.button("Cancelar"):
-        st.rerun()
+        st.rerun() # Fecha o dialog
 
 
 # --- Tela Principal da Página ---
@@ -135,7 +171,7 @@ def tela_dados_agencia():
         st.markdown("<div class='section-title-center'>GESTÃO DE DADOS POR AGÊNCIA</div>", unsafe_allow_html=True)
     with c2:
         if st.button("📥 Importar Novos Chamados", use_container_width=True):
-            run_importer_dialog()
+            run_importer_dialog() # Chama o pop-up
     
     st.write(" ")
     utils_chamados.criar_tabela_chamados()
@@ -210,7 +246,6 @@ def tela_dados_agencia():
 
     # Prepara o DataFrame para agrupamento
     try:
-        # Garante que 'Agendamento' seja datetime para o cálculo da data mínima
         df_chamados_filtrado['Agendamento'] = pd.to_datetime(df_chamados_filtrado['Agendamento'], errors='coerce')
         df_chamados_filtrado['Agendamento_str'] = df_chamados_filtrado['Agendamento'].dt.strftime('%d/%m/%Y').fillna('Sem Data')
         
@@ -234,7 +269,6 @@ def tela_dados_agencia():
 
     for nome_agencia, df_agencia in agencias_agrupadas:
         
-        # --- NOVO: Cálculo da Data Mais Próxima ---
         hoje = pd.Timestamp.now().normalize()
         proximas_datas = df_agencia[df_agencia['Agendamento'] >= hoje]['Agendamento']
         
@@ -242,10 +276,9 @@ def tela_dados_agencia():
         if not proximas_datas.empty:
             prox_data_str = proximas_datas.min().strftime('%d/%m/%Y')
             header_agencia = f"🏦 {nome_agencia} ({len(df_agencia)} chamados) | 🗓️ Próximo Ag: {prox_data_str}"
-        # --- FIM DA MUDANÇA ---
 
         if agencia_selecionada == "Todas":
-            expander_agencia = st.expander(header_agencia) # Usa o novo header
+            expander_agencia = st.expander(header_agencia)
         else:
             expander_agencia = st.container() 
 
@@ -276,13 +309,11 @@ def tela_dados_agencia():
                     
                     with st.form(key=form_key):
                         
-                        # --- NOVO: Botão Salvar no Topo ---
                         c_title, c_btn = st.columns([3, 1])
                         with c_title:
                             st.markdown(f"**Editar todos os {len(df_projeto)} chamados deste projeto:**")
                         with c_btn:
                             btn_salvar_bulk = st.form_submit_button("💾 Salvar Lote", use_container_width=True)
-                        # --- FIM DA MUDANÇA ---
                         
                         st.markdown("<h6>Informações e Prazos</h6>", unsafe_allow_html=True)
                         c1, c2, c3, c4 = st.columns(4)
@@ -307,10 +338,8 @@ def tela_dados_agencia():
                         proj_idx = projeto_list.index(proj_val) if proj_val in projeto_list else 0
                         novo_projeto = c1.selectbox("Projeto", options=projeto_list, index=proj_idx, key=f"{form_key}_proj")
                         
-                        # --- NOVO: Campo Analista Editável ---
                         analista_val = first_row.get('Analista', '')
                         novo_analista = c2.text_input("Analista", value=analista_val, key=f"{form_key}_analista")
-                        # --- FIM DA MUDANÇA ---
 
                         gestor_val = first_row.get('Gestor', '')
                         gestor_idx = gestor_list.index(gestor_val) if gestor_val in gestor_list else 0
@@ -320,7 +349,6 @@ def tela_dados_agencia():
                         prior_idx = prioridade_options.index(prior_val) if prior_val in prioridade_options else 1
                         nova_prioridade = c4.selectbox("Prioridade", options=prioridade_options, index=prior_idx, key=f"{form_key}_prior")
 
-                        # --- Layout da Linha 3 Ajustado (Botão saiu) ---
                         c1, c2 = st.columns(2)
                         
                         ag_val = first_row.get('Agencia_Combinada', '')
@@ -329,10 +357,8 @@ def tela_dados_agencia():
                         nova_agencia_selecionada = c1.selectbox("Agência", options=agencia_list_no_todas, index=ag_idx, key=f"{form_key}_ag")
                         nova_agencia_id = str(nova_agencia_selecionada).split(" - ")[0].replace("AG ", "").lstrip('0')
                         
-                        # --- NOVO: Campo Técnico Editável ---
                         tec_val = first_row.get('Técnico', '')
                         novo_tecnico = c2.text_input("Técnico", value=tec_val, key=f"{form_key}_tec")
-                        # --- FIM DA MUDANÇA ---
 
                     if btn_salvar_bulk:
                         updates = {
