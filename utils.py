@@ -283,26 +283,30 @@ def generate_excel_template_bytes():
     with pd.ExcelWriter(output, engine='openpyxl') as writer: df_template.to_excel(writer, index=False, sheet_name='Projetos')
     return output.getvalue()
 
-df = pd.read_csv(uploaded_file)
+uploaded_file = st.file_uploader("Selecione o arquivo CSV", type=["csv", "xlsx"])
 
-# 🔍 Trecho de teste temporário — para detectar colunas com datetime64
-import numpy as np
-import streamlit as st
+if uploaded_file is not None:
+    df = pd.read_csv(uploaded_file)
 
-st.write("**Tipos das colunas:**")
-st.write(df.dtypes)
+    # 🔍 Trecho de teste temporário
+    import numpy as np
+    st.write("**Tipos das colunas:**")
+    st.write(df.dtypes)
 
-datetime_cols = [
-    col for col in df.columns
-    if df[col].apply(lambda x: isinstance(x, np.datetime64)).any()
-]
+    datetime_cols = [
+        col for col in df.columns
+        if df[col].apply(lambda x: isinstance(x, np.datetime64)).any()
+    ]
+    st.write("**Colunas com numpy.datetime64:**", datetime_cols)
 
-st.write("**Colunas com numpy.datetime64:**", datetime_cols)
+    for col in datetime_cols:
+        st.write(f"**Amostra de '{col}':**")
+        st.write(df[col].head(10))
 
-# Mostra amostras dessas colunas
-for col in datetime_cols:
-    st.write(f"**Amostra de '{col}':**")
-    st.write(df[col].head(10))
+    # 👉 Só depois disso chame a função
+    # bulk_insert_projetos_db(df, usuario_logado)
+else:
+    st.warning("Por favor, envie um arquivo para continuar.")
 
 def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
     if not conn:
@@ -572,6 +576,7 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         st.cache_data.clear(); return True, len(values)
     except Exception as e: 
         st.error(f"Erro ao salvar chamados no banco: {e}"); conn.rollback(); return False, 0
+
 
 
 
