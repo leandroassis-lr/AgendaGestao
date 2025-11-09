@@ -459,9 +459,16 @@ def tela_dados_agencia():
 
                 # --- Cor do Gestor ---
                 gestor_color = utils_chamados.get_color_for_name(nome_gestor)
-                gestor_html = f"<span style='color: {gestor_color}; font-weight: 500;'>{html.escape(nome_gestor)}</span>"
                 
-                # --- Cor do Status ---
+                # --- CORREÇÃO APLICADA AQUI ---
+                # Garante que todos os valores são strings antes de usar html.escape()
+                gestor_html = f"<span style='color: {gestor_color}; font-weight: 500;'>{html.escape(str(nome_gestor))}</span>"
+                projeto_html = html.escape(str(nome_projeto).upper())
+                analista_html = html.escape(str(first_row.get('Analista', 'N/A')))
+                agencia_html = html.escape(str(first_row.get('Agencia_Combinada', 'N/A')))
+                status_html = html.escape(str(status_principal_atual).upper())
+                # --- FIM DA CORREÇÃO ---
+                
                 status_color = utils_chamados.get_status_color(status_principal_atual)
                 
                 # --- Monta o HTML do Card ---
@@ -470,25 +477,25 @@ def tela_dados_agencia():
                         
                         <div>
                             <div class="date">📅 {data_agend}</div>
-                            <h5>{html.escape(nome_projeto.upper())}</h5>
+                            <h5>{projeto_html}</h5>
                         </div>
                         
                         <div>
                             <div class="label">Analista:</div>
-                            <div class="value">{html.escape(first_row.get('Analista', 'N/A'))}</div>
+                            <div class="value">{analista_html}</div>
                             <div class="sla">{sla_text}</div>
                         </div>
                         
                         <div>
                             <div class="label">Agência:</div>
-                            <div class="value">{html.escape(first_row.get('Agencia_Combinada', 'N/A'))}</div>
+                            <div class="value">{agencia_html}</div>
                             <div class="label">Gestor:</div>
                             <div class="value">{gestor_html}</div>
                         </div>
                         
                         <div>
                             <div class="card-status-badge" style="background-color: {status_color};">
-                                {html.escape(status_principal_atual.upper())}
+                                {status_html}
                             </div>
                             <div class="card-action-text">{acao_text}</div>
                         </div>
@@ -496,15 +503,11 @@ def tela_dados_agencia():
                     </div>
                 """
                 
-                # Escreve o HTML do card
                 st.markdown(card_html, unsafe_allow_html=True)
                 
-                # --- Nível 3 (Expander com formulários) ---
-                # Agora o expander vai DENTRO do card
                 expander_title = f"Ver/Editar Detalhes - ID: {first_row['ID']}"
                 with st.expander(expander_title):
                     
-                    # --- Nível 2: Formulário de Edição em Lote (Igual antes) ---
                     form_key_lote = f"form_lote_edit_{first_row['ID']}"
                     with st.form(key=form_key_lote):
                         st.markdown(f"**Editar campos comuns (para {len(df_projeto)} chamados):**")
@@ -536,7 +539,6 @@ def tela_dados_agencia():
                             else:
                                 st.cache_data.clear(); st.rerun()
                     
-                    # --- Nível 3: Formulário Individual (Igual antes) ---
                     st.markdown("---")
                     st.markdown("##### 🔎 Detalhes por Chamado Individual")
                     for _, chamado_row in df_projeto.iterrows():
@@ -596,7 +598,6 @@ def tela_dados_agencia():
                                     else:
                                         st.error("Falha ao salvar o chamado.")
                     
-                    # --- Descrição Agregada (Igual antes) ---
                     st.markdown("---")
                     st.markdown("##### Descrição (Total de Equipamentos do Projeto)")
                     descricao_list = []
