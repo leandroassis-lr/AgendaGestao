@@ -21,6 +21,30 @@ def get_db_connection_chamados():
 
 conn = get_db_connection_chamados() 
 
+# --- VARIÁVEL GLOBAL DE COLUNAS (CORREÇÃO) ---
+# Dicionário de todas as colunas que a tabela DEVE ter
+colunas_necessarias = {
+    'agencia_id': 'TEXT', 'agencia_nome': 'TEXT', 'agencia_uf': 'TEXT',
+    'servico': 'TEXT', 'projeto_nome': 'TEXT', 'data_agendamento': 'DATE',
+    'sistema': 'TEXT', 'cod_equipamento': 'TEXT', 'nome_equipamento': 'TEXT',
+    'quantidade': 'INTEGER', 'gestor': 'TEXT', 'descricao': 'TEXT',
+    'data_abertura': 'DATE', 'data_fechamento': 'DATE',
+    'status_chamado': 'TEXT', 'valor_chamado': 'NUMERIC(10, 2) DEFAULT 0.00',
+    'status_financeiro': "TEXT DEFAULT 'Pendente'",
+    'observacao': 'TEXT', 
+    'log_chamado': 'TEXT',
+    'analista': 'TEXT',
+    'tecnico': 'TEXT',
+    'prioridade': "TEXT DEFAULT 'Média'",
+    'link_externo': 'TEXT',
+    'protocolo': 'TEXT',
+    'numero_pedido': 'TEXT',
+    'data_envio': 'DATE',
+    'observacao_equipamento': 'TEXT'
+}
+# --- FIM DA CORREÇÃO ---
+
+
 # --- 2. FUNÇÃO PARA CRIAR/ATUALIZAR A TABELA 'chamados' ---
 def criar_tabela_chamados():
     """Cria a tabela 'chamados' e adiciona colunas ausentes se não existirem."""
@@ -34,31 +58,10 @@ def criar_tabela_chamados():
                 );
             """)
             
-            # Dicionário de todas as colunas que a tabela DEVE ter
-            colunas_necessarias = {
-                'agencia_id': 'TEXT', 'agencia_nome': 'TEXT', 'agencia_uf': 'TEXT',
-                'servico': 'TEXT', 'projeto_nome': 'TEXT', 'data_agendamento': 'DATE',
-                'sistema': 'TEXT', 'cod_equipamento': 'TEXT', 'nome_equipamento': 'TEXT',
-                'quantidade': 'INTEGER', 'gestor': 'TEXT', 'descricao': 'TEXT',
-                'data_abertura': 'DATE', 'data_fechamento': 'DATE',
-                'status_chamado': 'TEXT', 'valor_chamado': 'NUMERIC(10, 2) DEFAULT 0.00',
-                'status_financeiro': "TEXT DEFAULT 'Pendente'",
-                'observacao': 'TEXT', 
-                'log_chamado': 'TEXT',
-                'analista': 'TEXT',
-                'tecnico': 'TEXT',
-                'prioridade': "TEXT DEFAULT 'Média'",
-                # --- NOVAS COLUNAS ADICIONADAS (v9) ---
-                'link_externo': 'TEXT',
-                'protocolo': 'TEXT',
-                'numero_pedido': 'TEXT',
-                'data_envio': 'DATE',
-                'observacao_equipamento': 'TEXT'
-            }
-            
             cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'chamados';")
             colunas_existentes = [row[0] for row in cur.fetchall()]
             
+            # Agora lê a variável global 'colunas_necessarias'
             for coluna, tipo_coluna in colunas_necessarias.items():
                 if coluna not in colunas_existentes:
                     st.warning(f"Atualizando BD (Chamados): Adicionando coluna '{coluna}'...")
@@ -98,14 +101,9 @@ def carregar_chamados_db(agencia_id_filtro=None):
             'status_chamado': 'Status', 'valor_chamado': 'Valor (R$)',
             'status_financeiro': 'Status Financeiro',
             'observacao': 'Observação', 'log_chamado': 'Log do Chamado',
-            'analista': 'Analista',
-            'tecnico': 'Técnico',
-            'prioridade': 'Prioridade',
-            # --- NOVAS COLUNAS ADICIONADAS (v9) ---
-            'link_externo': 'Link Externo',
-            'protocolo': 'Nº Protocolo',
-            'numero_pedido': 'Nº Pedido',
-            'data_envio': 'Data Envio',
+            'analista': 'Analista', 'tecnico': 'Técnico', 'prioridade': 'Prioridade',
+            'link_externo': 'Link Externo', 'protocolo': 'Nº Protocolo',
+            'numero_pedido': 'Nº Pedido', 'data_envio': 'Data Envio',
             'observacao_equipamento': 'Obs. Equipamento'
         }
         df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
@@ -199,7 +197,6 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
     
     try:
         with conn.cursor() as cur:
-            # Puxa todos os campos, incluindo os novos
             cur.execute("""
                 SELECT 
                     data_agendamento, data_fechamento, observacao, log_chamado,
@@ -226,7 +223,6 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
             for key, value in updates.items():
                 k = str(key).lower().replace(" ", "_")
                 
-                # Mapeamento dos nomes do formulário para o banco
                 mapa_nomes = {
                     'agendamento': 'data_agendamento', 'finalização': 'data_fechamento', 'fechamento': 'data_fechamento',
                     'observação': 'observacao', 'sistema': 'sistema', 'serviço': 'servico',
@@ -245,8 +241,7 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
                         db_key = db_col
                         break
                 
-                if not db_key: # Se não achou no mapa, usa o nome original
-                    db_key = k
+                if not db_key: db_key = k
 
                 if isinstance(value, (datetime, date)): db_updates_raw[db_key] = value.strftime('%Y-%m-%d')
                 elif pd.isna(value): db_updates_raw[db_key] = None
@@ -290,7 +285,9 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
             
             updates_final = {}
             for k in db_updates_raw:
-                if k in colunas_necessarias: # Valida contra o mapa de colunas
+                # --- CORREÇÃO APLICADA AQUI ---
+                # Agora lê a variável global 'colunas_necessarias'
+                if k in colunas_necessarias: 
                     updates_final[k] = db_updates_raw[k]
 
             if not updates_final and not log_entries:
