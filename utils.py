@@ -301,7 +301,7 @@ def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
         'Links de Referência': 'links_referencia'
     }
 
-    # Valida colunas obrigatórias
+    # 🧩 Validação de colunas obrigatórias
     if 'Projeto' not in df.columns or 'Agência' not in df.columns:
         st.error("Erro: Planilha deve conter 'Projeto' e 'Agência'.")
         return False, 0
@@ -310,22 +310,26 @@ def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
         st.error("Erro: 'Projeto' e 'Agência' não podem ser vazios.")
         return False, 0
 
-    # Mapeia e trata colunas
+    # 🧱 Mapeia e trata colunas
     df_to_insert = df.rename(columns=column_map)
 
+    # Converte a coluna agendamento para datetime (se existir)
     if 'agendamento' in df_to_insert.columns:
         df_to_insert['agendamento'] = pd.to_datetime(df_to_insert['agendamento'], errors='coerce')
     else:
         df_to_insert['agendamento'] = None
 
+    # Campos padrão
     df_to_insert['status'] = 'NÃO INICIADA'
     df_to_insert['data_abertura'] = date.today()
 
+    # Analista padrão
     if 'analista' not in df_to_insert or df_to_insert['analista'].isnull().all():
         df_to_insert['analista'] = usuario_logado
     else:
         df_to_insert['analista'] = df_to_insert['analista'].fillna(usuario_logado)
 
+    # Prioridade padrão e validação
     if 'prioridade' not in df_to_insert:
         df_to_insert['prioridade'] = 'Média'
     else:
@@ -347,42 +351,21 @@ def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
 
         df_to_insert['prioridade'] = df_to_insert['prioridade'].str.capitalize()
 
+    # Define colunas a inserir
     cols_to_insert = [
         'projeto', 'descricao', 'agencia', 'tecnico', 'status', 'data_abertura',
         'observacao', 'demanda', 'analista', 'gestor', 'prioridade',
         'agendamento', 'links_referencia'
     ]
     
-        df_final = df_to_insert[[col for col in cols_to_insert if col in df_to_insert.columns]]
-        
-        # 🔧 Converte qualquer coluna datetime64 para datetime.date
-        for col in df_final.columns:
-            if np.issubdtype(df_final[col].dtype, np.datetime64):
-                df_final[col] = df_final[col].apply(lambda x: x.date() if pd.notna(x) else None)
-        
-        values = []
-        for record in df_final.to_records(index=False):
-            processed_record = []
-            for cell in record:
-                if pd.isna(cell):
-                    processed_record.append(None)
-                elif isinstance(cell, np.datetime64):
-                    processed_record.append(pd.to_datetime(cell).date())
-                elif isinstance(cell, pd.Timestamp):
-                    processed_record.append(cell.date())
-                elif isinstance(cell, datetime):
-                    processed_record.append(cell.date())
-                else:
-                    processed_record.append(cell)
-            values.append(tuple(processed_record))
+    df_final = df_to_insert[[col for col in cols_to_insert if col in df_to_insert.columns]]
 
-    # Conversão de agendamento para tipo date
-    if 'agendamento' in df_final.columns:
-        df_final['agendamento'] = df_final['agendamento'].apply(
-            lambda x: x.date() if pd.notna(x) and isinstance(x, (pd.Timestamp, datetime)) else None
-        )
+    # 🔧 Converte todas as colunas datetime64 para datetime.date
+    for col in df_final.columns:
+        if np.issubdtype(df_final[col].dtype, np.datetime64):
+            df_final[col] = df_final[col].apply(lambda x: x.date() if pd.notna(x) else None)
 
-    # 🔧 Conversão de tipos problemáticos (numpy.datetime64, pd.Timestamp etc.)
+    # 🧩 Prepara valores para inserção
     values = []
     for record in df_final.to_records(index=False):
         processed_record = []
@@ -399,6 +382,7 @@ def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
                 processed_record.append(cell)
         values.append(tuple(processed_record))
 
+    # 🧱 Monta e executa o SQL
     cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns))
     placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
     query = sql.SQL("INSERT INTO projetos ({}) VALUES ({})").format(cols_sql, placeholders)
@@ -406,6 +390,7 @@ def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
     try:
         with conn.cursor() as cur:
             cur.executemany(query, values)
+        conn.commit()
         st.cache_data.clear()
         return True, len(values)
     except Exception as e:
@@ -413,7 +398,6 @@ def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
         conn.rollback()
         return False, 0
 
-# (dataframe_to_excel_bytes - Sem alterações)
 def dataframe_to_excel_bytes(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -599,4 +583,5 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         st.cache_data.clear(); return True, len(values)
     except Exception as e: 
         st.error(f"Erro ao salvar chamados no banco: {e}"); conn.rollback(); return False, 0
+
 
