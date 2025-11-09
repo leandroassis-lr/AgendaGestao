@@ -215,7 +215,13 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
     else:
         novo_status = "Não Iniciado"
 
-    status_atual = df_projeto.iloc[0]['Status']
+    # --- CORREÇÃO APLICADA AQUI (para o status_atual) ---
+    status_atual_val = df_projeto.iloc[0]['Status']
+    if pd.isna(status_atual_val) or status_atual_val == "":
+        status_atual = "Não Iniciado"
+    else:
+        status_atual = str(status_atual_val)
+    # --- FIM DA CORREÇÃO ---
     
     if status_atual != novo_status:
         st.info(f"Status do projeto mudou de '{status_atual}' para '{novo_status}'")
@@ -426,7 +432,14 @@ def tela_dados_agencia():
                 
                 first_row = df_projeto.iloc[0]
                 chamado_ids_internos_list = df_projeto['ID'].tolist()
-                status_principal_atual = first_row.get('Status', 'Não Iniciado')
+                
+                # --- CORREÇÃO APLICADA AQUI ---
+                status_val = first_row.get('Status')
+                if pd.isna(status_val) or status_val == "":
+                    status_principal_atual = 'Não Iniciado'
+                else:
+                    status_principal_atual = str(status_val)
+                # --- FIM DA CORREÇÃO ---
                 
                 # --- Cálculo do SLA (Placeholder) ---
                 sla_text = ""
@@ -443,7 +456,7 @@ def tela_dados_agencia():
                 
                 # --- Texto de Ação (Baseado no Status) ---
                 acao_text = "FINALIZADO" # Default
-                status_lower = status_principal_atual.lower()
+                status_lower = status_principal_atual.lower() # Agora é seguro
                 if "não iniciado" in status_lower:
                     acao_text = "INICIAR PROJETO"
                 elif "acionar técnico" in status_lower:
@@ -460,14 +473,12 @@ def tela_dados_agencia():
                 # --- Cor do Gestor ---
                 gestor_color = utils_chamados.get_color_for_name(nome_gestor)
                 
-                # --- CORREÇÃO APLICADA AQUI ---
                 # Garante que todos os valores são strings antes de usar html.escape()
                 gestor_html = f"<span style='color: {gestor_color}; font-weight: 500;'>{html.escape(str(nome_gestor))}</span>"
                 projeto_html = html.escape(str(nome_projeto).upper())
                 analista_html = html.escape(str(first_row.get('Analista', 'N/A')))
                 agencia_html = html.escape(str(first_row.get('Agencia_Combinada', 'N/A')))
-                status_html = html.escape(str(status_principal_atual).upper())
-                # --- FIM DA CORREÇÃO ---
+                status_html = html.escape(status_principal_atual.upper())
                 
                 status_color = utils_chamados.get_status_color(status_principal_atual)
                 
