@@ -58,7 +58,7 @@ def formatar_agencia_excel(id_agencia, nome_agencia):
           nome_str = nome_str[len(id_agencia_limpo):].strip(" -")
     return f"{id_str} - {nome_str}"
 
-# --- 1. DIALOG (POP-UP) DE IMPORTAÇÃO (COM MULTI-UPLOAD) ---
+# --- 1. DIALOG (POP-UP) DE IMPORTAÇÃO (COM MULTI-UPLOAD E UTF-8) ---
 @st.dialog("Importar Novos Chamados (Excel/CSV)")
 def run_importer_dialog():
     st.info(f"""
@@ -76,7 +76,6 @@ def run_importer_dialog():
     )
 
     if uploaded_files:
-        
         dfs_list = []
         all_files_ok = True
         
@@ -84,12 +83,7 @@ def run_importer_dialog():
             for uploaded_file in uploaded_files:
                 try:
                     if uploaded_file.name.endswith('.csv'):
-                        
-                        # --- INÍCIO DA CORREÇÃO ---
-                        # Mudei de 'latin-1' para 'utf-8'
                         df_individual = pd.read_csv(uploaded_file, sep=';', header=0, encoding='utf-8', keep_default_na=False, dtype=str) 
-                        # --- FIM DA CORREÇÃO ---
-                        
                     else:
                         df_individual = pd.read_excel(uploaded_file, header=0, keep_default_na=False, dtype=str) 
 
@@ -161,16 +155,85 @@ def run_importer_dialog():
         st.rerun()
 
 
+# --- FUNÇÃO "CÉREBRO" DE STATUS ---
+def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
+    """
+    Calcula o novo status de um projeto com base nas suas regras de negócio
+    e atualiza o campo 'Status' de todos os chamados do grupo.
+    """
+    has_S = df_projeto['Nº Chamado'].str.contains('-S-').any()
+    has_E = df_projeto['Nº Chamado'].str.contains('-E-').any()
+    
+    # Verifica o estado dos campos-gatilho em TODO o grupo
+    link_presente = df_projeto['Link Externo'].fillna('').str.strip().ne('').any()
+    pedido_presente = df_projeto['Nº Pedido'].fillna('').str.strip().ne('').any()
+    envio_presente = df_projeto['Data Envio'].notna().any()
+    tecnico_presente = df_projeto['Técnico'].fillna('').str.strip().ne('').any()
+    
+    novo_status = "Indefinido"
+
+    # --- Cenário 1: Só Serviço (S-Only) ---
+    if has_S and not has_E:
+        if tecnico_presente:
+            novo_status = "Em Andamento"
+        elif link_presente:
+            novo_status = "Acionar técnico"
+        else:
+            novo_status = "Não Iniciado"
+
+    # --- Cenário 2: Misto (S e E) ---
+    elif has_S and has_E:
+        if tecnico_presente:
+            novo_status = "Em Andamento"
+        elif envio_presente:
+            novo_status = "Equipamento entregue - Acionar técnico"
+        elif pedido_presente:
+            novo_status = "Equipamento Solicitado"
+        elif link_presente:
+            novo_status = "Solicitar Equipamento"
+        else:
+            novo_status = "Não Iniciado"
+
+    # --- Cenário 3: Só Equipamento (E-Only) ---
+    elif not has_S and has_E:
+        if envio_presente:
+            novo_status = "Equipamento entregue - Concluído"
+        elif pedido_presente:
+            novo_status = "Equipamento Solicitado"
+        else:
+            # Estado base para E-Only
+            novo_status = "Solicitar Equipamento"
+    
+    # --- Fallback (se não for S nem E) ---
+    else:
+        novo_status = "Não Iniciado"
+
+    # Pega o status atual (o primeiro da lista é o representante)
+    status_atual = df_projeto.iloc[0]['Status']
+    
+    # Se o status calculado for diferente do atual, atualiza TODOS
+    if status_atual != novo_status:
+        st.info(f"Status do projeto mudou de '{status_atual}' para '{novo_status}'")
+        updates = {"Status": novo_status}
+        for chamado_id in ids_para_atualizar:
+            # Usamos o utils, mas sem log, para não poluir
+            utils_chamados.atualizar_chamado_db(chamado_id, updates)
+        
+        # Retorna True para podermos recarregar a página
+        return True
+    
+    return False
+
+
 # --- Tela Principal da Página ---
 def tela_dados_agencia():
     
-    # --- TÍTULO E BOTÃO DE IMPORTAR (NOVO LAYOUT) ---
     c1, c2 = st.columns([3, 1])
     with c1:
         st.markdown("<div class='section-title-center'>GESTÃO DE DADOS POR AGÊNCIA</div>", unsafe_allow_html=True)
     with c2:
         if st.button("📥 Importar Novos Chamados", use_container_width=True):
-            run_importer_dialog() # Chama o pop-up
+            run_importer_dialog()
     
     st.write(" ")
     utils_chamados.criar_tabela_chamados()
@@ -194,9 +257,7 @@ def tela_dados_agencia():
         st.error("Tabela de chamados incompleta (sem 'Cód. Agência'). Tente re-importar."); st.stop()
 
     # --- 4. Preparar Listas de Opções para Formulários ---
-    status_options = ["Não iniciada", "Em andamento", "Concluído", "Pendencia de infra", "Pendencia de equipamento", "Pausado", "Cancelado"]
     prioridade_options = ["Baixa", "Média", "Alta", "Crítica"]
-    
     projeto_list = sorted([str(p) for p in df_chamados_raw['Projeto'].dropna().unique() if p])
     gestor_list = sorted([str(g) for g in df_chamados_raw['Gestor'].dropna().unique() if g])
     
@@ -220,15 +281,14 @@ def tela_dados_agencia():
     else:
         df_chamados_filtrado = df_chamados_raw[df_chamados_raw['Agencia_Combinada'] == agencia_selecionada]
 
-
     # --- 7. Painel de KPIs ---
+    # (Omitido por brevidade, permanece o mesmo)
     total_chamados = len(df_chamados_filtrado)
     if not df_chamados_filtrado.empty:
-        status_fechamento = ['fechado', 'concluido', 'resolvido', 'cancelado', 'encerrado']
+        status_fechamento = ['fechado', 'concluido', 'resolvido', 'cancelado', 'encerrado', 'equipamento entregue - concluído']
         chamados_abertos_count = len(df_chamados_filtrado[~df_chamados_filtrado['Status'].astype(str).str.lower().isin(status_fechamento)])
     else:
         chamados_abertos_count = 0
-
     st.markdown(f"### 📊 Resumo da Agência: {agencia_selecionada}")
     cols_kpi = st.columns(2) 
     cols_kpi[0].metric("Total de Chamados", total_chamados)
@@ -247,10 +307,6 @@ def tela_dados_agencia():
     try:
         df_chamados_filtrado['Agendamento'] = pd.to_datetime(df_chamados_filtrado['Agendamento'], errors='coerce')
         df_chamados_filtrado['Agendamento_str'] = df_chamados_filtrado['Agendamento'].dt.strftime('%d/%m/%Y').fillna('Sem Data')
-        
-        if 'Analista' not in df_chamados_filtrado.columns: df_chamados_filtrado['Analista'] = 'N/A'
-        if 'Técnico' not in df_chamados_filtrado.columns: df_chamados_filtrado['Técnico'] = 'N/A'
-        if 'Prioridade' not in df_chamados_filtrado.columns: df_chamados_filtrado['Prioridade'] = 'Média'
         
         chave_agencia = 'Agencia_Combinada'
         chave_projeto = ['Projeto', 'Gestor', 'Agendamento_str']
@@ -304,67 +360,38 @@ def tela_dados_agencia():
                     
                     first_row = df_projeto.iloc[0]
                     chamado_ids_internos_list = df_projeto['ID'].tolist()
-                    form_key = f"form_bulk_edit_{first_row['ID']}"
                     
-                    with st.form(key=form_key):
+                    # --- NOVO: Status Principal (Calculado e Read-Only) ---
+                    # Pega o status do primeiro chamado (são todos iguais)
+                    status_principal_atual = first_row.get('Status', 'Não Iniciado')
+                    st.info(f"**Status Principal do Projeto:** {status_principal_atual}")
+                    
+                    
+                    # --- NÍVEL 2: Formulário de Edição em Lote ---
+                    form_key_lote = f"form_lote_edit_{first_row['ID']}"
+                    
+                    with st.form(key=form_key_lote):
+                        st.markdown(f"**Editar campos comuns (para {len(df_projeto)} chamados):**")
                         
-                        c_title, c_btn = st.columns([3, 1])
-                        with c_title:
-                            st.markdown(f"**Editar todos os {len(df_projeto)} chamados deste projeto:**")
-                        with c_btn:
-                            btn_salvar_bulk = st.form_submit_button("💾 Salvar Lote", use_container_width=True)
-                        
-                        st.markdown("<h6>Informações e Prazos</h6>", unsafe_allow_html=True)
-                        c1, c2, c3, c4 = st.columns(4)
-                        
-                        status_val = first_row.get('Status', 'Não iniciada')
-                        status_idx = status_options.index(status_val) if status_val in status_options else 0
-                        novo_status = c1.selectbox("Status", options=status_options, index=status_idx, key=f"{form_key}_status")
-                        
-                        abertura_val = _to_date_safe(first_row.get('Abertura'))
-                        nova_abertura = c2.date_input("Data Abertura", value=abertura_val, format="DD/MM/YYYY", key=f"{form_key}_abertura")
-                        
-                        agend_val = _to_date_safe(first_row.get('Agendamento'))
-                        novo_agendamento = c3.date_input("Agendamento", value=agend_val, format="DD/MM/YYYY", key=f"{form_key}_agend")
-                        
-                        final_val = _to_date_safe(first_row.get('Fechamento'))
-                        nova_finalizacao = c4.date_input("Data Finalização", value=final_val, format="DD/MM/YYYY", key=f"{form_key}_final")
-
-                        st.markdown("<h6>Detalhes do Projeto</h6>", unsafe_allow_html=True)
-                        c1, c2, c3, c4 = st.columns(4)
-                        
-                        proj_val = first_row.get('Projeto', '')
-                        proj_idx = projeto_list.index(proj_val) if proj_val in projeto_list else 0
-                        novo_projeto = c1.selectbox("Projeto", options=projeto_list, index=proj_idx, key=f"{form_key}_proj")
+                        c1, c2, c3, c_btn = st.columns([2, 2, 1, 1])
                         
                         analista_val = first_row.get('Analista', '')
-                        novo_analista = c2.text_input("Analista", value=analista_val, key=f"{form_key}_analista")
+                        novo_analista = c1.text_input("Analista", value=analista_val, key=f"{form_key_lote}_analista")
 
-                        gestor_val = first_row.get('Gestor', '')
-                        gestor_idx = gestor_list.index(gestor_val) if gestor_val in gestor_list else 0
-                        novo_gestor = c3.selectbox("Gestor", options=gestor_list, index=gestor_idx, key=f"{form_key}_gestor")
+                        tec_val = first_row.get('Técnico', '')
+                        novo_tecnico = c2.text_input("Técnico", value=tec_val, key=f"{form_key_lote}_tec")
                         
                         prior_val = first_row.get('Prioridade', 'Média')
                         prior_idx = prioridade_options.index(prior_val) if prior_val in prioridade_options else 1
-                        nova_prioridade = c4.selectbox("Prioridade", options=prioridade_options, index=prior_idx, key=f"{form_key}_prior")
+                        nova_prioridade = c3.selectbox("Prioridade", options=prioridade_options, index=prior_idx, key=f"{form_key_lote}_prior")
 
-                        c1, c2 = st.columns(2)
-                        
-                        ag_val = first_row.get('Agencia_Combinada', '')
-                        ag_id_num = str(ag_val).split(" - ")[0].replace("AG ", "").lstrip('0')
-                        ag_idx = agencia_list_no_todas.index(ag_val) if ag_val in agencia_list_no_todas else 0
-                        nova_agencia_selecionada = c1.selectbox("Agência", options=agencia_list_no_todas, index=ag_idx, key=f"{form_key}_ag")
-                        nova_agencia_id = str(nova_agencia_selecionada).split(" - ")[0].replace("AG ", "").lstrip('0')
-                        
-                        tec_val = first_row.get('Técnico', '')
-                        novo_tecnico = c2.text_input("Técnico", value=tec_val, key=f"{form_key}_tec")
+                        btn_salvar_lote = c_btn.form_submit_button("💾 Salvar Lote", use_container_width=True)
 
-                    if btn_salvar_bulk:
+                    if btn_salvar_lote:
                         updates = {
-                            "Status": novo_status, "Data Abertura": nova_abertura, "Data Agendamento": novo_agendamento,
-                            "Data Finalização": nova_finalizacao, "Projeto": novo_projeto, "Analista": novo_analista,
-                            "Gestor": novo_gestor, "Prioridade": nova_prioridade, "Agência": nova_agencia_id,
-                            "Técnico": novo_tecnico
+                            "Analista": novo_analista,
+                            "Técnico": novo_tecnico,
+                            "Prioridade": nova_prioridade
                         }
                         
                         with st.spinner(f"Atualizando {len(chamado_ids_internos_list)} chamados..."):
@@ -373,11 +400,22 @@ def tela_dados_agencia():
                                 if utils_chamados.atualizar_chamado_db(chamado_id, updates):
                                     sucesso_count += 1
                             
-                            st.cache_data.clear()
                             st.success(f"{sucesso_count} de {len(chamado_ids_internos_list)} chamados foram atualizados!")
-                            st.rerun()
+                            
+                            # --- Dispara o Recálculo do Status ---
+                            # Recarrega o DF com os dados salvos para o cálculo
+                            df_chamados_atualizado = utils_chamados.carregar_chamados_db()
+                            df_projeto_atualizado = df_chamados_atualizado[df_chamados_atualizado['ID'].isin(chamado_ids_internos_list)]
+                            
+                            if calcular_e_atualizar_status_projeto(df_projeto_atualizado, chamado_ids_internos_list):
+                                st.cache_data.clear()
+                                st.rerun() # Reroda a página para mostrar o novo status
+                            else:
+                                st.cache_data.clear()
+                                st.rerun() # Reroda mesmo se não mudou, para mostrar os campos salvos
                     
-                    # --- NÍVEL 3 (Simplificado) ---
+                    
+                    # --- NÍVEL 3 (Formulário Individual) ---
                     st.markdown("---")
                     st.markdown("##### 🔎 Detalhes por Chamado Individual")
 
@@ -385,24 +423,72 @@ def tela_dados_agencia():
                         chamado_id_interno = chamado_row['ID']
                         chamado_id_str = chamado_row['Nº Chamado']
                         
+                        form_key_ind = f"form_ind_edit_{chamado_id_interno}"
+                        
                         with st.expander(f"▶️ Chamado: {chamado_id_str}"):
-                            c1, c2 = st.columns(2)
-                            c1.text_input("Serviço", value=chamado_row.get('Serviço', 'N/A'), disabled=True, key=f"serv_{chamado_id_interno}")
-                            c2.text_input("Sistema", value=chamado_row.get('Sistema', 'N/A'), disabled=True, key=f"sist_{chamado_id_interno}")
+                            with st.form(key=form_key_ind):
+                                
+                                # Verifica o tipo de chamado
+                                is_servico = '-S-' in chamado_id_str
+                                is_equipamento = '-E-' in chamado_id_str
+                                
+                                updates_individuais = {}
+                                
+                                # --- Campos Condicionais ---
+                                if is_servico:
+                                    st.markdown("**Gatilhos de Serviço (-S-)**")
+                                    link_val = chamado_row.get('Link Externo', '')
+                                    novo_link = st.text_input("Link Externo", value=link_val, key=f"{form_key_ind}_link")
+                                    updates_individuais['Link Externo'] = novo_link
+                                    
+                                    proto_val = chamado_row.get('Nº Protocolo', '')
+                                    novo_protocolo = st.text_input("Nº Protocolo", value=proto_val, key=f"{form_key_ind}_proto")
+                                    updates_individuais['Nº Protocolo'] = novo_protocolo
+                                    
+                                if is_equipamento:
+                                    st.markdown("**Gatilhos de Equipamento (-E-)**")
+                                    c1, c2 = st.columns(2)
+                                    
+                                    pedido_val = chamado_row.get('Nº Pedido', '')
+                                    novo_pedido = c1.text_input("Nº Pedido", value=pedido_val, key=f"{form_key_ind}_pedido")
+                                    updates_individuais['Nº Pedido'] = novo_pedido
+                                    
+                                    envio_val = _to_date_safe(chamado_row.get('Data Envio'))
+                                    nova_data_envio = c2.date_input("Data Envio", value=envio_val, format="DD/MM/YYYY", key=f"{form_key_ind}_envio")
+                                    updates_individuais['Data Envio'] = nova_data_envio
 
-                            qtd_val_numeric_ind = pd.to_numeric(chamado_row.get('Qtd.'), errors='coerce')
-                            qtd_int_ind = int(qtd_val_numeric_ind) if pd.notna(qtd_val_numeric_ind) else 0
-                            equip_str_ind = str(chamado_row.get('Equipamento', 'N/A'))
-                            
-                            st.text_area(
-                                "Descrição (equipamento deste chamado)", 
-                                value=f"{qtd_int_ind:02d} - {equip_str_ind}", 
-                                disabled=True, height=50,
-                                key=f"desc_ind_{chamado_id_interno}"
-                            )
-                    
+                                    obs_val = chamado_row.get('Obs. Equipamento', '')
+                                    nova_obs_equip = st.text_area("Obs. Equipamento", value=obs_val, height=100, key=f"{form_key_ind}_obs_equip")
+                                    updates_individuais['Obs. Equipamento'] = nova_obs_equip
+
+                                st.markdown("**Informações do Chamado**")
+                                c1, c2 = st.columns(2)
+                                c1.text_input("Serviço", value=chamado_row.get('Serviço', 'N/A'), disabled=True)
+                                c2.text_input("Sistema", value=chamado_row.get('Sistema', 'N/A'), disabled=True)
+                                
+                                btn_salvar_individual = st.form_submit_button("💾 Salvar Chamado", use_container_width=True)
+
+                            if btn_salvar_individual:
+                                with st.spinner(f"Salvando chamado {chamado_id_str}..."):
+                                    if utils_chamados.atualizar_chamado_db(chamado_id_interno, updates_individuais):
+                                        st.success("Chamado salvo!")
+                                        
+                                        # --- Dispara o Recálculo do Status ---
+                                        df_chamados_atualizado = utils_chamados.carregar_chamados_db()
+                                        df_projeto_atualizado = df_chamados_atualizado[df_chamados_atualizado['ID'].isin(chamado_ids_internos_list)]
+                                        
+                                        if calcular_e_atualizar_status_projeto(df_projeto_atualizado, chamado_ids_internos_list):
+                                            st.cache_data.clear()
+                                            st.rerun()
+                                        else:
+                                            st.cache_data.clear()
+                                            st.rerun()
+                                    else:
+                                        st.error("Falha ao salvar o chamado.")
+
                     # --- DESCRIÇÃO AGREGADA (Final) ---
                     st.markdown("---")
+                    st.markdown("##### Descrição (Total de Equipamentos do Projeto)")
                     descricao_list = []
                     for _, chamado_row_desc in df_projeto.iterrows():
                         qtd_val_numeric = pd.to_numeric(chamado_row_desc.get('Qtd.'), errors='coerce')
@@ -416,7 +502,8 @@ def tela_dados_agencia():
                         value=descricao_texto, 
                         height=max(50, len(descricao_list) * 25 + 25),
                         disabled=True,
-                        key=f"desc_proj_{nome_agencia}_{nome_projeto}_{data_agend}"
+                        key=f"desc_proj_{nome_agencia}_{nome_projeto}_{data_agend}",
+                        label_visibility="collapsed"
                     )
 
 # --- Ponto de Entrada ---
