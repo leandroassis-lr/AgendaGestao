@@ -68,25 +68,28 @@ def run_importer_dialog():
             Se um `Chamado` (Coluna A) já existir, ele será **atualizado**.
     """)
     
-    # --- MUDANÇA 1: Habilitado multi-upload ---
     uploaded_files = st.file_uploader(
         "Selecione o(s) arquivo(s) Excel/CSV de chamados", 
         type=["xlsx", "xls", "csv"], 
         key="chamado_uploader_dialog",
-        accept_multiple_files=True # <<< Habilitado
+        accept_multiple_files=True
     )
 
-    # --- MUDANÇA 2: Lógica de loop e concatenação ---
-    if uploaded_files: # Se a lista não estiver vazia
+    if uploaded_files:
         
-        dfs_list = [] # Lista para guardar os dataframes
+        dfs_list = []
         all_files_ok = True
         
         with st.spinner("Lendo e processando arquivos..."):
-            for uploaded_file in uploaded_files: # Loop nos arquivos
+            for uploaded_file in uploaded_files:
                 try:
                     if uploaded_file.name.endswith('.csv'):
-                        df_individual = pd.read_csv(uploaded_file, sep=';', header=0, encoding='latin-1', keep_default_na=False, dtype=str) 
+                        
+                        # --- INÍCIO DA CORREÇÃO ---
+                        # Mudei de 'latin-1' para 'utf-8'
+                        df_individual = pd.read_csv(uploaded_file, sep=';', header=0, encoding='utf-8', keep_default_na=False, dtype=str) 
+                        # --- FIM DA CORREÇÃO ---
+                        
                     else:
                         df_individual = pd.read_excel(uploaded_file, header=0, keep_default_na=False, dtype=str) 
 
@@ -99,21 +102,18 @@ def run_importer_dialog():
                 except Exception as e:
                     st.error(f"Erro ao ler o arquivo '{uploaded_file.name}': {e}")
                     all_files_ok = False
-                    break # Para o loop se um arquivo falhar
+                    break 
 
-        # Se a lista de dataframes não estiver vazia e não houve erros
         if dfs_list and all_files_ok:
             try:
-                # Combina todos os dataframes em um só
                 df_raw = pd.concat(dfs_list, ignore_index=True)
                 if df_raw.empty:
                     st.error("Erro: Nenhum dado válido encontrado nos arquivos.")
-                    return # Para o dialog
+                    return
             except Exception as e:
                 st.error(f"Erro ao combinar arquivos: {e}")
                 return
 
-            # --- Daqui para baixo, a lógica é a mesma, mas aplicada ao df_raw combinado ---
             col_map = {
                 0: 'chamado_id', 1: 'agencia_id', 2: 'agencia_nome', 3: 'agencia_uf',
                 9: 'servico', 10: 'projeto_nome', 11: 'data_agendamento', 12: 'sistema',
@@ -153,13 +153,12 @@ def run_importer_dialog():
         elif not dfs_list:
             st.info("Nenhum dado válido encontrado nos arquivos selecionados.")
 
-    # Se a importação terminou, o rerun() fecha o dialog
     if st.session_state.get("importer_done", False):
         st.session_state.importer_done = False 
         st.rerun()
 
     if st.button("Cancelar"):
-        st.rerun() # Fecha o dialog
+        st.rerun()
 
 
 # --- Tela Principal da Página ---
