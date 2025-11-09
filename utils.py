@@ -352,8 +352,29 @@ def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
         'observacao', 'demanda', 'analista', 'gestor', 'prioridade',
         'agendamento', 'links_referencia'
     ]
-
-    df_final = df_to_insert[[col for col in cols_to_insert if col in df_to_insert.columns]]
+    
+        df_final = df_to_insert[[col for col in cols_to_insert if col in df_to_insert.columns]]
+        
+        # 🔧 Converte qualquer coluna datetime64 para datetime.date
+        for col in df_final.columns:
+            if np.issubdtype(df_final[col].dtype, np.datetime64):
+                df_final[col] = df_final[col].apply(lambda x: x.date() if pd.notna(x) else None)
+        
+        values = []
+        for record in df_final.to_records(index=False):
+            processed_record = []
+            for cell in record:
+                if pd.isna(cell):
+                    processed_record.append(None)
+                elif isinstance(cell, np.datetime64):
+                    processed_record.append(pd.to_datetime(cell).date())
+                elif isinstance(cell, pd.Timestamp):
+                    processed_record.append(cell.date())
+                elif isinstance(cell, datetime):
+                    processed_record.append(cell.date())
+                else:
+                    processed_record.append(cell)
+            values.append(tuple(processed_record))
 
     # Conversão de agendamento para tipo date
     if 'agendamento' in df_final.columns:
