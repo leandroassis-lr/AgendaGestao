@@ -1,6 +1,3 @@
-# --- Conteúdo do NOVO arquivo: utils_chamados.py ---
-# Este arquivo é 100% independente e só serve à Página 7.
-
 import streamlit as st
 import pandas as pd
 from datetime import date, datetime 
