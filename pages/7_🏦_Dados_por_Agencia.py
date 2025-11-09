@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
-import utils 
+import utils # Para login, CSS
+import utils_chamados # <<< NOSSO NOVO ARQUIVO
 from datetime import date, datetime
 import re 
 import html 
@@ -8,11 +9,11 @@ import html
 # Configuração da Página
 st.set_page_config(page_title="Dados por Agência - GESTÃO", page_icon="🏦", layout="wide")
 try:
-    utils.load_css() # Tenta carregar o CSS
+    utils.load_css() 
 except:
     pass 
 
-# --- Controle Principal de Login (Independente do app.py) ---
+# --- Controle Principal de Login ---
 if "logado" not in st.session_state or not st.session_state.logado:
     st.warning("Por favor, faça o login na página principal (app.py) antes de acessar esta página.")
     st.stop()
@@ -22,36 +23,25 @@ def _to_date_safe(val):
     if val is None or pd.isna(val): return None
     if isinstance(val, date) and not isinstance(val, datetime): return val
     try:
-        # Tenta converter, inclusive formatos PT-BR
-        ts = pd.to_datetime(val, errors='coerce', dayfirst=True)
+        ts = pd.to_datetime(val, errors='coerce', dayfirst=True) # Tenta ler DD/MM/AAAA
         if pd.isna(ts): return None
         return ts.date()
     except Exception: return None
 
 # --- Funções Helper da Página ---
 def extrair_e_mapear_colunas(df, col_map):
-    """
-    Extrai colunas do DataFrame raw (lido do Excel/CSV) com base em um mapa
-    de índices (números) para nomes de colunas do banco de dados.
-    """
+    """ Extrai e renomeia colunas com base em índices. """
     df_extraido = pd.DataFrame()
     colunas_originais = df.columns.tolist()
     
-    # Validação (o CSV tem 29 colunas, T=19)
     if len(colunas_originais) < 20: 
         st.error(f"Erro: O arquivo carregado parece ter apenas {len(colunas_originais)} colunas. O formato esperado (com 20+ colunas) não foi reconhecido.")
         return None
     try:
-        # Pega os nomes das colunas originais do arquivo (da linha 1)
         col_nomes_originais = {idx: colunas_originais[idx] for idx in col_map.keys() if idx < len(colunas_originais)}
-        
-        # Pega as colunas pelos Nomes Originais
-        df_para_renomear = df[col_nomes_originais.values()].copy()
-        
-        # Mapeia o Nome Original -> Nome do BD
+        df_para_renomear = df[list(col_nomes_originais.values())].copy() # Convertido para lista
         col_rename_map = {orig_name: db_name for idx, db_name in col_map.items() if idx in col_nomes_originais and (orig_name := col_nomes_originais[idx])}
         df_extraido = df_para_renomear.rename(columns=col_rename_map)
-        
     except KeyError as e:
         st.error(f"Erro ao mapear colunas. Coluna esperada {e} não encontrada no arquivo.")
         st.error(f"Colunas encontradas: {colunas_originais}")
@@ -82,20 +72,7 @@ def tela_dados_agencia():
         st.info(f"""
             Arraste seu arquivo Excel de chamados (formato `.xlsx` ou `.csv` com `;`) aqui.
             O sistema espera que a **primeira linha** contenha os cabeçalhos.
-            As colunas necessárias (baseado no arquivo 'RelatorioAnexo...'):
-            - **A:** Chamado (ID)
-            - **B:** Codigo_Ponto (ID Agência)
-            - **C:** Nome (Nome Agência)
-            - **D:** UF
-            - **J:** Servico
-            - **K:** Projeto
-            - **L:** Data_Agendamento (Formato DD/MM/AAAA)
-            - **M:** Tipo_De_Solicitacao (será salvo como 'Sistema')
-            - **N:** Sistema (será salvo como 'Cód. Equipamento')
-            - **O:** Codigo_Equipamento (será salvo como 'Nome Equipamento')
-            - **Q:** Quantidade_Solicitada (será salvo como 'Quantidade')
-            - **T:** Gestor
-            
+            As colunas necessárias (A, B, C, D, J, K, L, M, N, O, Q, T) serão lidas automaticamente.
             Se um `Chamado` (Coluna A) já existir, ele será **atualizado**.
         """)
         uploaded_file = st.file_uploader("Selecione o arquivo Excel/CSV de chamados", type=["xlsx", "xls", "csv"], key="chamado_uploader")
@@ -103,20 +80,19 @@ def tela_dados_agencia():
         if uploaded_file is not None:
             try:
                 if uploaded_file.name.endswith('.csv'):
-                    df_raw = pd.read_csv(uploaded_file, sep=';', header=0, encoding='latin-1', keep_default_na=False) 
+                    df_raw = pd.read_csv(uploaded_file, sep=';', header=0, encoding='latin-1', keep_default_na=False, dtype=str) # Lê tudo como string
                 else:
-                    df_raw = pd.read_excel(uploaded_file, header=0, keep_default_na=False) 
+                    df_raw = pd.read_excel(uploaded_file, header=0, keep_default_na=False, dtype=str) # Lê tudo como string
 
                 df_raw.dropna(how='all', inplace=True)
                 if df_raw.empty: st.error("Erro: O arquivo está vazio."); st.stop()
 
-                # --- >>> CORREÇÃO DO MAPEAMENTO (Q = 16) <<< ---
-                # A=0, B=1, C=2, D=3, J=9, K=10, L=11, M=12, N=13, O=14, Q=16, T=19
+                # --- Mapeamento (Q = 16) ---
                 col_map = {
                     0: 'chamado_id', 1: 'agencia_id', 2: 'agencia_nome', 3: 'agencia_uf',
                     9: 'servico', 10: 'projeto_nome', 11: 'data_agendamento', 12: 'sistema',
                     13: 'cod_equipamento', 14: 'nome_equipamento', 
-                    16: 'quantidade', # <<< CORRIGIDO: P(15) -> Q(16)
+                    16: 'quantidade', # Coluna Q (Quantidade_Solicitada)
                     19: 'gestor'
                 }
                 
@@ -136,12 +112,13 @@ def tela_dados_agencia():
                                     'agencia_uf': 'UF', 'servico': 'Servico', 'projeto_nome': 'Projeto',
                                     'data_agendamento': 'Data_Agendamento', 'sistema': 'Tipo_De_Solicitacao',
                                     'cod_equipamento': 'Sistema', 'nome_equipamento': 'Codigo_Equipamento',
-                                    'quantidade': 'Quantidade_Solicitada', # <<< CORRIGIDO
+                                    'quantidade': 'Quantidade_Solicitada', 
                                     'gestor': 'Substitui_Outro_Equipamento_(Sim/Não)'
                                 }
                                 df_final_para_salvar = df_para_salvar.rename(columns=reverse_map)
 
-                                sucesso, num_importados = utils.bulk_insert_chamados_db(df_final_para_salvar)
+                                # --- CHAMA A FUNÇÃO DO NOVO UTILS ---
+                                sucesso, num_importados = utils_chamados.bulk_insert_chamados_db(df_final_para_salvar)
                                 if sucesso:
                                     st.success(f"🎉 {num_importados} chamados importados/atualizados com sucesso!")
                                     st.balloons(); st.rerun() 
@@ -155,7 +132,8 @@ def tela_dados_agencia():
 
     # --- 2. Carregar Dados (APENAS CHAMADOS) ---
     with st.spinner("Carregando dados de chamados..."):
-        df_chamados_raw = utils.carregar_chamados_db()
+        # --- CHAMA A FUNÇÃO DO NOVO UTILS ---
+        df_chamados_raw = utils_chamados.carregar_chamados_db()
 
     if df_chamados_raw.empty:
         st.info("Nenhum dado de chamado encontrado no sistema. Comece importando um arquivo acima.")
@@ -188,10 +166,7 @@ def tela_dados_agencia():
     if agencia_selecionada == "Todas":
         df_chamados_filtrado = df_chamados_raw
     else:
-        # Filtra pelo Cód. Agência, não pelo nome combinado, para ser mais preciso
-        agencia_id_filtro = agencia_selecionada.split(" - ")[0].replace("AG ", "").lstrip('0')
-        df_chamados_filtrado = df_chamados_raw[df_chamados_raw['Cód. Agência'].astype(str) == agencia_id_filtro]
-
+        df_chamados_filtrado = df_chamados_raw[df_chamados_raw['Agencia_Combinada'] == agencia_selecionada]
 
     # --- 6. Painel Financeiro e KPIs ---
     total_chamados = len(df_chamados_filtrado)
@@ -216,11 +191,10 @@ def tela_dados_agencia():
     if df_chamados_filtrado.empty:
         st.info("Nenhum chamado encontrado para esta agência.")
     else:
-        # Garante que 'Agendamento' é datetime para ordenar
         df_chamados_filtrado['Agendamento'] = pd.to_datetime(df_chamados_filtrado['Agendamento'], errors='coerce')
         df_chamados_filtrado = df_chamados_filtrado.sort_values(by="Agendamento", ascending=False, na_position='last')
         
-        # Agrupa pelo nome do PROJETO (como na sua imagem de referência)
+        # Agrupa pelo nome do PROJETO
         df_chamados_filtrado['Projeto'] = df_chamados_filtrado['Projeto'].fillna('Projeto Não Especificado')
         df_chamados_por_projeto = df_chamados_filtrado.groupby('Projeto')
         
@@ -228,7 +202,15 @@ def tela_dados_agencia():
             
             # --- Cabeçalho do PROJETO (Expander) ---
             total_chamados_projeto = len(chamados_do_projeto)
-            header = f"**{str(projeto_nome).upper()}** ({total_chamados_projeto} chamados)"
+            
+            # Encontra a data de agendamento mais recente (que não seja nula)
+            data_recente_projeto = chamados_do_projeto['Agendamento'].max()
+            if pd.isna(data_recente_projeto):
+                data_header = "Sem Agendamento"
+            else:
+                data_header = data_recente_projeto.strftime('%d/%m/%Y')
+
+            header = f"**{str(projeto_nome).upper()}** ({total_chamados_projeto} chamados) | **Último Agendamento:** {data_header}"
             
             with st.expander(header, expanded=True): # Começa ABERTO
                 
@@ -237,13 +219,7 @@ def tela_dados_agencia():
                     chamado_id_str = str(row.get('Nº Chamado', 'N/A'))
                     chamado_id_interno = row.get('ID') # ID da tabela 'chamados'
                     
-                    # --- Monta o Cabeçalho (Conforme solicitado) ---
-                    data_recente_str = row.get('Agendamento_str', 'Sem Data')
-                    if pd.isna(row.get('Agendamento')): data_recente_str = "Sem Agendamento"
-                    else:
-                        try: data_recente_str = pd.to_datetime(row.get('Agendamento')).strftime('%d/%m/%Y')
-                        except: data_recente_str = "Data Inválida"
-                        
+                    # --- Monta o Cabeçalho do Card (Conforme solicitado) ---
                     agencia_nome = row.get('Agencia_Combinada', 'N/A')
                     gestor_nome = html.escape(str(row.get('Gestor', 'N/A')))
                     uf_nome = html.escape(str(row.get('UF', 'N/A')))
@@ -253,7 +229,7 @@ def tela_dados_agencia():
                         <div class='project-card'>
                             <div style='display: flex; justify-content: space-between; align-items: flex-start;'>
                                 <div style='flex: 3;'>
-                                    <h6 style='margin-bottom: 5px;'>📅 {data_recente_str} | {agencia_nome} ({uf_nome})</h6>
+                                    <h6 style='margin-bottom: 5px;'>{agencia_nome} ({uf_nome})</h6>
                                     <h5 style='margin:2px 0;'>CHAMADO: {chamado_id_str}</h5>
                                 </div>
                                 <div style='flex: 1; text-align: right;'>
@@ -266,9 +242,10 @@ def tela_dados_agencia():
 
                     # --- Expander INTERNO com Formulário de Edição ---
                     with st.expander(f"Editar Chamado: {chamado_id_str}"):
+                        
                         with st.form(f"form_chamado_edit_{chamado_id_interno}"):
+                            st.markdown(f"**Editando Chamado:** {chamado_id_str}")
                             
-                            # Colunas do Card (Conforme solicitado)
                             col_form1, col_form2 = st.columns(2)
                             with col_form1:
                                 data_abertura = _to_date_safe(row.get('Abertura'))
@@ -290,7 +267,6 @@ def tela_dados_agencia():
                                 st.text_input("Cód. Equipamento", value=row.get('Cód. Equip.'), disabled=True, key=f"cod_{chamado_id_interno}")
                                 st.text_input("Status (do Excel)", value=row.get('Status'), disabled=True, key=f"stat_{chamado_id_interno}")
                             
-                            # --- Novas Caixas de Texto ---
                             st.markdown("---")
                             nova_observacao = st.text_area(
                                 "Observações (Editável)", 
@@ -316,7 +292,7 @@ def tela_dados_agencia():
                                     "observacao": nova_observacao
                                 }
                                 with st.spinner("Salvando..."):
-                                    sucesso = utils.atualizar_chamado_db(chamado_id_str, updates)
+                                    sucesso = utils_chamados.atualizar_chamado_db(chamado_id_str, updates)
                                     if sucesso:
                                         st.success(f"Chamado {chamado_id_str} atualizado com sucesso!")
                                         st.rerun()
