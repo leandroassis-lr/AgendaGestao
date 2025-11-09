@@ -108,4 +108,226 @@ def tela_dados_agencia():
                 col_map = {
                     0: 'chamado_id', 1: 'agencia_id', 2: 'agencia_nome', 3: 'agencia_uf',
                     9: 'servico', 10: 'projeto_nome', 11: 'data_agendamento', 12: 'sistema',
-                    13: 'cod_equipamento', 14: 'nome_equipamento',
+                    13: 'cod_equipamento', 14: 'nome_equipamento', 
+                    16: 'quantidade', # Coluna Q (Quantidade_Solicitada)
+                    19: 'gestor'
+                }
+                
+                df_para_salvar = extrair_e_mapear_colunas(df_raw, col_map)
+                
+                if df_para_salvar is not None:
+                    st.success("Arquivo lido. Pré-visualização dos dados extraídos:")
+                    st.dataframe(df_para_salvar.head(), use_container_width=True)
+
+                    if st.button("▶️ Iniciar Importação de Chamados"):
+                        if df_para_salvar.empty: st.error("Planilha vazia ou colunas não encontradas.")
+                        else:
+                            with st.spinner("Importando e atualizando chamados..."):
+                                # Renomeia colunas para o formato que 'bulk_insert_chamados_db' espera
+                                reverse_map = {
+                                    'chamado_id': 'Chamado', 'agencia_id': 'Codigo_Ponto', 'agencia_nome': 'Nome',
+                                    'agencia_uf': 'UF', 'servico': 'Servico', 'projeto_nome': 'Projeto',
+                                    'data_agendamento': 'Data_Agendamento', 'sistema': 'Tipo_De_Solicitacao',
+                                    'cod_equipamento': 'Sistema', 'nome_equipamento': 'Codigo_Equipamento',
+                                    'quantidade': 'Quantidade_Solicitada', 
+                                    'gestor': 'Substitui_Outro_Equipamento_(Sim/Não)'
+                                }
+                                df_final_para_salvar = df_para_salvar.rename(columns=reverse_map)
+
+                                # --- CHAMA A FUNÇÃO DO NOVO UTILS ---
+                                sucesso, num_importados = utils_chamados.bulk_insert_chamados_db(df_final_para_salvar)
+                                if sucesso:
+                                    st.success(f"🎉 {num_importados} chamados importados/atualizados com sucesso!")
+                                    st.balloons(); st.rerun() 
+                                else:
+                                    st.error("A importação de chamados falhou.")
+            except Exception as e:
+                st.error(f"Erro ao ler o arquivo: {e}")
+                st.error("Verifique o formato do arquivo (Excel ou CSV com ';') e se ele não está corrompido.")
+
+    st.divider()
+
+    # --- 2. Carregar Dados (APENAS CHAMADOS) ---
+    with st.spinner("Carregando dados de chamados..."):
+        # --- CHAMA A FUNÇÃO DO NOVO UTILS ---
+        df_chamados_raw = utils_chamados.carregar_chamados_db()
+
+    if df_chamados_raw.empty:
+        st.info("Nenhum dado de chamado encontrado no sistema. Comece importando um arquivo acima.")
+        st.stop()
+
+    # --- 3. Criar o Campo Combinado de Agência ---
+    if not df_chamados_raw.empty and 'Cód. Agência' in df_chamados_raw.columns:
+        df_chamados_raw['Agencia_Combinada'] = df_chamados_raw.apply(
+            lambda row: formatar_agencia_excel(row['Cód. Agência'], row['Nome Agência']), 
+            axis=1
+        )
+    else:
+        st.error("Tabela de chamados parece estar incompleta (sem 'Cód. Agência'). Tente re-importar."); st.stop()
+
+    lista_agencias_completa = sorted(df_chamados_raw['Agencia_Combinada'].dropna().astype(str).unique())
+    lista_agencias_completa = [a for a in lista_agencias_completa if a not in ["N/A", "None", ""]]
+    lista_agencias_completa.insert(0, "Todas") 
+
+    # --- 4. Filtro Principal por Agência ---
+    st.markdown("#### 🏦 Selecionar Agência")
+    agencia_selecionada = st.selectbox(
+        "Selecione uma Agência para ver o histórico completo:",
+        options=lista_agencias_completa,
+        key="filtro_agencia_principal",
+        label_visibility="collapsed"
+    )
+    st.divider()
+
+    # --- 5. Exibição dos Dados (Filtrados) ---
+    if agencia_selecionada == "Todas":
+        df_chamados_filtrado = df_chamados_raw
+    else:
+        # Filtra pelo Cód. Agência (extrai o número)
+        agencia_id_filtro = agencia_selecionada.split(" - ")[0].replace("AG ", "").lstrip('0')
+        df_chamados_filtrado = df_chamados_raw[df_chamados_raw['Cód. Agência'].astype(str) == agencia_id_filtro]
+
+
+    # --- 6. Painel Financeiro e KPIs ---
+    total_chamados = len(df_chamados_filtrado)
+    valor_total_chamados = 0.0; chamados_abertos_count = 0
+    if not df_chamados_filtrado.empty:
+        if 'Valor (R$)' in df_chamados_filtrado.columns:
+            valor_total_chamados = pd.to_numeric(df_chamados_filtrado['Valor (R$)'], errors='coerce').fillna(0).sum()
+        if 'Status' in df_chamados_filtrado.columns:
+            status_fechamento = ['fechado', 'concluido', 'resolvido', 'cancelado', 'encerrado']
+            chamados_abertos_count = len(df_chamados_filtrado[~df_chamados_filtrado['Status'].astype(str).str.lower().isin(status_fechamento)])
+
+    st.markdown(f"### 📊 Resumo da Agência: {agencia_selecionada}")
+    cols_kpi = st.columns(3) 
+    cols_kpi[0].metric("Total de Chamados", total_chamados)
+    cols_kpi[1].metric("Chamados Abertos", chamados_abertos_count)
+    cols_kpi[2].metric("Financeiro Chamados (R$)", f"{valor_total_chamados:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')) 
+    st.divider()
+
+    # --- 7. NOVA VISÃO EM CARDS ---
+    st.markdown("#### 📋 Chamados Registrados")
+    
+    if df_chamados_filtrado.empty:
+        st.info("Nenhum chamado encontrado para esta agência.")
+    else:
+        # Garante que 'Agendamento' é datetime para ordenar
+        df_chamados_filtrado['Agendamento'] = pd.to_datetime(df_chamados_filtrado['Agendamento'], errors='coerce')
+        # Ordena pelos projetos e depois pela data
+        df_chamados_filtrado = df_chamados_filtrado.sort_values(by=["Projeto", "Agendamento"], ascending=[True, False])
+        
+        # Agrupa pelo nome do PROJETO
+        df_chamados_filtrado['Projeto'] = df_chamados_filtrado['Projeto'].fillna('Projeto Não Especificado')
+        df_chamados_por_projeto = df_chamados_filtrado.groupby('Projeto')
+        
+        for projeto_nome, chamados_do_projeto in df_chamados_por_projeto:
+            
+            # --- Cabeçalho do PROJETO (Expander) ---
+            total_chamados_projeto = len(chamados_do_projeto)
+            
+            # Encontra a data de agendamento mais recente (que não seja nula)
+            data_recente_projeto = chamados_do_projeto['Agendamento'].max()
+            if pd.isna(data_recente_projeto):
+                data_header = "Sem Agendamento"
+            else:
+                data_header = data_recente_projeto.strftime('%d/%m/%Y')
+
+            header = f"**{str(projeto_nome).upper()}** ({total_chamados_projeto} chamados) | **Último Agendamento:** {data_header}"
+            
+            with st.expander(header, expanded=True): # Começa ABERTO
+                
+                # Loop para criar os CARDS DE CHAMADO
+                for _, row in chamados_do_projeto.iterrows():
+                    chamado_id_str = str(row.get('Nº Chamado', 'N/A'))
+                    chamado_id_interno = row.get('ID') # ID da tabela 'chamados'
+                    
+                    # --- Monta o Cabeçalho do Card (Conforme solicitado) ---
+                    agencia_nome = row.get('Agencia_Combinada', 'N/A')
+                    gestor_nome = html.escape(str(row.get('Gestor', 'N/A')))
+                    uf_nome = html.escape(str(row.get('UF', 'N/A')))
+                    status_chamado = html.escape(str(row.get('Status', 'N/A')))
+                    
+                    data_agend_card = "Sem Data"
+                    if pd.notna(row.get('Agendamento')):
+                         try: data_agend_card = pd.to_datetime(row.get('Agendamento')).strftime('%d/%m/%Y')
+                         except: pass
+                    
+                    # Usa o estilo de card do app principal
+                    st.markdown(f"""
+                        <div class'project-card'>
+                            <div style='display: flex; justify-content: space-between; align-items: flex-start;'>
+                                <div style='flex: 3;'>
+                                    <h6 style='margin-bottom: 5px;'>📅 {data_agend_card} | {agencia_nome} ({uf_nome})</h6>
+                                    <h5 style='margin:2px 0;'>CHAMADO: {chamado_id_str}</h5>
+                                </div>
+                                <div style='flex: 1; text-align: right;'>
+                                    <span style='font-weight: bold; color: {utils_chamados.get_color_for_name(gestor_nome)};'>{gestor_nome}</span>
+                                    <span style="background-color:{utils_chamados.get_status_color(status_chamado)}; color:black; padding:4px 8px; border-radius:5px; font-weight:bold; font-size:0.8em; margin-top: 5px; display: block;">{status_chamado}</span>
+                                </div>
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
+
+                    # --- Expander INTERNO com Formulário de Edição ---
+                    with st.expander(f"Editar Chamado: {chamado_id_str}"):
+                        
+                        with st.form(f"form_chamado_edit_{chamado_id_interno}"):
+                            st.markdown(f"**Editando Chamado:** {chamado_id_str}")
+                            
+                            # Colunas do Card (Conforme solicitado)
+                            col_form1, col_form2 = st.columns(2)
+                            with col_form1:
+                                data_abertura = _to_date_safe(row.get('Abertura'))
+                                st.date_input("Data Abertura (Importado)", value=data_abertura, format="DD/MM/YYYY", disabled=True, key=f"abertura_{chamado_id_interno}")
+                                
+                                agendamento_val = _to_date_safe(row.get('Agendamento'))
+                                novo_agendamento = st.date_input("Data Agendamento (Editável)", value=agendamento_val, format="DD/MM/YYYY", key=f"agend_{chamado_id_interno}")
+                                
+                                finalizacao_val = _to_date_safe(row.get('Fechamento'))
+                                novo_fechamento = st.date_input("Data Finalização (Editável)", value=finalizacao_val, format="DD/MM/YYYY", key=f"final_{chamado_id_interno}")
+                                
+                                st.text_input("Nº Chamado", value=chamado_id_str, disabled=True, key=f"id_{chamado_id_interno}")
+                                st.text_input("Sistema", value=row.get('Sistema'), disabled=True, key=f"sis_{chamado_id_interno}")
+
+                            with col_form2:
+                                st.text_input("Serviço", value=row.get('Serviço'), disabled=True, key=f"serv_{chamado_id_interno}")
+                                st.text_input("Nome Equipamento", value=row.get('Equipamento'), disabled=True, key=f"equip_{chamado_id_interno}")
+                                st.text_input("Quantidade", value=row.get('Qtd.'), disabled=True, key=f"qtd_{chamado_id_interno}")
+                                st.text_input("Cód. Equipamento", value=row.get('Cód. Equip.'), disabled=True, key=f"cod_{chamado_id_interno}")
+                                st.text_input("Status (do Excel)", value=row.get('Status'), disabled=True, key=f"stat_{chamado_id_interno}")
+                            
+                            # --- Novas Caixas de Texto ---
+                            st.markdown("---")
+                            nova_observacao = st.text_area(
+                                "Observações (Editável)", 
+                                value=row.get('Observação', ''),
+                                placeholder="Insira observações sobre este chamado...",
+                                key=f"obs_{chamado_id_interno}"
+                            )
+                            log_chamado = row.get('Log do Chamado', '')
+                            st.text_area(
+                                "Log de Alterações", 
+                                value=log_chamado, 
+                                disabled=True, 
+                                height=100,
+                                key=f"log_{chamado_id_interno}"
+                            )
+                            
+                            btn_salvar_chamado = st.form_submit_button("💾 Salvar Alterações do Chamado")
+                            
+                            if btn_salvar_chamado:
+                                updates = {
+                                    "Data Agendamento": novo_agendamento,
+                                    "Data Finalização": novo_fechamento,
+                                    "Observação": nova_observacao
+                                }
+                                with st.spinner("Salvando..."):
+                                    sucesso = utils_chamados.atualizar_chamado_db(chamado_id_str, updates)
+                                    if sucesso:
+                                        st.success(f"Chamado {chamado_id_str} atualizado com sucesso!")
+                                        st.rerun()
+                                    else:
+                                        st.error("Falha ao salvar as alterações.")
+
+# --- Ponto de Entrada ---
+tela_dados_agencia()
