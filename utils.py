@@ -1,4 +1,3 @@
-# Atualizando o cache#
 import streamlit as st
 import pandas as pd
 from datetime import date, datetime 
@@ -10,7 +9,7 @@ import io
 import base64
 from io import BytesIO
 from PIL import Image
-import numpy as np
+import numpy as np # Importa numpy
 
 # (image_to_base64 - Sem alterações)
 def image_to_base64(image):
@@ -275,6 +274,7 @@ def validar_usuario(nome, email):
     else:
         return False, None
 
+# (generate_excel_template_bytes - Sem alterações)
 def generate_excel_template_bytes():
     template_columns = ["Projeto", "Descrição", "Agência", "Técnico", "Agendamento", "Demanda", "Observação", "Analista", "Gestor", "Prioridade", "Links de Referência"] 
     df_template = pd.DataFrame(columns=template_columns)
@@ -283,114 +283,55 @@ def generate_excel_template_bytes():
     with pd.ExcelWriter(output, engine='openpyxl') as writer: df_template.to_excel(writer, index=False, sheet_name='Projetos')
     return output.getvalue()
 
-uploaded_file = st.file_uploader("Selecione o arquivo CSV", type=["csv", "xlsx"])
-
-if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
-
-    # 🔍 Trecho de teste temporário
-    import numpy as np
-    st.write("**Tipos das colunas:**")
-    st.write(df.dtypes)
-
-    datetime_cols = [
-        col for col in df.columns
-        if df[col].apply(lambda x: isinstance(x, np.datetime64)).any()
-    ]
-    st.write("**Colunas com numpy.datetime64:**", datetime_cols)
-
-    for col in datetime_cols:
-        st.write(f"**Amostra de '{col}':**")
-        st.write(df[col].head(10))
-
-    # 👉 Só depois disso chame a função
-    # bulk_insert_projetos_db(df, usuario_logado)
-else:
-    st.warning("Por favor, envie um arquivo para continuar.")
-
+# --- >>> FUNÇÃO CORRIGIDA <<< ---
+# (bulk_insert_projetos_db - Corrigido para converter numpy.int64)
 def bulk_insert_projetos_db(df: pd.DataFrame, usuario_logado: str):
-    if not conn:
-        return False, 0
-
-    column_map = {
-        'Projeto': 'projeto', 'Descrição': 'descricao', 'Agência': 'agencia', 
-        'Técnico': 'tecnico', 'Demanda': 'demanda', 'Observação': 'observacao', 
-        'Analista': 'analista', 'Gestor': 'gestor', 'Prioridade': 'prioridade', 
-        'Agendamento': 'agendamento', 'Links de Referência': 'links_referencia'
-    }
-
-    # Validações
-    if 'Projeto' not in df.columns or 'Agência' not in df.columns:
-        st.error("Erro: Planilha deve conter 'Projeto' e 'Agência'.")
-        return False, 0
-
-    if df[['Projeto', 'Agência']].isnull().values.any():
-        st.error("Erro: 'Projeto' e 'Agência' não podem ser vazios.")
-        return False, 0
-
+    if not conn: return False, 0
+    column_map = {'Projeto': 'projeto', 'Descrição': 'descricao', 'Agência': 'agencia', 'Técnico': 'tecnico', 'Demanda': 'demanda', 'Observação': 'observacao', 'Analista': 'analista', 'Gestor': 'gestor', 'Prioridade': 'prioridade', 'Agendamento': 'agendamento', 'Links de Referência': 'links_referencia' }
+    if 'Projeto' not in df.columns or 'Agência' not in df.columns: st.error("Erro: Planilha deve conter 'Projeto' e 'Agência'."); return False, 0
+    if df[['Projeto', 'Agência']].isnull().values.any(): st.error("Erro: 'Projeto' e 'Agência' não podem ser vazios."); return False, 0
     df_to_insert = df.rename(columns=column_map)
-
-    # Converter coluna de agendamento
-    if 'agendamento' in df_to_insert.columns:
-        df_to_insert['agendamento'] = pd.to_datetime(df_to_insert['agendamento'], errors='coerce')
-    else:
-        df_to_insert['agendamento'] = None
-
-    df_to_insert['status'] = 'NÃO INICIADA'
-    df_to_insert['data_abertura'] = date.today()
-
-    if 'analista' not in df_to_insert or df_to_insert['analista'].isnull().all():
-        df_to_insert['analista'] = usuario_logado
-    else:
-        df_to_insert['analista'] = df_to_insert['analista'].fillna(usuario_logado)
-
-    if 'prioridade' not in df_to_insert:
-        df_to_insert['prioridade'] = 'Média'
+    if 'agendamento' in df_to_insert.columns: df_to_insert['agendamento'] = pd.to_datetime(df_to_insert['agendamento'], errors='coerce')
+    else: df_to_insert['agendamento'] = None 
+    df_to_insert['status'] = 'NÃO INICIADA'; df_to_insert['data_abertura'] = date.today() 
+    if 'analista' not in df_to_insert or df_to_insert['analista'].isnull().all(): df_to_insert['analista'] = usuario_logado
+    else: df_to_insert['analista'] = df_to_insert['analista'].fillna(usuario_logado)
+    if 'prioridade' not in df_to_insert: df_to_insert['prioridade'] = 'Média'
     else:
         df_to_insert['prioridade'] = df_to_insert['prioridade'].astype(str).replace(['', 'nan', 'None'], 'Média').fillna('Média')
-        allowed_priorities = ['alta', 'média', 'baixa']
-        df_to_insert['prioridade'] = df_to_insert['prioridade'].str.lower()
+        allowed_priorities = ['alta', 'média', 'baixa']; df_to_insert['prioridade'] = df_to_insert['prioridade'].str.lower()
         invalid_priorities = df_to_insert[~df_to_insert['prioridade'].isin(allowed_priorities)]
-        if not invalid_priorities.empty:
-            st.warning(f"Prioridades inválidas (linhas: {invalid_priorities.index.tolist()}) substituídas por 'Média'.")
-            df_to_insert.loc[invalid_priorities.index, 'prioridade'] = 'média'
+        if not invalid_priorities.empty: st.warning(f"Prioridades inválidas (linhas: {invalid_priorities.index.tolist()}) substituídas por 'Média'."); df_to_insert.loc[invalid_priorities.index, 'prioridade'] = 'média'
         df_to_insert['prioridade'] = df_to_insert['prioridade'].str.capitalize()
-
-    cols_to_insert = [
-        'projeto', 'descricao', 'agencia', 'tecnico', 'status', 'data_abertura', 
-        'observacao', 'demanda', 'analista', 'gestor', 'prioridade', 
-        'agendamento', 'links_referencia'
-    ]
-    
+    cols_to_insert = ['projeto', 'descricao', 'agencia', 'tecnico', 'status','data_abertura', 'observacao', 'demanda', 'analista', 'gestor','prioridade', 'agendamento', 'links_referencia'] 
     df_final = df_to_insert[[col for col in cols_to_insert if col in df_to_insert.columns]]
-
-    # 🔧 CONVERSÃO DEFINITIVA DE DATAS (para evitar o erro numpy.datetime64)
-    for col in ['agendamento', 'data_abertura']:
-        if col in df_final.columns:
-            df_final[col] = df_final[col].apply(
-                lambda x: x.date() if isinstance(x, (pd.Timestamp, datetime)) 
-                else (pd.to_datetime(x).date() if isinstance(x, np.datetime64) and not pd.isna(x) 
-                      else (x if isinstance(x, date) else None))
-            )
-
-    # Monta os valores para inserir
-    values = [tuple(None if pd.isna(c) else c for c in row) for row in df_final.to_numpy()]
-
-    cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns))
-    placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
+    
+    # --- Conversão de Tipos para o Banco (Robusta) ---
+    values = []
+    for record in df_final.to_records(index=False):
+        processed_record = []
+        for cell in record:
+            if pd.isna(cell):
+                processed_record.append(None) # Converte NaT, NaN, pd.NA para None
+            elif isinstance(cell, (np.int64, np.int32, np.int16, np.int8)):
+                processed_record.append(int(cell)) # Converte numpy int para python int
+            elif isinstance(cell, (np.float64, np.float32)):
+                processed_record.append(float(cell)) # Converte numpy float para python float
+            elif isinstance(cell, (pd.Timestamp, datetime)):
+                processed_record.append(cell.date()) # Converte datetime para date
+            else:
+                processed_record.append(cell) 
+        values.append(tuple(processed_record))
+    # --- Fim da Correção ---
+    
+    cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns)); placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
     query = sql.SQL("INSERT INTO projetos ({}) VALUES ({})").format(cols_sql, placeholders)
-
     try:
-        with conn.cursor() as cur:
-            cur.executemany(query, values)
-        conn.commit()
-        st.cache_data.clear()
-        return True, len(values)
-    except Exception as e:
-        conn.rollback()
-        st.error(f"Erro ao salvar no banco: {e}")
-        return False, 0
+        with conn.cursor() as cur: cur.executemany(query, values) 
+        st.cache_data.clear(); return True, len(values)
+    except Exception as e: st.error(f"Erro ao salvar no banco: {e}"); conn.rollback(); return False, 0
 
+# (dataframe_to_excel_bytes - Sem alterações)
 def dataframe_to_excel_bytes(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -469,7 +410,7 @@ def get_color_for_name(name_str):
     except Exception: return "#555"
     
     
-# --- Funções para a Tabela de Chamados (ATUALIZADAS) ---
+# --- Funções para a Tabela de Chamados ---
 @st.cache_data(ttl=60)
 def carregar_chamados_db(agencia_id_filtro=None):
     """ Carrega chamados, opcionalmente filtrados por ID de agência. """
@@ -479,7 +420,10 @@ def carregar_chamados_db(agencia_id_filtro=None):
         params = []
         if agencia_id_filtro and agencia_id_filtro != "Todas":
             query += " WHERE agencia_id = %s"
-            params.append(agencia_id_filtro)
+            # Extrai o ID (ex: "AG 0001 - NOME" -> "0001")
+            match = re.search(r'\b(\d{4})\b', agencia_id_filtro)
+            agencia_id_num = match.group(1) if match else agencia_id_filtro
+            params.append(agencia_id_num)
         query += " ORDER BY data_abertura DESC"
         df = pd.read_sql_query(query, conn, params=params if params else None)
         rename_map = {
@@ -504,9 +448,14 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
     
     # Mapa de colunas do Excel/CSV -> Banco (baseado no seu mapeamento A, B, C...)
     column_map = {
-        'Chamado': 'chamado_id', 'Codigo_Ponto': 'agencia_id', 'Nome': 'agencia_nome',
-        'UF': 'agencia_uf', 'Servico': 'servico', 'Projeto': 'projeto_nome',
-        'Data_Agendamento': 'data_agendamento', 'Tipo_De_Solicitacao': 'sistema', # M
+        'Chamado': 'chamado_id',
+        'Codigo_Ponto': 'agencia_id',
+        'Nome': 'agencia_nome',
+        'UF': 'agencia_uf',
+        'Servico': 'servico',
+        'Projeto': 'projeto_nome',
+        'Data_Agendamento': 'data_agendamento',
+        'Tipo_De_Solicitacao': 'sistema', # M
         'Sistema': 'cod_equipamento',     # N
         'Codigo_Equipamento': 'nome_equipamento', # O
         'Nome_Equipamento': 'quantidade',     # P
@@ -576,8 +525,3 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         st.cache_data.clear(); return True, len(values)
     except Exception as e: 
         st.error(f"Erro ao salvar chamados no banco: {e}"); conn.rollback(); return False, 0
-
-
-
-
-
