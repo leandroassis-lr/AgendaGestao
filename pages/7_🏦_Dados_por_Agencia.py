@@ -162,20 +162,14 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
     e atualiza o campo 'Status' e 'Sub-Status' de todos os chamados do grupo.
     """
     
-    # --- INÍCIO DA CORREÇÃO ---
-    # Pega o status atual. Se for manual, o cérebro NÃO RODA.
-    # Usa .get() para evitar KeyError se a coluna 'Status' não existir
+    # --- Pega o status atual. Se for manual, o cérebro NÃO RODA. ---
     status_atual = str(df_projeto.iloc[0].get('Status', 'Não Iniciado')).strip()
-    # --- FIM DA CORREÇÃO ---
-
     status_manual_list = ["Pendência de Infra", "Pendência de Equipamento", "Pausado", "Cancelado", "Finalizado"]
     if status_atual in status_manual_list:
         
-        # --- INÍCIO DA CORREÇÃO ---
         # Pega o Sub-Status atual. Usa .get() para segurança
         sub_status_atual_val = df_projeto.iloc[0].get('Sub-Status')
         sub_status_atual = "" if pd.isna(sub_status_atual_val) else str(sub_status_atual_val).strip()
-        # --- FIM DA CORREÇÃO ---
         
         if sub_status_atual != "":
             updates = {"Sub-Status": None}
@@ -258,11 +252,9 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
         novo_status = "Não Iniciado"
         novo_sub_status = "Verificar Chamados"
 
-    # --- INÍCIO DA CORREÇÃO ---
     # Pega o Sub-Status atual. Usa .get() para segurança
     sub_status_atual_val = df_projeto.iloc[0].get('Sub-Status')
     sub_status_atual = "" if pd.isna(sub_status_atual_val) else str(sub_status_atual_val).strip()
-    # --- FIM DA CORREÇÃO ---
     
     if status_atual != novo_status or sub_status_atual != novo_sub_status:
         st.info(f"Status do projeto mudou de '{status_atual} | {sub_status_atual}' para '{novo_status} | {novo_sub_status}'")
@@ -463,16 +455,9 @@ def tela_dados_agencia():
                     first_row = df_projeto.iloc[0]
                     chamado_ids_internos_list = df_projeto['ID'].tolist()
                     
-                    status_val = str(first_row.get('Status', 'Não Iniciado')).strip()
-                    if status_val == "" or status_val.lower() == "none" or status_val.lower() == "nan":
-                        status_principal_atual = "Não Iniciado"
-                    else:
-                        status_principal_atual = status_val
-                    
-                    # --- CORREÇÃO APLICADA AQUI ---
-                    # Usa .get() para segurança
-                    sub_status_val = first_row.get('Sub-Status')
-                    sub_status_atual = "" if pd.isna(sub_status_val) else str(sub_status_val)
+                    # --- INÍCIO DA CORREÇÃO ---
+                    status_principal_atual = clean_val(first_row.get('Status'), default="Não Iniciado")
+                    sub_status_atual = clean_val(first_row.get('Sub-Status'), default="")
                     # --- FIM DA CORREÇÃO ---
                     
                     sla_text = ""
@@ -509,14 +494,23 @@ def tela_dados_agencia():
                             st.markdown(f"**Gestor:**\n{gestor_html}", unsafe_allow_html=True)
 
                         with col4:
+                            # --- INÍCIO DA CORREÇÃO ---
+                            # Garante que o status principal seja sempre exibido
+                            status_html = html.escape(status_principal_atual.upper())
                             st.markdown(f"""
                             <div class="card-status-badge" style="background-color: {status_color};">
-                                {clean_val(status_principal_atual, "Não Iniciado").upper()}
-                            </div>
-                            <div class="card-action-text">
-                                {sub_status_atual}
+                                {status_html}
                             </div>
                             """, unsafe_allow_html=True)
+                            
+                            # Só exibe o Sub-Status se ele NÃO estiver vazio
+                            if sub_status_atual != "":
+                                st.markdown(f"""
+                                <div class="card-action-text">
+                                    {sub_status_atual}
+                                </div>
+                                """, unsafe_allow_html=True)
+                            # --- FIM DA CORREÇÃO ---
 
                         # --- NÍVEL 3 (Expander com formulários) ---
                         expander_title = f"Ver/Editar Detalhes - ID: {first_row['ID']}"
