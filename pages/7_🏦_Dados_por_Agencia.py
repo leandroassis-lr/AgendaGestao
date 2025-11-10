@@ -178,6 +178,13 @@ def tela_dados_agencia():
             .card-status-badge { background-color: #B0BEC5; color: white; padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 0.85em; display: inline-block; width: 100%; text-align: center; }
             .project-card [data-testid="stExpander"] { border: 1px solid var(--gray-border); border-radius: var(--std-radius); margin-top: 15px; }
             .project-card [data-testid="stExpander"] > summary { font-weight: 600; font-size: 0.95rem; }
+            
+            /* Remove a borda do st.form() de dentro do expander */
+            [data-testid="stExpander"] [data-testid="stForm"] {
+                border: none;
+                box-shadow: none;
+                padding: 0;
+            }
         </style>
     """, unsafe_allow_html=True)
     
@@ -370,17 +377,15 @@ def tela_dados_agencia():
                             
                             st.markdown("<h6>Informações e Prazos</h6>", unsafe_allow_html=True)
                             
-                            # --- LINHA 1: Prazo e Status ---
                             c1, c2 = st.columns(2)
                             novo_prazo = c1.text_input("Prazo", value=first_row.get('Prazo', ''), key=f"{form_key_lote}_prazo")
                             status_val = first_row.get('Status', 'Não Iniciado')
                             status_idx = status_options.index(status_val) if status_val in status_options else 0
                             novo_status = c2.selectbox("STATUS", options=status_options, index=status_idx, key=f"{form_key_lote}_status")
                             
-                            # --- LINHA 2: Datas (CORRIGIDO) ---
                             c3, c4, c5 = st.columns(3)
                             abertura_val = _to_date_safe(first_row.get('Abertura'))
-                            if abertura_val is None: abertura_val = date.today() # Padrão
+                            if abertura_val is None: abertura_val = date.today() 
                             nova_abertura = c3.date_input("Data Abertura", value=abertura_val, format="DD/MM/YYYY", key=f"{form_key_lote}_abertura")
                             
                             agend_val = _to_date_safe(first_row.get('Agendamento'))
@@ -388,7 +393,6 @@ def tela_dados_agencia():
 
                             final_val = _to_date_safe(first_row.get('Fechamento'))
                             nova_finalizacao = c5.date_input("Data Finalização", value=final_val, format="DD/MM/YYYY", key=f"{form_key_lote}_final")
-                            # --- FIM DA CORREÇÃO DE LAYOUT E FORMATO ---
 
                             st.markdown("<h6>Detalhes do Projeto</h6>", unsafe_allow_html=True)
                             c6, c7, c8 = st.columns(3)
@@ -432,34 +436,72 @@ def tela_dados_agencia():
                                 st.success(f"{sucesso_count} de {len(chamado_ids_internos_list)} chamados foram atualizados!")
                                 st.cache_data.clear(); st.rerun()
                         
-                        # --- INÍCIO DA NOVA VISÃO INDIVIDUAL (READ-ONLY) ---
+                        
+                        # --- INÍCIO DA REVISÃO DO NÍVEL 3 ---
                         st.markdown("---")
                         st.markdown("##### 🔎 Detalhes por Chamado Individual")
                         
                         for _, chamado_row in df_projeto.iterrows():
-                            st.markdown(f"**Chamado:** `{chamado_row['Nº Chamado']}`")
-                            
-                            c1, c2 = st.columns(2)
-                            
-                            if '-S-' in chamado_row['Nº Chamado']:
-                                c1.text_input("Link Externo", value=chamado_row.get('Link Externo', ''), disabled=True, key=f"link_{chamado_row['ID']}")
-                                c2.text_input("Nº Protocolo", value=chamado_row.get('Nº Protocolo', ''), disabled=True, key=f"proto_{chamado_row['ID']}")
-                            
-                            elif '-E-' in chamado_row['Nº Chamado']:
-                                c1.text_input("Nº Pedido", value=chamado_row.get('Nº Pedido', ''), disabled=True, key=f"pedido_{chamado_row['ID']}")
-                                data_envio_val = _to_date_safe(chamado_row.get('Data Envio'))
-                                c2.date_input("Data Envio", value=data_envio_val, format="DD/MM/YYYY", disabled=True, key=f"envio_{chamado_row['ID']}")
-                            
-                            qtd_val_numeric_ind = pd.to_numeric(chamado_row.get('Qtd.'), errors='coerce')
-                            qtd_int_ind = int(qtd_val_numeric_ind) if pd.notna(qtd_val_numeric_ind) else 0
-                            equip_str_ind = str(chamado_row.get('Equipamento', 'N/A'))
-                            
-                            st.text_area(
-                                "Descrição (equipamento deste chamado)", 
-                                value=f"{qtd_int_ind:02d} - {equip_str_ind}", 
-                                disabled=True, height=50,
-                                key=f"desc_ind_{chamado_row['ID']}"
-                            )
+                            # Expander para cada chamado
+                            with st.expander(f"▶️ Chamado: {chamado_row['Nº Chamado']}"):
+                                
+                                # Formulário individual para salvar
+                                form_key_ind = f"form_ind_edit_{chamado_row['ID']}"
+                                with st.form(key=form_key_ind):
+                                    
+                                    is_servico = '-S-' in chamado_row['Nº Chamado']
+                                    is_equipamento = '-E-' in chamado_row['Nº Chamado']
+                                    updates_individuais = {}
+                                    
+                                    # --- CAMPOS EDITÁVEIS (S ou E) ---
+                                    if is_servico:
+                                        st.markdown("**Gatilhos de Serviço (-S-)**")
+                                        c1, c2 = st.columns(2)
+                                        link_val = chamado_row.get('Link Externo', '')
+                                        novo_link = c1.text_input("Link Externo", value=link_val, key=f"link_{chamado_row['ID']}")
+                                        updates_individuais['Link Externo'] = novo_link
+                                        
+                                        proto_val = chamado_row.get('Nº Protocolo', '')
+                                        novo_protocolo = c2.text_input("Nº Protocolo", value=proto_val, key=f"proto_{chamado_row['ID']}")
+                                        updates_individuais['Nº Protocolo'] = novo_protocolo
+                                    
+                                    if is_equipamento:
+                                        st.markdown("**Gatilhos de Equipamento (-E-)**")
+                                        c1, c2 = st.columns(2)
+                                        pedido_val = chamado_row.get('Nº Pedido', '')
+                                        novo_pedido = c1.text_input("Nº Pedido", value=pedido_val, key=f"pedido_{chamado_row['ID']}")
+                                        updates_individuais['Nº Pedido'] = novo_pedido
+                                        
+                                        envio_val = _to_date_safe(chamado_row.get('Data Envio'))
+                                        nova_data_envio = c2.date_input("Data Envio", value=envio_val, format="DD/MM/YYYY", key=f"envio_{chamado_row['ID']}")
+                                        updates_individuais['Data Envio'] = nova_data_envio
+                                        
+                                        obs_val = chamado_row.get('Obs. Equipamento', '')
+                                        nova_obs_equip = st.text_area("Obs. Equipamento", value=obs_val, height=100, key=f"obs_equip_{chamado_row['ID']}")
+                                        updates_individuais['Obs. Equipamento'] = nova_obs_equip
+
+                                    # --- CAMPO DE DESCRIÇÃO (Read-Only) ---
+                                    qtd_val_numeric_ind = pd.to_numeric(chamado_row.get('Qtd.'), errors='coerce')
+                                    qtd_int_ind = int(qtd_val_numeric_ind) if pd.notna(qtd_val_numeric_ind) else 0
+                                    equip_str_ind = str(chamado_row.get('Equipamento', 'N/A'))
+                                    st.text_area(
+                                        "Descrição (equipamento deste chamado)", 
+                                        value=f"{qtd_int_ind:02d} - {equip_str_ind}", 
+                                        disabled=True, height=50,
+                                        key=f"desc_ind_{chamado_row['ID']}"
+                                    )
+                                    
+                                    btn_salvar_individual = st.form_submit_button("💾 Salvar Chamado Individual", use_container_width=True)
+
+                                if btn_salvar_individual:
+                                    with st.spinner(f"Salvando chamado {chamado_row['Nº Chamado']}..."):
+                                        if utils_chamados.atualizar_chamado_db(chamado_row['ID'], updates_individuais):
+                                            st.success("Chamado salvo!")
+                                            st.cache_data.clear(); st.rerun()
+                                        else:
+                                            st.error("Falha ao salvar o chamado.")
+                        # --- FIM DA REVISÃO DO NÍVEL 3 ---
+
                         
                         # --- Descrição Agregada (Total de Equipamentos) ---
                         st.markdown("---")
