@@ -176,7 +176,6 @@ def tela_dados_agencia():
             .card-grid .value { font-size: 0.95rem; font-weight: 500; color: var(--gray-darkest); margin-bottom: 8px; }
             .card-grid .sla { font-size: 0.9rem; font-weight: 600; margin-top: 5px; }
             .card-status-badge { background-color: #B0BEC5; color: white; padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 0.85em; display: inline-block; width: 100%; text-align: center; }
-            .card-action-text { text-align: center; font-size: 0.9em; font-weight: 600; margin-top: 8px; color: var(--primary-dark); }
             .project-card [data-testid="stExpander"] { border: 1px solid var(--gray-border); border-radius: var(--std-radius); margin-top: 15px; }
             .project-card [data-testid="stExpander"] > summary { font-weight: 600; font-size: 0.95rem; }
         </style>
@@ -211,8 +210,11 @@ def tela_dados_agencia():
         st.error("Tabela de chamados incompleta (sem 'Cód. Agência'). Tente re-importar."); st.stop()
 
     # --- 4. Preparar Listas de Opções para Formulários ---
-    # Status agora é manual e editável
-    status_options = ["Não Iniciado", "Em Andamento", "Concluído", "Pendencia de infra", "Pendencia de equipamento", "Pausado", "Cancelado", "Acionar técnico", "Solicitar Equipamento", "Equipamento Solicitado", "Equipamento entregue - Acionar técnico", "Equipamento entregue - Concluído"]
+    status_options = [
+        "Não Iniciado", "Em Andamento", "Concluído", "Pendencia de infra", "Pendencia de equipamento", 
+        "Pausado", "Cancelado", "Acionar técnico", "Solicitar Equipamento", "Equipamento Solicitado", 
+        "Equipamento entregue - Acionar técnico", "Equipamento entregue - Concluído"
+    ]
     
     projeto_list = sorted([str(p) for p in df_chamados_raw['Projeto'].dropna().unique() if p])
     gestor_list = sorted([str(g) for g in df_chamados_raw['Gestor'].dropna().unique() if g])
@@ -330,6 +332,7 @@ def tela_dados_agencia():
                 gestor_color = utils_chamados.get_color_for_name(nome_gestor)
                 status_color = utils_chamados.get_status_color(status_principal_atual)
 
+                # --- NOVO: Usa st.container() e st.columns para o card (Nativo) ---
                 st.markdown('<div class="project-card">', unsafe_allow_html=True)
                 with st.container():
                     
@@ -354,7 +357,6 @@ def tela_dados_agencia():
                             {clean_val(status_principal_atual, "Não Iniciado").upper()}
                         </div>
                         """, unsafe_allow_html=True)
-                        # --- Texto de Ação REMOVIDO pois o status é manual ---
 
                     # --- NÍVEL 3 (Expander com formulários) ---
                     expander_title = f"Ver/Editar Detalhes - ID: {first_row['ID']}"
@@ -367,43 +369,46 @@ def tela_dados_agencia():
                             st.markdown(f"**Editar todos os {len(df_projeto)} chamados deste projeto:**")
                             
                             st.markdown("<h6>Informações e Prazos</h6>", unsafe_allow_html=True)
-                            c1, c2, c3, c4 = st.columns(4)
                             
+                            # --- LINHA 1: Prazo e Status ---
+                            c1, c2 = st.columns(2)
                             novo_prazo = c1.text_input("Prazo", value=first_row.get('Prazo', ''), key=f"{form_key_lote}_prazo")
-                            
                             status_val = first_row.get('Status', 'Não Iniciado')
                             status_idx = status_options.index(status_val) if status_val in status_options else 0
                             novo_status = c2.selectbox("STATUS", options=status_options, index=status_idx, key=f"{form_key_lote}_status")
                             
+                            # --- LINHA 2: Datas (CORRIGIDO) ---
+                            c3, c4, c5 = st.columns(3)
                             abertura_val = _to_date_safe(first_row.get('Abertura'))
                             if abertura_val is None: abertura_val = date.today() # Padrão
-                            nova_abertura = c3.date_input("Data Abertura", value=abertura_val, format="DD/MM/YY", key=f"{form_key_lote}_abertura")
+                            nova_abertura = c3.date_input("Data Abertura", value=abertura_val, format="DD/MM/YYYY", key=f"{form_key_lote}_abertura")
                             
                             agend_val = _to_date_safe(first_row.get('Agendamento'))
-                            novo_agendamento = c4.date_input("Data Agendamento", value=agend_val, format="DD/MM/YY", key=f"{form_key_lote}_agend")
+                            novo_agendamento = c4.date_input("Data Agendamento", value=agend_val, format="DD/MM/YYYY", key=f"{form_key_lote}_agend")
 
                             final_val = _to_date_safe(first_row.get('Fechamento'))
-                            nova_finalizacao = c4.date_input("Data Finalização", value=final_val, format="DD/MM/YY", key=f"{form_key_lote}_final")
+                            nova_finalizacao = c5.date_input("Data Finalização", value=final_val, format="DD/MM/YYYY", key=f"{form_key_lote}_final")
+                            # --- FIM DA CORREÇÃO DE LAYOUT E FORMATO ---
 
                             st.markdown("<h6>Detalhes do Projeto</h6>", unsafe_allow_html=True)
-                            c5, c6, c7 = st.columns(3)
+                            c6, c7, c8 = st.columns(3)
                             
                             proj_val = first_row.get('Projeto', '')
                             proj_idx = projeto_list.index(proj_val) if proj_val in projeto_list else 0
-                            novo_projeto = c5.selectbox("Nome do projeto", options=projeto_list, index=proj_idx, key=f"{form_key_lote}_proj")
+                            novo_projeto = c6.selectbox("Nome do projeto", options=projeto_list, index=proj_idx, key=f"{form_key_lote}_proj")
                             
                             analista_val = first_row.get('Analista', '')
-                            novo_analista = c6.text_input("Analista", value=analista_val, key=f"{form_key_lote}_analista")
+                            novo_analista = c7.text_input("Analista", value=analista_val, key=f"{form_key_lote}_analista")
 
                             gestor_val = first_row.get('Gestor', '')
                             gestor_idx = gestor_list.index(gestor_val) if gestor_val in gestor_list else 0
-                            novo_gestor = c7.selectbox("Gestor", options=gestor_list, index=gestor_idx, key=f"{form_key_lote}_gestor")
+                            novo_gestor = c8.selectbox("Gestor", options=gestor_list, index=gestor_idx, key=f"{form_key_lote}_gestor")
 
-                            c8, c9, c10 = st.columns(3)
+                            c9, c10, c11 = st.columns(3)
                             
-                            novo_sistema = c8.text_input("Sistema", value=first_row.get('Sistema', ''), key=f"{form_key_lote}_sistema")
-                            novo_servico = c9.text_input("Serviço", value=first_row.get('Serviço', ''), key=f"{form_key_lote}_servico")
-                            novo_tecnico = c10.text_input("Técnico", value=first_row.get('Técnico', ''), key=f"{form_key_lote}_tec")
+                            novo_sistema = c9.text_input("Sistema", value=first_row.get('Sistema', ''), key=f"{form_key_lote}_sistema")
+                            novo_servico = c10.text_input("Serviço", value=first_row.get('Serviço', ''), key=f"{form_key_lote}_servico")
+                            novo_tecnico = c11.text_input("Técnico", value=first_row.get('Técnico', ''), key=f"{form_key_lote}_tec")
 
                             nova_descricao = st.text_area("Descrição", value=first_row.get('Descrição', ''), key=f"{form_key_lote}_desc")
                             nova_obs_pend = st.text_area("Observações e Pendencias", value=first_row.get('Observações e Pendencias', ''), key=f"{form_key_lote}_obs")
@@ -412,19 +417,11 @@ def tela_dados_agencia():
 
                         if btn_salvar_lote:
                             updates = {
-                                "Prazo": novo_prazo,
-                                "Status": novo_status,
-                                "Data Abertura": nova_abertura,
-                                "Data Agendamento": novo_agendamento,
-                                "Data Finalização": nova_finalizacao,
-                                "Projeto": novo_projeto,
-                                "Analista": novo_analista,
-                                "Gestor": novo_gestor,
-                                "Sistema": novo_sistema,
-                                "Serviço": novo_servico,
-                                "Técnico": novo_tecnico,
-                                "Descrição": nova_descricao,
-                                "Observações e Pendencias": nova_obs_pend
+                                "Prazo": novo_prazo, "Status": novo_status, "Data Abertura": nova_abertura,
+                                "Data Agendamento": novo_agendamento, "Data Finalização": nova_finalizacao,
+                                "Projeto": novo_projeto, "Analista": novo_analista, "Gestor": novo_gestor,
+                                "Sistema": novo_sistema, "Serviço": novo_servico, "Técnico": novo_tecnico,
+                                "Descrição": nova_descricao, "Observações e Pendencias": nova_obs_pend
                             }
                             
                             with st.spinner(f"Atualizando {len(chamado_ids_internos_list)} chamados..."):
@@ -434,8 +431,6 @@ def tela_dados_agencia():
                                         sucesso_count += 1
                                 st.success(f"{sucesso_count} de {len(chamado_ids_internos_list)} chamados foram atualizados!")
                                 st.cache_data.clear(); st.rerun()
-                        # --- FIM DO NOVO FORMULÁRIO DE LOTE ---
-
                         
                         # --- INÍCIO DA NOVA VISÃO INDIVIDUAL (READ-ONLY) ---
                         st.markdown("---")
@@ -446,18 +441,15 @@ def tela_dados_agencia():
                             
                             c1, c2 = st.columns(2)
                             
-                            # Mostra Link e Protocolo (se for Serviço)
                             if '-S-' in chamado_row['Nº Chamado']:
                                 c1.text_input("Link Externo", value=chamado_row.get('Link Externo', ''), disabled=True, key=f"link_{chamado_row['ID']}")
                                 c2.text_input("Nº Protocolo", value=chamado_row.get('Nº Protocolo', ''), disabled=True, key=f"proto_{chamado_row['ID']}")
                             
-                            # Mostra Pedido e Data (se for Equipamento)
                             elif '-E-' in chamado_row['Nº Chamado']:
                                 c1.text_input("Nº Pedido", value=chamado_row.get('Nº Pedido', ''), disabled=True, key=f"pedido_{chamado_row['ID']}")
                                 data_envio_val = _to_date_safe(chamado_row.get('Data Envio'))
-                                c2.date_input("Data Envio", value=data_envio_val, format="DD/MM/YY", disabled=True, key=f"envio_{chamado_row['ID']}")
+                                c2.date_input("Data Envio", value=data_envio_val, format="DD/MM/YYYY", disabled=True, key=f"envio_{chamado_row['ID']}")
                             
-                            # Descrição do equipamento (individual)
                             qtd_val_numeric_ind = pd.to_numeric(chamado_row.get('Qtd.'), errors='coerce')
                             qtd_int_ind = int(qtd_val_numeric_ind) if pd.notna(qtd_val_numeric_ind) else 0
                             equip_str_ind = str(chamado_row.get('Equipamento', 'N/A'))
@@ -468,8 +460,6 @@ def tela_dados_agencia():
                                 disabled=True, height=50,
                                 key=f"desc_ind_{chamado_row['ID']}"
                             )
-                        # --- FIM DA NOVA VISÃO INDIVIDUAL ---
-                        
                         
                         # --- Descrição Agregada (Total de Equipamentos) ---
                         st.markdown("---")
