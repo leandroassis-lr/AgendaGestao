@@ -155,6 +155,116 @@ def run_importer_dialog():
         st.rerun()
 
 
+# --- FUNÇÃO "CÉREBRO" DE STATUS (v11) ---
+def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
+    """
+    Calcula o novo status de um projeto com base nas suas regras de negócio
+    e atualiza o campo 'Status' e 'Sub-Status' de todos os chamados do grupo.
+    """
+    
+    # Pega o status atual. Se for manual, o cérebro NÃO RODA.
+    status_atual = str(df_projeto.iloc[0]['Status']).strip()
+    status_manual_list = ["Pendência de Infra", "Pendência de Equipamento", "Pausado", "Cancelado", "Finalizado"]
+    if status_atual in status_manual_list:
+        # Se é manual, o único update é garantir que o sub-status está limpo
+        if str(df_projeto.iloc[0]['Sub-Status']).strip() != "":
+            updates = {"Sub-Status": None}
+            for chamado_id in ids_para_atualizar:
+                utils_chamados.atualizar_chamado_db(chamado_id, updates)
+            return True # Retorna True para recarregar a página
+        return False # Nenhuma mudança necessária
+
+    # --- Se chegou aqui, o status NÃO é manual, então o Cérebro Roda ---
+    
+    has_S = df_projeto['Nº Chamado'].str.contains('-S-').any()
+    has_E = df_projeto['Nº Chamado'].str.contains('-E-').any()
+    
+    def check_col_present(df, col_name):
+        if col_name in df.columns:
+            return df[col_name].fillna('').astype(str).str.strip().ne('').any()
+        return False
+
+    def check_date_present(df, col_name):
+        if col_name in df.columns:
+            return df[col_name].notna().any()
+        return False
+    
+    link_presente = check_col_present(df_projeto, 'Link Externo')
+    protocolo_presente = check_col_present(df_projeto, 'Nº Protocolo')
+    pedido_presente = check_col_present(df_projeto, 'Nº Pedido')
+    envio_presente = check_date_present(df_projeto, 'Data Envio')
+    tecnico_presente = check_col_present(df_projeto, 'Técnico')
+    
+    novo_status = "Não Iniciado"
+    novo_sub_status = ""
+
+    # --- Cenário 1: Só Serviço (S-Only) ---
+    if has_S and not has_E:
+        if protocolo_presente:
+            novo_status = "Concluído"
+            novo_sub_status = "Enviar Book"
+        elif tecnico_presente:
+            novo_status = "Em Andamento"
+            novo_sub_status = "Enviar Status Cliente"
+        elif link_presente:
+            novo_status = "Em Andamento"
+            novo_sub_status = "Acionar técnico"
+        else:
+            novo_status = "Não Iniciado"
+            novo_sub_status = "Pendente Link" # Sub-status inicial
+
+    # --- Cenário 2: Misto (S e E) ---
+    elif has_S and has_E:
+        if protocolo_presente:
+            novo_status = "Concluído"
+            novo_sub_status = "Enviar Book"
+        elif tecnico_presente:
+            novo_status = "Em Andamento"
+            novo_sub_status = "Enviar Status Cliente"
+        elif envio_presente:
+            novo_status = "Em Andamento"
+            novo_sub_status = "Equipamento entregue - Acionar técnico"
+        elif pedido_presente:
+            novo_status = "Em Andamento"
+            novo_sub_status = "Equipamento Solicitado"
+        elif link_presente:
+            novo_status = "Em Andamento"
+            novo_sub_status = "Solicitar Equipamento"
+        else:
+            novo_status = "Não Iniciado"
+            novo_sub_status = "Pendente Link" # Sub-status inicial
+
+    # --- Cenário 3: Só Equipamento (E-Only) ---
+    elif not has_S and has_E:
+        if envio_presente:
+            novo_status = "Concluído"
+            novo_sub_status = "Equipamento entregue"
+        elif pedido_presente:
+            novo_status = "Em Andamento"
+            novo_sub_status = "Equipamento Solicitado"
+        else:
+            novo_status = "Não Iniciado"
+            novo_sub_status = "Solicitar Equipamento" # Sub-status inicial
+    
+    else: # Fallback
+        novo_status = "Não Iniciado"
+        novo_sub_status = "Verificar Chamados"
+
+    # Pega os status atuais para ver se algo mudou
+    status_atual = str(df_projeto.iloc[0]['Status'])
+    sub_status_atual = str(df_projeto.iloc[0]['Sub-Status'])
+    if pd.isna(df_projeto.iloc[0]['Sub-Status']): sub_status_atual = "" # Trata None
+    
+    if status_atual != novo_status or sub_status_atual != novo_sub_status:
+        st.info(f"Status do projeto mudou de '{status_atual} | {sub_status_atual}' para '{novo_status} | {novo_sub_status}'")
+        updates = {"Status": novo_status, "Sub-Status": novo_sub_status}
+        for chamado_id in ids_para_atualizar:
+            utils_chamados.atualizar_chamado_db(chamado_id, updates)
+        return True # Mudou!
+    
+    return False # Nada mudou
+
+
 # --- FUNÇÃO HELPER PARA LIMPAR VALORES ---
 def clean_val(val, default="N/A"):
     """Converte None, NaN, etc. para 'N/A' ou o padrão definido."""
@@ -169,6 +279,7 @@ def tela_dados_agencia():
     # CSS customizado para o Card (Layout da Foto 1)
     st.markdown("""
         <style>
+            /* Layout do Card de Nível 2 (Projeto) */
             .card-grid { display: grid; grid-template-columns: 2.5fr 2fr 2.5fr 2.5fr; gap: 16px; align-items: start; }
             .card-grid h5 { margin-top: 5px; margin-bottom: 0; font-size: 1.15rem; font-weight: 700; color: var(--gray-darkest); }
             .card-grid .date { font-weight: 600; font-size: 0.95rem; color: var(--gray-dark); }
@@ -176,21 +287,33 @@ def tela_dados_agencia():
             .card-grid .value { font-size: 0.95rem; font-weight: 500; color: var(--gray-darkest); margin-bottom: 8px; }
             .card-grid .sla { font-size: 0.9rem; font-weight: 600; margin-top: 5px; }
             .card-status-badge { background-color: #B0BEC5; color: white; padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 0.85em; display: inline-block; width: 100%; text-align: center; }
+            
+            /* (v11) Card de Ação/Sub-Status */
+            .card-action-text { 
+                text-align: center; font-size: 0.9em; font-weight: 600; margin-top: 8px; 
+                color: var(--primary-dark);
+                background-color: #F0F2F5; /* Fundo cinza claro */
+                padding: 4px;
+                border-radius: 5px;
+            } 
+            
+            /* Layout do Card de Nível 1 (Agência) */
+            .agency-card-grid { display: grid; grid-template-columns: 1.5fr 3fr 2fr 1.5fr; gap: 16px; align-items: center; }
+            .agency-card-grid .tag { font-weight: bold; }
+            .agency-card-grid .agency-name { font-size: 1.15rem; font-weight: bold; }
+            .agency-card-grid .date-info { font-size: 1rem; }
+            .agency-card-grid .count { font-size: 1rem; font-weight: bold; text-align: right; }
+            
+            /* Ajustes gerais de expander e forms */
             .project-card [data-testid="stExpander"] { border: 1px solid var(--gray-border); border-radius: var(--std-radius); margin-top: 15px; }
             .project-card [data-testid="stExpander"] > summary { font-weight: 600; font-size: 0.95rem; }
-            
-            /* Remove a borda do st.form() de dentro do expander */
-            [data-testid="stExpander"] [data-testid="stForm"] {
-                border: none;
-                box-shadow: none;
-                padding: 0;
-            }
+            [data-testid="stExpander"] [data-testid="stForm"] { border: none; box-shadow: none; padding: 0; }
         </style>
     """, unsafe_allow_html=True)
     
     c1, c2 = st.columns([3, 1])
     with c1:
-        st.markdown("<div class='section-title-center'>GESTÃO DE DADOS POR AGÊNCIA</div>", unsafe_allow_html=True)
+        st.markdown("<div class'section-title-center'>GESTÃO DE DADOS POR AGÊNCIA</div>", unsafe_allow_html=True)
     with c2:
         if st.button("📥 Importar Novos Chamados", use_container_width=True):
             run_importer_dialog()
@@ -217,10 +340,10 @@ def tela_dados_agencia():
         st.error("Tabela de chamados incompleta (sem 'Cód. Agência'). Tente re-importar."); st.stop()
 
     # --- 4. Preparar Listas de Opções para Formulários ---
-    status_options = [
-        "Não Iniciado", "Em Andamento", "Concluído", "Pendencia de infra", "Pendencia de equipamento", 
-        "Pausado", "Cancelado", "Acionar técnico", "Solicitar Equipamento", "Equipamento Solicitado", 
-        "Equipamento entregue - Acionar técnico", "Equipamento entregue - Concluído"
+    # Lista de status MANUAIS que o usuário pode escolher
+    status_manual_options = [
+        "(Status Automático)", "Pendência de Infra", "Pendência de Equipamento", 
+        "Pausado", "Cancelado", "Finalizado"
     ]
     
     projeto_list = sorted([str(p) for p in df_chamados_raw['Projeto'].dropna().unique() if p])
@@ -248,7 +371,7 @@ def tela_dados_agencia():
 
     # --- 7. Painel de KPIs ---
     total_chamados = len(df_chamados_filtrado)
-    status_fechamento_kpi = ['fechado', 'concluido', 'resolvido', 'cancelado', 'encerrado', 'equipamento entregue - concluído']
+    status_fechamento_kpi = ['fechado', 'concluido', 'resolvido', 'cancelado', 'encerrado', 'equipamento entregue - concluído', 'finalizado']
     if not df_chamados_filtrado.empty:
         chamados_abertos_count = len(df_chamados_filtrado[~df_chamados_filtrado['Status'].astype(str).str.lower().isin(status_fechamento_kpi)])
     else:
@@ -288,9 +411,7 @@ def tela_dados_agencia():
 
     for nome_agencia, df_agencia in agencias_agrupadas:
         
-        # --- INÍCIO DA MUDANÇA (Nível 1) ---
-        
-        status_fechamento_proj = ['concluído', 'cancelado', 'equipamento entregue - concluído']
+        status_fechamento_proj = ['concluído', 'cancelado', 'equipamento entregue - concluído', 'finalizado']
         df_agencia_aberta = df_agencia[~df_agencia['Status'].astype(str).str.lower().isin(status_fechamento_proj)]
         
         hoje_ts = pd.Timestamp.now().normalize()
@@ -309,28 +430,29 @@ def tela_dados_agencia():
                 urgency_text = f"Urgente: {earliest_date.strftime('%d/%m/%Y')}"
             elif earliest_date == hoje_ts:
                 tag_html = "<span style='color: #FFA726; font-weight: bold;'>🟧 PARA HOJE</span>"
-                urgency_text = f"📅 {earliest_date.strftime('%d/%m/%Y')}" # <--- MUDANÇA 1
+                urgency_text = f"📅 {earliest_date.strftime('%d/%m/%Y')}"
             else:
                 tag_html = "🟦"
-                urgency_text = f"📅 {earliest_date.strftime('%d/%m/%Y')}" # <--- MUDANÇA 1
+                urgency_text = f"📅 {earliest_date.strftime('%d/%m/%Y')}"
 
         num_projetos = len(df_agencia.groupby(chave_projeto))
         
         st.markdown('<div class="project-card">', unsafe_allow_html=True)
         with st.container():
-            col1, col2, col3, col4 = st.columns([1.5, 3, 2, 1.5])
-            with col1:
-                st.markdown(tag_html, unsafe_allow_html=True)
-            with col2:
-                # --- MUDANÇA 2: Nome da agência maior ---
-                st.markdown(f"<span style='font-size: 1.15rem; font-weight: bold;'>{nome_agencia}</span>", unsafe_allow_html=True)
-            with col3:
-                st.markdown(urgency_text, unsafe_allow_html=True)
-            with col4:
-                proj_s = "Projetos" if num_projetos > 1 else "Projeto"
-                st.markdown(f"**{num_projetos} {proj_s}**")
-            # --- FIM DAS MUDANÇAS (Nível 1) ---
+            # Card Nível 1 (Agência)
+            with st.container():
+                col1, col2, col3, col4 = st.columns([1.5, 3, 2, 1.5])
+                with col1:
+                    st.markdown(tag_html, unsafe_allow_html=True)
+                with col2:
+                    st.markdown(f"<span style='font-size: 1.15rem; font-weight: bold;'>{nome_agencia}</span>", unsafe_allow_html=True)
+                with col3:
+                    st.markdown(urgency_text, unsafe_allow_html=True)
+                with col4:
+                    proj_s = "Projetos" if num_projetos > 1 else "Projeto"
+                    st.markdown(f"**{num_projetos} {proj_s}**")
 
+            # Expander para MOSTRAR os projetos
             with st.expander("Ver Projetos desta Agência"):
                 try:
                     projetos_agrupados = df_agencia.groupby(chave_projeto)
@@ -351,6 +473,8 @@ def tela_dados_agencia():
                         status_principal_atual = "Não Iniciado"
                     else:
                         status_principal_atual = status_val
+                    
+                    sub_status_atual = clean_val(first_row.get('Sub-Status'), "")
                     
                     sla_text = ""
                     try:
@@ -387,8 +511,11 @@ def tela_dados_agencia():
 
                         with col4:
                             st.markdown(f"""
-                            <div style="background-color: {status_color}; color: white; padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 0.85em; display: inline-block; width: 100%; text-align: center;">
+                            <div class="card-status-badge" style="background-color: {status_color};">
                                 {clean_val(status_principal_atual, "Não Iniciado").upper()}
+                            </div>
+                            <div class="card-action-text">
+                                {sub_status_atual}
                             </div>
                             """, unsafe_allow_html=True)
 
@@ -405,9 +532,12 @@ def tela_dados_agencia():
                                 
                                 c1, c2 = st.columns(2)
                                 novo_prazo = c1.text_input("Prazo", value=first_row.get('Prazo', ''), key=f"{form_key_lote}_prazo")
-                                status_val = first_row.get('Status', 'Não Iniciado')
-                                status_idx = status_options.index(status_val) if status_val in status_options else 0
-                                novo_status = c2.selectbox("STATUS", options=status_options, index=status_idx, key=f"{form_key_lote}_status")
+                                
+                                # --- NOVO: Lógica de Status Manual ---
+                                status_manual_atual = status_principal_atual if status_principal_atual in status_manual_options else "(Status Automático)"
+                                status_idx = status_manual_options.index(status_manual_atual)
+                                novo_status_manual = c2.selectbox("Forçar Status Manual", options=status_manual_options, index=status_idx, key=f"{form_key_lote}_status")
+                                # --- FIM ---
                                 
                                 c3, c4, c5 = st.columns(3)
                                 abertura_val = _to_date_safe(first_row.get('Abertura'))
@@ -446,20 +576,48 @@ def tela_dados_agencia():
                                 btn_salvar_lote = st.form_submit_button("💾 Salvar Alterações do Projeto", use_container_width=True)
 
                             if btn_salvar_lote:
+                                # Lógica de Salvamento do Lote
                                 updates = {
-                                    "Prazo": novo_prazo, "Status": novo_status, "Data Abertura": nova_abertura,
+                                    "Prazo": novo_prazo, "Data Abertura": nova_abertura,
                                     "Data Agendamento": novo_agendamento, "Data Finalização": nova_finalizacao,
                                     "Projeto": novo_projeto, "Analista": novo_analista, "Gestor": novo_gestor,
                                     "Sistema": novo_sistema, "Serviço": novo_servico, "Técnico": novo_tecnico,
                                     "Descrição": nova_descricao, "Observações e Pendencias": nova_obs_pend
                                 }
                                 
+                                # Lógica do Status Manual
+                                status_foi_mudado = False
+                                if novo_status_manual == "Finalizado":
+                                    if nova_finalizacao is None:
+                                        st.error("Erro: Para 'Finalizado', a Data de Finalização é obrigatória.")
+                                        st.stop()
+                                    else:
+                                        updates['Status'] = 'Finalizado'
+                                        updates['Sub-Status'] = None
+                                        status_foi_mudado = True
+                                
+                                elif novo_status_manual != "(Status Automático)":
+                                    updates['Status'] = novo_status_manual
+                                    updates['Sub-Status'] = None # Limpa o sub-status
+                                    status_foi_mudado = True
+                                
+                                elif novo_status_manual == "(Status Automático)":
+                                    # Se o usuário quer voltar ao automático, forçamos o recálculo
+                                    status_foi_mudado = True 
+
                                 with st.spinner(f"Atualizando {len(chamado_ids_internos_list)} chamados..."):
                                     sucesso_count = 0
                                     for chamado_id in chamado_ids_internos_list:
                                         if utils_chamados.atualizar_chamado_db(chamado_id, updates):
                                             sucesso_count += 1
                                     st.success(f"{sucesso_count} de {len(chamado_ids_internos_list)} chamados foram atualizados!")
+                                    
+                                    # Recalcula o status se necessário
+                                    if status_foi_mudado:
+                                        df_chamados_atualizado = utils_chamados.carregar_chamados_db()
+                                        df_projeto_atualizado = df_chamados_atualizado[df_chamados_atualizado['ID'].isin(chamado_ids_internos_list)]
+                                        calcular_e_atualizar_status_projeto(df_projeto_atualizado, chamado_ids_internos_list)
+
                                     st.cache_data.clear(); st.rerun()
                             
                             
@@ -519,6 +677,12 @@ def tela_dados_agencia():
                                         with st.spinner(f"Salvando chamado {chamado_row['Nº Chamado']}..."):
                                             if utils_chamados.atualizar_chamado_db(chamado_row['ID'], updates_individuais):
                                                 st.success("Chamado salvo!")
+                                                
+                                                # --- Dispara o Recálculo do Status ---
+                                                df_chamados_atualizado = utils_chamados.carregar_chamados_db()
+                                                df_projeto_atualizado = df_chamados_atualizado[df_chamados_atualizado['ID'].isin(chamado_ids_internos_list)]
+                                                calcular_e_atualizar_status_projeto(df_projeto_atualizado, chamado_ids_internos_list)
+                                                
                                                 st.cache_data.clear(); st.rerun()
                                             else:
                                                 st.error("Falha ao salvar o chamado.")
