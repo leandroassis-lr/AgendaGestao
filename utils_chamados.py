@@ -21,13 +21,13 @@ def get_db_connection_chamados():
 
 conn = get_db_connection_chamados() 
 
-# --- VARIÁVEL GLOBAL DE COLUNAS (A GARANTIA DA CORREÇÃO) ---
+# --- VARIÁVEL GLOBAL DE COLUNAS (CORREÇÃO) ---
 # Dicionário de todas as colunas que a tabela DEVE ter
 colunas_necessarias = {
     'agencia_id': 'TEXT', 'agencia_nome': 'TEXT', 'agencia_uf': 'TEXT',
     'servico': 'TEXT', 'projeto_nome': 'TEXT', 'data_agendamento': 'DATE',
     'sistema': 'TEXT', 'cod_equipamento': 'TEXT', 'nome_equipamento': 'TEXT',
-    'quantidade': 'INTEGER', 'gestor': 'TEXT', 'descricao': 'TEXT',
+    'quantidade': 'INTEGER', 'gestor': 'TEXT', 
     'data_abertura': 'DATE', 'data_fechamento': 'DATE',
     'status_chamado': 'TEXT', 'valor_chamado': 'NUMERIC(10, 2) DEFAULT 0.00',
     'status_financeiro': "TEXT DEFAULT 'Pendente'",
@@ -40,7 +40,11 @@ colunas_necessarias = {
     'protocolo': 'TEXT',
     'numero_pedido': 'TEXT',
     'data_envio': 'DATE',
-    'observacao_equipamento': 'TEXT'
+    'observacao_equipamento': 'TEXT',
+    # --- NOVAS COLUNAS ADICIONADAS (v10) ---
+    'prazo': 'TEXT',
+    'descricao_projeto': 'TEXT', # 'Descrição' do lote
+    'observacao_pendencias': 'TEXT' # 'Observações e pendencias' do lote
 }
 # --- FIM DA VARIÁVEL GLOBAL ---
 
@@ -48,7 +52,7 @@ colunas_necessarias = {
 # --- 2. FUNÇÃO PARA CRIAR/ATUALIZAR A TABELA 'chamados' ---
 def criar_tabela_chamados():
     """Cria a tabela 'chamados' e adiciona colunas ausentes se não existirem."""
-    global colunas_necessarias # Garante que está usando a global
+    global colunas_necessarias
     if not conn: return
     try:
         with conn.cursor() as cur:
@@ -97,19 +101,23 @@ def carregar_chamados_db(agencia_id_filtro=None):
             'projeto_nome': 'Projeto', 'data_agendamento': 'Agendamento',
             'sistema': 'Sistema', 'cod_equipamento': 'Cód. Equip.', 'nome_equipamento': 'Equipamento',
             'quantidade': 'Qtd.', 'gestor': 'Gestor',
-            'descricao': 'Descrição', 'data_abertura': 'Abertura', 'data_fechamento': 'Fechamento',
+            'data_abertura': 'Abertura', 'data_fechamento': 'Fechamento',
             'status_chamado': 'Status', 'valor_chamado': 'Valor (R$)',
             'status_financeiro': 'Status Financeiro',
             'observacao': 'Observação', 'log_chamado': 'Log do Chamado',
             'analista': 'Analista', 'tecnico': 'Técnico', 'prioridade': 'Prioridade',
             'link_externo': 'Link Externo', 'protocolo': 'Nº Protocolo',
             'numero_pedido': 'Nº Pedido', 'data_envio': 'Data Envio',
-            'observacao_equipamento': 'Obs. Equipamento'
+            'observacao_equipamento': 'Obs. Equipamento',
+            # --- NOVAS COLUNAS ADICIONADAS (v10) ---
+            'prazo': 'Prazo',
+            'descricao_projeto': 'Descrição',
+            'observacao_pendencias': 'Observações e Pendencias'
         }
         df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
         
         # Garante que as colunas existam no DF
-        for col in ['Analista', 'Técnico', 'Link Externo', 'Nº Protocolo', 'Nº Pedido', 'Obs. Equipamento']:
+        for col in ['Analista', 'Técnico', 'Link Externo', 'Nº Protocolo', 'Nº Pedido', 'Obs. Equipamento', 'Prazo', 'Descrição', 'Observações e Pendencias']:
              if col not in df.columns: df[col] = None
         if 'Prioridade' not in df.columns: df['Prioridade'] = 'Média'
         if 'Data Envio' not in df.columns: df['Data Envio'] = pd.NaT
@@ -139,6 +147,10 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         st.error("Erro: A planilha deve conter a coluna 'Codigo_Ponto' (ID da Agência).")
         return False, 0
 
+    # --- NOVO: Adiciona data_abertura na importação ---
+    df_to_insert['data_abertura'] = date.today()
+    # --- FIM DA MUDANÇA ---
+    
     cols_data = ['data_abertura', 'data_fechamento', 'data_agendamento']
     for col in cols_data:
         if col in df_to_insert.columns:
@@ -154,7 +166,7 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
     cols_to_insert = [
         'chamado_id', 'agencia_id', 'agencia_nome', 'agencia_uf', 'servico', 'projeto_nome', 
         'data_agendamento', 'sistema', 'cod_equipamento', 'nome_equipamento', 'quantidade', 'gestor',
-        'descricao', 'data_abertura', 'data_fechamento', 'status_chamado', 'valor_chamado',
+        'data_abertura', 'status_chamado', 'valor_chamado',
         'analista', 'tecnico', 'prioridade'
     ]
                        
@@ -175,9 +187,10 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
     
     cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns)); placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
     
+    # --- MUDANÇA: Não atualizar data_abertura em conflito ---
     update_clause = sql.SQL(', ').join(
         sql.SQL("{} = EXCLUDED.{}").format(sql.Identifier(col), sql.Identifier(col))
-        for col in df_final.columns if col != 'chamado_id' 
+        for col in df_final.columns if col != 'chamado_id' and col != 'data_abertura' # Não sobrescreve a data de abertura
     )
     query = sql.SQL("INSERT INTO chamados ({}) VALUES ({}) ON CONFLICT (chamado_id) DO UPDATE SET {}").format(cols_sql, placeholders, update_clause)
 
@@ -191,7 +204,7 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
 # --- 5. FUNÇÃO PARA SALVAR EDIÇÕES DE CHAMADOS ---
 def atualizar_chamado_db(chamado_id_interno, updates: dict):
     """ Atualiza um chamado existente no banco de dados e gera log. """
-    global colunas_necessarias # Garante que está usando a global
+    global colunas_necessarias
     if not conn: return False
     
     usuario_logado = st.session_state.get('usuario', 'Sistema') 
@@ -200,11 +213,12 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT 
-                    data_agendamento, data_fechamento, observacao, log_chamado,
-                    sistema, servico, nome_equipamento, quantidade, status_financeiro,
+                    data_agendamento, data_fechamento, log_chamado,
+                    sistema, servico,
                     analista, tecnico, prioridade, status_chamado, projeto_nome, gestor,
                     agencia_id, data_abertura,
-                    link_externo, protocolo, numero_pedido, data_envio, observacao_equipamento
+                    link_externo, protocolo, numero_pedido, data_envio, observacao_equipamento,
+                    prazo, descricao_projeto, observacao_pendencias
                 FROM chamados WHERE id = %s
             """, (chamado_id_interno,))
             current_data_tuple = cur.fetchone()
@@ -212,11 +226,12 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
                 st.error(f"Erro: Chamado com ID interno {chamado_id_interno} não encontrado.")
                 return False
 
-            (current_agendamento, current_fechamento, current_obs, current_log,
-             current_sistema, current_servico, current_equip, current_qtd, current_fin,
+            (current_agendamento, current_fechamento, current_log,
+             current_sistema, current_servico,
              current_analista, current_tecnico, current_prioridade, current_status,
              current_projeto, current_gestor, current_agencia_id, current_abertura,
-             current_link, current_protocolo, current_pedido, current_envio, current_obs_equip) = current_data_tuple
+             current_link, current_protocolo, current_pedido, current_envio, current_obs_equip,
+             current_prazo, current_desc_proj, current_obs_pend) = current_data_tuple
              
             current_log = current_log or "" 
 
@@ -224,16 +239,18 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
             for key, value in updates.items():
                 k = str(key).lower().replace(" ", "_")
                 
+                # Mapa de Nomes do Formulário -> Nomes do Banco
                 mapa_nomes = {
                     'agendamento': 'data_agendamento', 'finalização': 'data_fechamento', 'fechamento': 'data_fechamento',
-                    'observação': 'observacao', 'sistema': 'sistema', 'serviço': 'servico',
-                    'equipamento': 'nome_equipamento', 'quantidade': 'quantidade', 'status_financeiro': 'status_financeiro',
+                    'sistema': 'sistema', 'serviço': 'servico',
                     'analista': 'analista', 'técnico': 'tecnico', 'prioridade': 'prioridade',
                     'status': 'status_chamado', 'projeto': 'projeto_nome', 'gestor': 'gestor',
                     'agência': 'agencia_id', 'abertura': 'data_abertura',
-                    'link_externo': 'link_externo', 'nº_protocolo': 'protocolo',
+                    'link_externo': 'link_externo', 'protocolo': 'protocolo',
                     'nº_pedido': 'numero_pedido', 'data_envio': 'data_envio',
-                    'obs._equipamento': 'observacao_equipamento'
+                    'obs._equipamento': 'observacao_equipamento',
+                    'prazo': 'prazo', 'descrição': 'descricao_projeto', 
+                    'observações_e_pendencias': 'observacao_pendencias'
                 }
                 
                 db_key = None
@@ -280,13 +297,18 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
             log_change("Nº Pedido", db_updates_raw.get('numero_pedido'), current_pedido)
             log_change("Data Envio", db_updates_raw.get('data_envio'), current_envio, is_date=True)
             log_change("Obs. Equipamento", db_updates_raw.get('observacao_equipamento'), current_obs_equip)
+            log_change("Prazo", db_updates_raw.get('prazo'), current_prazo)
+            log_change("Descrição", db_updates_raw.get('descricao_projeto'), current_desc_proj)
+            log_change("Observações/Pendencias", db_updates_raw.get('observacao_pendencias'), current_obs_pend)
+            log_change("Sistema", db_updates_raw.get('sistema'), current_sistema)
+            log_change("Serviço", db_updates_raw.get('servico'), current_servico)
             
             log_final = current_log; 
             if log_entries: log_final += ("\n" if current_log else "") + "\n".join(log_entries)
             
             updates_final = {}
             for k in db_updates_raw:
-                if k in colunas_necessarias: # Valida contra a variável global
+                if k in colunas_necessarias: 
                     updates_final[k] = db_updates_raw[k]
 
             if not updates_final and not log_entries:
