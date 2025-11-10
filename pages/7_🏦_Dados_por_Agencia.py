@@ -155,19 +155,12 @@ def run_importer_dialog():
         st.rerun()
 
 
-# --- FUNÇÃO "CÉREBRO" DE STATUS (v11.1 - Corrigida) ---
+# --- FUNÇÃO "CÉREBRO" DE STATUS (v11.1) ---
 def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
-    """
-    Calcula o novo status de um projeto com base nas suas regras de negócio
-    e atualiza o campo 'Status' e 'Sub-Status' de todos os chamados do grupo.
-    """
     
-    # --- Pega o status atual. Se for manual, o cérebro NÃO RODA. ---
     status_atual = str(df_projeto.iloc[0].get('Status', 'Não Iniciado')).strip()
     status_manual_list = ["Pendência de Infra", "Pendência de Equipamento", "Pausado", "Cancelado", "Finalizado"]
     if status_atual in status_manual_list:
-        
-        # Pega o Sub-Status atual. Usa .get() para segurança
         sub_status_atual_val = df_projeto.iloc[0].get('Sub-Status')
         sub_status_atual = "" if pd.isna(sub_status_atual_val) else str(sub_status_atual_val).strip()
         
@@ -252,7 +245,6 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
         novo_status = "Não Iniciado"
         novo_sub_status = "Verificar Chamados"
 
-    # Pega o Sub-Status atual. Usa .get() para segurança
     sub_status_atual_val = df_projeto.iloc[0].get('Sub-Status')
     sub_status_atual = "" if pd.isna(sub_status_atual_val) else str(sub_status_atual_val).strip()
     
@@ -340,30 +332,75 @@ def tela_dados_agencia():
     agencia_list_no_todas = [a for a in lista_agencias_completa if a not in ["N/A", "None", ""]]
     lista_agencias_completa.insert(0, "Todas") 
 
-    # --- 5. Filtro Principal por Agência ---
-    st.markdown("#### 🏦 Selecionar Agência")
+    # --- 5. FILTROS PRINCIPAIS (SEÇÃO ATUALIZADA) ---
+    st.markdown("#### 🏦 Filtro Primário")
     agencia_selecionada = st.selectbox(
         "Selecione uma Agência para ver o histórico completo:",
         options=lista_agencias_completa,
         key="filtro_agencia_principal",
         label_visibility="collapsed"
     )
-    st.divider()
+    
+    # --- NOVOS FILTROS (Seção 5b) ---
+    st.markdown("#### 🔎 Filtros Adicionais")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        termo_busca = st.text_input("Buscar por (Projeto, Gestor, Analista):", key="filtro_termo_busca")
+    with col2:
+        # Pega todos os status únicos (manuais e automáticos) do DF
+        status_list = ["Todos"] + sorted(df_chamados_raw['Status'].dropna().unique())
+        status_selecionado = st.selectbox("Status (Manual ou Automático):", options=status_list, key="filtro_status")
 
-    # --- 6. Filtrar DataFrame Principal ---
+    col3, col4 = st.columns(2)
+    with col3:
+        data_inicio = st.date_input("Agendamento (De):", value=None, format="DD/MM/YYYY", key="filtro_data_inicio")
+    with col4:
+        data_fim = st.date_input("Agendamento (Até):", value=None, format="DD/MM/YYYY", key="filtro_data_fim")
+    
+    st.divider()
+    # --- FIM DAS MUDANÇAS DA SEÇÃO 5 ---
+
+
+    # --- 6. Filtrar DataFrame Principal (SEÇÃO ATUALIZADA) ---
+    
+    # 1. Filtra por Agência (filtro primário)
     if agencia_selecionada == "Todas":
-        df_chamados_filtrado = df_chamados_raw
+        df_filtrado = df_chamados_raw
     else:
-        df_chamados_filtrado = df_chamados_raw[df_chamados_raw['Agencia_Combinada'] == agencia_selecionada]
+        df_filtrado = df_chamados_raw[df_chamados_raw['Agencia_Combinada'] == agencia_selecionada]
+
+    # 2. Aplica os filtros adicionais
+    if termo_busca:
+        termo = termo_busca.lower()
+        # Garante que as colunas existam antes de filtrar
+        mask_projeto = df_filtrado['Projeto'].astype(str).str.lower().str.contains(termo, na=False)
+        mask_gestor = df_filtrado['Gestor'].astype(str).str.lower().str.contains(termo, na=False)
+        mask_analista = df_filtrado['Analista'].astype(str).str.lower().str.contains(termo, na=False)
+        
+        df_filtrado = df_filtrado[mask_projeto | mask_gestor | mask_analista]
+
+    if status_selecionado != "Todos":
+        df_filtrado = df_filtrado[df_filtrado['Status'] == status_selecionado]
+
+    # Converte Agendamento para datetime ANTES de filtrar
+    df_filtrado['Agendamento'] = pd.to_datetime(df_filtrado['Agendamento'], errors='coerce')
+
+    if data_inicio:
+        df_filtrado = df_filtrado[df_filtrado['Agendamento'] >= pd.to_datetime(data_inicio)]
+    if data_fim:
+        df_filtrado = df_filtrado[df_filtrado['Agendamento'] <= pd.to_datetime(data_fim).replace(hour=23, minute=59)]
+    # --- FIM DAS MUDANÇAS DA SEÇÃO 6 ---
+
 
     # --- 7. Painel de KPIs ---
-    total_chamados = len(df_chamados_filtrado)
+    total_chamados = len(df_filtrado)
     status_fechamento_kpi = ['fechado', 'concluido', 'resolvido', 'cancelado', 'encerrado', 'equipamento entregue - concluído', 'finalizado']
-    if not df_chamados_filtrado.empty:
-        chamados_abertos_count = len(df_chamados_filtrado[~df_chamados_filtrado['Status'].astype(str).str.lower().isin(status_fechamento_kpi)])
+    if not df_filtrado.empty:
+        chamados_abertos_count = len(df_filtrado[~df_filtrado['Status'].astype(str).str.lower().isin(status_fechamento_kpi)])
     else:
         chamados_abertos_count = 0
-    st.markdown(f"### 📊 Resumo da Agência: {agencia_selecionada}")
+    st.markdown(f"### 📊 Resumo da Visão Filtrada") # Título atualizado
     cols_kpi = st.columns(2) 
     cols_kpi[0].metric("Total de Chamados", total_chamados)
     cols_kpi[1].metric("Chamados Abertos", chamados_abertos_count)
@@ -373,14 +410,13 @@ def tela_dados_agencia():
     # --- 8. NOVA VISÃO HIERÁRQUICA (Agência -> Projeto -> Chamados) ---
     st.markdown("#### 📋 Visão por Projetos e Chamados")
     
-    if df_chamados_filtrado.empty:
+    if df_filtrado.empty:
         st.info("Nenhum chamado encontrado para os filtros selecionados.")
         st.stop()
 
     # Prepara o DataFrame para agrupamento
     try:
-        df_chamados_filtrado['Agendamento'] = pd.to_datetime(df_chamados_filtrado['Agendamento'], errors='coerce')
-        df_chamados_filtrado['Agendamento_str'] = df_chamados_filtrado['Agendamento'].dt.strftime('%d/%m/%Y').fillna('Sem Data')
+        df_filtrado['Agendamento_str'] = df_filtrado['Agendamento'].dt.strftime('%d/%m/%Y').fillna('Sem Data')
         
         chave_agencia = 'Agencia_Combinada'
         chave_projeto = ['Projeto', 'Gestor', 'Agendamento_str']
@@ -391,10 +427,13 @@ def tela_dados_agencia():
 
     
     # --- NÍVEL 1: Loop pelas Agências ---
+    # O df_filtrado já está pré-filtrado pelos filtros acima
     if agencia_selecionada == "Todas":
-        agencias_agrupadas = df_chamados_filtrado.groupby(chave_agencia)
+        agencias_agrupadas = df_filtrado.groupby(chave_agencia)
     else:
-        agencias_agrupadas = [(agencia_selecionada, df_chamados_filtrado)]
+        # Se uma agência foi selecionada, o DF já está filtrado,
+        # mas precisamos "agrupar" para o loop funcionar
+        agencias_agrupadas = [(agencia_selecionada, df_filtrado)]
 
     for nome_agencia, df_agencia in agencias_agrupadas:
         
@@ -455,10 +494,8 @@ def tela_dados_agencia():
                     first_row = df_projeto.iloc[0]
                     chamado_ids_internos_list = df_projeto['ID'].tolist()
                     
-                    # --- INÍCIO DA CORREÇÃO ---
                     status_principal_atual = clean_val(first_row.get('Status'), default="Não Iniciado")
                     sub_status_atual = clean_val(first_row.get('Sub-Status'), default="")
-                    # --- FIM DA CORREÇÃO ---
                     
                     sla_text = ""
                     try:
@@ -494,8 +531,6 @@ def tela_dados_agencia():
                             st.markdown(f"**Gestor:**\n{gestor_html}", unsafe_allow_html=True)
 
                         with col4:
-                            # --- INÍCIO DA CORREÇÃO ---
-                            # Garante que o status principal seja sempre exibido
                             status_html = html.escape(status_principal_atual.upper())
                             st.markdown(f"""
                             <div class="card-status-badge" style="background-color: {status_color};">
@@ -503,14 +538,12 @@ def tela_dados_agencia():
                             </div>
                             """, unsafe_allow_html=True)
                             
-                            # Só exibe o Sub-Status se ele NÃO estiver vazio
                             if sub_status_atual != "":
                                 st.markdown(f"""
                                 <div class="card-action-text">
                                     {sub_status_atual}
                                 </div>
                                 """, unsafe_allow_html=True)
-                            # --- FIM DA CORREÇÃO ---
 
                         # --- NÍVEL 3 (Expander com formulários) ---
                         expander_title = f"Ver/Editar Detalhes - ID: {first_row['ID']}"
@@ -526,7 +559,6 @@ def tela_dados_agencia():
                                 c1, c2 = st.columns(2)
                                 novo_prazo = c1.text_input("Prazo", value=first_row.get('Prazo', ''), key=f"{form_key_lote}_prazo")
                                 
-                                # --- Lógica de Status Manual ---
                                 status_manual_atual = status_principal_atual if status_principal_atual in status_manual_options else "(Status Automático)"
                                 status_idx = status_manual_options.index(status_manual_atual)
                                 novo_status_manual = c2.selectbox("Forçar Status Manual", options=status_manual_options, index=status_idx, key=f"{form_key_lote}_status")
