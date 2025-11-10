@@ -290,11 +290,9 @@ def tela_dados_agencia():
         
         # --- INÍCIO DA MUDANÇA (Nível 1) ---
         
-        # 1. Filtra apenas projetos abertos
         status_fechamento_proj = ['concluído', 'cancelado', 'equipamento entregue - concluído']
         df_agencia_aberta = df_agencia[~df_agencia['Status'].astype(str).str.lower().isin(status_fechamento_proj)]
         
-        # 2. Calcula a data mais urgente
         hoje_ts = pd.Timestamp.now().normalize()
         datas_abertas = pd.to_datetime(df_agencia_aberta['Agendamento'], errors='coerce')
         
@@ -311,32 +309,29 @@ def tela_dados_agencia():
                 urgency_text = f"Urgente: {earliest_date.strftime('%d/%m/%Y')}"
             elif earliest_date == hoje_ts:
                 tag_html = "<span style='color: #FFA726; font-weight: bold;'>🟧 PARA HOJE</span>"
-                urgency_text = f"Agendado: {earliest_date.strftime('%d/%m/%Y')}"
+                urgency_text = f"📅 {earliest_date.strftime('%d/%m/%Y')}" # <--- MUDANÇA 1
             else:
                 tag_html = "🟦"
-                urgency_text = f"Próximo Ag: {earliest_date.strftime('%d/%m/%Y')}"
+                urgency_text = f"📅 {earliest_date.strftime('%d/%m/%Y')}" # <--- MUDANÇA 1
 
-        # 3. Calcula o número de PROJETOS
         num_projetos = len(df_agencia.groupby(chave_projeto))
         
-        # --- Cria o Card de Nível 1 ---
-        # Ele usa a classe .project-card (borda dourada) para consistência
         st.markdown('<div class="project-card">', unsafe_allow_html=True)
         with st.container():
             col1, col2, col3, col4 = st.columns([1.5, 3, 2, 1.5])
             with col1:
                 st.markdown(tag_html, unsafe_allow_html=True)
             with col2:
-                st.markdown(f"**{nome_agencia}**", unsafe_allow_html=True)
+                # --- MUDANÇA 2: Nome da agência maior ---
+                st.markdown(f"<span style='font-size: 1.15rem; font-weight: bold;'>{nome_agencia}</span>", unsafe_allow_html=True)
             with col3:
                 st.markdown(urgency_text, unsafe_allow_html=True)
             with col4:
                 proj_s = "Projetos" if num_projetos > 1 else "Projeto"
                 st.markdown(f"**{num_projetos} {proj_s}**")
+            # --- FIM DAS MUDANÇAS (Nível 1) ---
 
-            # Expander para MOSTRAR os projetos
             with st.expander("Ver Projetos desta Agência"):
-                # --- NÍVEL 2: Loop pelos Projetos ---
                 try:
                     projetos_agrupados = df_agencia.groupby(chave_projeto)
                     if not projetos_agrupados.groups:
