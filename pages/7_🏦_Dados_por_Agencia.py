@@ -293,7 +293,9 @@ def tela_dados_agencia():
     
     c1, c2 = st.columns([3, 1])
     with c1:
+        # --- INÍCIO DA CORREÇÃO DO TÍTULO ---
         st.markdown("<div class='section-title-center'>GESTÃO DE DADOS POR AGÊNCIA</div>", unsafe_allow_html=True)
+        # --- FIM DA CORREÇÃO DO TÍTULO ---
     with c2:
         if st.button("📥 Importar Novos Chamados", use_container_width=True):
             run_importer_dialog()
@@ -325,7 +327,6 @@ def tela_dados_agencia():
         "Pausado", "Cancelado", "Finalizado"
     ]
     
-    # --- INÍCIO DA MUDANÇA (Listas de Filtros) ---
     def get_options_list(df, column_name):
         return ["Todos"] + sorted(df[column_name].dropna().astype(str).unique())
 
@@ -334,7 +335,6 @@ def tela_dados_agencia():
     projeto_list = get_options_list(df_chamados_raw, 'Projeto')
     gestor_list = get_options_list(df_chamados_raw, 'Gestor')
     status_list = get_options_list(df_chamados_raw, 'Status')
-    # --- FIM DA MUDANÇA ---
 
     # --- 5. FILTROS PRINCIPAIS (SEÇÃO REESCRITA) ---
     st.markdown("#### 🔎 Busca Total")
@@ -376,7 +376,6 @@ def tela_dados_agencia():
     # --- 6. Filtrar DataFrame Principal (SEÇÃO REESCRITA) ---
     df_filtrado = df_chamados_raw.copy()
     
-    # Aplica filtros específicos
     if filtro_agencia != "Todos":
         df_filtrado = df_filtrado[df_filtrado['Agencia_Combinada'] == filtro_agencia]
     if filtro_analista != "Todos":
@@ -388,18 +387,15 @@ def tela_dados_agencia():
     if filtro_status != "Todos":
         df_filtrado = df_filtrado[df_filtrado['Status'] == filtro_status]
     
-    # Converte Agendamento para datetime ANTES de filtrar datas
     df_filtrado['Agendamento'] = pd.to_datetime(df_filtrado['Agendamento'], errors='coerce')
     if filtro_data_inicio:
         df_filtrado = df_filtrado[df_filtrado['Agendamento'] >= pd.to_datetime(filtro_data_inicio)]
     if filtro_data_fim:
         df_filtrado = df_filtrado[df_filtrado['Agendamento'] <= pd.to_datetime(filtro_data_fim).replace(hour=23, minute=59)]
     
-    # Aplica Busca Total (por último)
     if busca_total:
         termo = busca_total.lower()
         
-        # Colunas que você quer incluir na busca total
         cols_to_search = [
             'Nº Chamado', 'Projeto', 'Gestor', 'Analista', 'Sistema', 'Serviço',
             'Equipamento', 'Descrição', 'Observações e Pendencias', 'Obs. Equipamento',
@@ -408,7 +404,7 @@ def tela_dados_agencia():
         
         masks = []
         for col in cols_to_search:
-            if col in df_filtrado.columns: # Checa se a coluna existe
+            if col in df_filtrado.columns: 
                 masks.append(df_filtrado[col].astype(str).str.lower().str.contains(termo, na=False))
         
         if masks:
@@ -436,7 +432,7 @@ def tela_dados_agencia():
     
     if df_filtrado.empty:
         st.info("Nenhum chamado encontrado para os filtros selecionados.")
-        st.stop()
+        st.stop() # Para aqui se não houver dados
 
     # Prepara o DataFrame para agrupamento
     try:
@@ -451,10 +447,12 @@ def tela_dados_agencia():
 
     
     # --- NÍVEL 1: Loop pelas Agências ---
-    # O df_filtrado já está pronto, só precisamos agrupá-lo
     agencias_agrupadas = df_filtrado.groupby(chave_agencia)
     
-    if agencias_agrupadas.groups.keys():
+    # --- INÍCIO DA CORREÇÃO DO SYNTAXERROR ---
+    if not agencias_agrupadas.groups:
+        st.info("Nenhum projeto agrupado encontrado para os filtros selecionados.")
+    else:
         for nome_agencia, df_agencia in agencias_agrupadas:
             
             status_fechamento_proj = ['concluído', 'cancelado', 'equipamento entregue - concluído', 'finalizado']
@@ -747,13 +745,10 @@ def tela_dados_agencia():
                         
                         # Fecha o <div> do project-card (Nível 2)
                         st.markdown("</div>", unsafe_allow_html=True)
-            else:
-                st.info(f"Nenhum projeto encontrado para a agência {nome_agencia} com os filtros atuais.")
-        
-        # Fecha o <div> do agency-card (Nível 1)
-        st.markdown("</div>", unsafe_allow_html=True)
-        st.markdown("<br>", unsafe_allow_html=True) # Adiciona um espaço entre as agências
-    
+            
+            st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True) # Adiciona um espaço entre as agências
+    # --- FIM DA CORREÇÃO DO SYNTAXERROR ---
     else:
         st.info("Nenhum projeto encontrado para os filtros selecionados.")
 
