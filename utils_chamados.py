@@ -22,7 +22,6 @@ def get_db_connection_chamados():
 conn = get_db_connection_chamados() 
 
 # --- VARIÁVEL GLOBAL DE COLUNAS (CORREÇÃO) ---
-# Dicionário de todas as colunas que a tabela DEVE ter
 colunas_necessarias = {
     'agencia_id': 'TEXT', 'agencia_nome': 'TEXT', 'agencia_uf': 'TEXT',
     'servico': 'TEXT', 'projeto_nome': 'TEXT', 'data_agendamento': 'DATE',
@@ -41,10 +40,11 @@ colunas_necessarias = {
     'numero_pedido': 'TEXT',
     'data_envio': 'DATE',
     'observacao_equipamento': 'TEXT',
-    # --- NOVAS COLUNAS ADICIONADAS (v10) ---
     'prazo': 'TEXT',
-    'descricao_projeto': 'TEXT', # 'Descrição' do lote
-    'observacao_pendencias': 'TEXT' # 'Observações e pendencias' do lote
+    'descricao_projeto': 'TEXT', 
+    'observacao_pendencias': 'TEXT',
+    # --- NOVA COLUNA ADICIONADA (v11) ---
+    'sub_status': 'TEXT'
 }
 # --- FIM DA VARIÁVEL GLOBAL ---
 
@@ -109,15 +109,15 @@ def carregar_chamados_db(agencia_id_filtro=None):
             'link_externo': 'Link Externo', 'protocolo': 'Nº Protocolo',
             'numero_pedido': 'Nº Pedido', 'data_envio': 'Data Envio',
             'observacao_equipamento': 'Obs. Equipamento',
-            # --- NOVAS COLUNAS ADICIONADAS (v10) ---
-            'prazo': 'Prazo',
-            'descricao_projeto': 'Descrição',
-            'observacao_pendencias': 'Observações e Pendencias'
+            'prazo': 'Prazo', 'descricao_projeto': 'Descrição',
+            'observacao_pendencias': 'Observações e Pendencias',
+            # --- NOVA COLUNA ADICIONADA (v11) ---
+            'sub_status': 'Sub-Status'
         }
         df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
         
         # Garante que as colunas existam no DF
-        for col in ['Analista', 'Técnico', 'Link Externo', 'Nº Protocolo', 'Nº Pedido', 'Obs. Equipamento', 'Prazo', 'Descrição', 'Observações e Pendencias']:
+        for col in ['Analista', 'Técnico', 'Link Externo', 'Nº Protocolo', 'Nº Pedido', 'Obs. Equipamento', 'Prazo', 'Descrição', 'Observações e Pendencias', 'Sub-Status']:
              if col not in df.columns: df[col] = None
         if 'Prioridade' not in df.columns: df['Prioridade'] = 'Média'
         if 'Data Envio' not in df.columns: df['Data Envio'] = pd.NaT
@@ -147,9 +147,7 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         st.error("Erro: A planilha deve conter a coluna 'Codigo_Ponto' (ID da Agência).")
         return False, 0
 
-    # --- NOVO: Adiciona data_abertura na importação ---
     df_to_insert['data_abertura'] = date.today()
-    # --- FIM DA MUDANÇA ---
     
     cols_data = ['data_abertura', 'data_fechamento', 'data_agendamento']
     for col in cols_data:
@@ -187,10 +185,9 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
     
     cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns)); placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
     
-    # --- MUDANÇA: Não atualizar data_abertura em conflito ---
     update_clause = sql.SQL(', ').join(
         sql.SQL("{} = EXCLUDED.{}").format(sql.Identifier(col), sql.Identifier(col))
-        for col in df_final.columns if col != 'chamado_id' and col != 'data_abertura' # Não sobrescreve a data de abertura
+        for col in df_final.columns if col != 'chamado_id' and col != 'data_abertura'
     )
     query = sql.SQL("INSERT INTO chamados ({}) VALUES ({}) ON CONFLICT (chamado_id) DO UPDATE SET {}").format(cols_sql, placeholders, update_clause)
 
@@ -218,7 +215,8 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
                     analista, tecnico, prioridade, status_chamado, projeto_nome, gestor,
                     agencia_id, data_abertura,
                     link_externo, protocolo, numero_pedido, data_envio, observacao_equipamento,
-                    prazo, descricao_projeto, observacao_pendencias
+                    prazo, descricao_projeto, observacao_pendencias,
+                    sub_status -- (v11)
                 FROM chamados WHERE id = %s
             """, (chamado_id_interno,))
             current_data_tuple = cur.fetchone()
@@ -231,7 +229,8 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
              current_analista, current_tecnico, current_prioridade, current_status,
              current_projeto, current_gestor, current_agencia_id, current_abertura,
              current_link, current_protocolo, current_pedido, current_envio, current_obs_equip,
-             current_prazo, current_desc_proj, current_obs_pend) = current_data_tuple
+             current_prazo, current_desc_proj, current_obs_pend,
+             current_sub_status) = current_data_tuple
              
             current_log = current_log or "" 
 
@@ -239,7 +238,6 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
             for key, value in updates.items():
                 k = str(key).lower().replace(" ", "_")
                 
-                # Mapa de Nomes do Formulário -> Nomes do Banco
                 mapa_nomes = {
                     'agendamento': 'data_agendamento', 'finalização': 'data_fechamento', 'fechamento': 'data_fechamento',
                     'sistema': 'sistema', 'serviço': 'servico',
@@ -250,7 +248,8 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
                     'nº_pedido': 'numero_pedido', 'data_envio': 'data_envio',
                     'obs._equipamento': 'observacao_equipamento',
                     'prazo': 'prazo', 'descrição': 'descricao_projeto', 
-                    'observações_e_pendencias': 'observacao_pendencias'
+                    'observações_e_pendencias': 'observacao_pendencias',
+                    'sub-status': 'sub_status' # (v11)
                 }
                 
                 db_key = None
@@ -282,13 +281,14 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
                        log_entries.append(f"Em {hoje_str} por {usuario_logado}: {field_name} de '{old_val}' para '{new_val}'.")
 
             # Log para todos os campos
+            log_change("Status", db_updates_raw.get('status_chamado'), current_status)
+            log_change("Sub-Status", db_updates_raw.get('sub_status'), current_sub_status) # (v11)
             log_change("Agendamento", db_updates_raw.get('data_agendamento'), current_agendamento, is_date=True)
             log_change("Abertura", db_updates_raw.get('data_abertura'), current_abertura, is_date=True)
             log_change("Fechamento", db_updates_raw.get('data_fechamento'), current_fechamento, is_date=True)
             log_change("Analista", db_updates_raw.get('analista'), current_analista)
             log_change("Técnico", db_updates_raw.get('tecnico'), current_tecnico)
             log_change("Prioridade", db_updates_raw.get('prioridade'), current_prioridade)
-            log_change("Status", db_updates_raw.get('status_chamado'), current_status)
             log_change("Projeto", db_updates_raw.get('projeto_nome'), current_projeto)
             log_change("Gestor", db_updates_raw.get('gestor'), current_gestor)
             log_change("Agência ID", db_updates_raw.get('agencia_id'), current_agencia_id)
@@ -308,7 +308,7 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
             
             updates_final = {}
             for k in db_updates_raw:
-                if k in colunas_necessarias: 
+                if k in colunas_necessarias:
                     updates_final[k] = db_updates_raw[k]
 
             if not updates_final and not log_entries:
