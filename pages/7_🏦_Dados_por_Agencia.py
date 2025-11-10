@@ -293,9 +293,9 @@ def tela_dados_agencia():
     
     c1, c2 = st.columns([3, 1])
     with c1:
-        # --- INÍCIO DA CORREÇÃO DO TÍTULO ---
+        # --- INÍCIO DA CORREÇÃO DO SYNTAXERROR ---
         st.markdown("<div class='section-title-center'>GESTÃO DE DADOS POR AGÊNCIA</div>", unsafe_allow_html=True)
-        # --- FIM DA CORREÇÃO DO TÍTULO ---
+        # --- FIM DA CORREÇÃO DO SYNTAXERROR ---
     with c2:
         if st.button("📥 Importar Novos Chamados", use_container_width=True):
             run_importer_dialog()
@@ -432,7 +432,7 @@ def tela_dados_agencia():
     
     if df_filtrado.empty:
         st.info("Nenhum chamado encontrado para os filtros selecionados.")
-        st.stop() # Para aqui se não houver dados
+        st.stop() 
 
     # Prepara o DataFrame para agrupamento
     try:
@@ -746,6 +746,7 @@ def tela_dados_agencia():
                         # Fecha o <div> do project-card (Nível 2)
                         st.markdown("</div>", unsafe_allow_html=True)
             
+            # Fecha o <div> do agency-card (Nível 1)
             st.markdown("</div>", unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True) # Adiciona um espaço entre as agências
     # --- FIM DA CORREÇÃO DO SYNTAXERROR ---
