@@ -5,6 +5,7 @@ import utils_chamados # <<< NOSSO ARQUIVO
 from datetime import date, datetime
 import re 
 import html 
+import io # Para exportação
 
 # Configuração da Página
 st.set_page_config(page_title="Dados por Agência - GESTÃO", page_icon="🏦", layout="wide")
@@ -297,7 +298,9 @@ def tela_dados_agencia():
         st.markdown("<div class='section-title-center'>GESTÃO DE DADOS POR AGÊNCIA</div>", unsafe_allow_html=True)
         # --- FIM DA CORREÇÃO DO SYNTAXERROR ---
     with c2:
-        if st.button("📥 Importar Novos Chamados", use_container_width=True):
+        # --- INÍCIO DA CORREÇÃO (use_container_width) ---
+        if st.button("📥 Importar Novos Chamados", width='stretch'): # Era use_container_width=True
+        # --- FIM DA CORREÇÃO ---
             run_importer_dialog()
     
     st.write(" ")
@@ -328,7 +331,6 @@ def tela_dados_agencia():
     ]
     
     def get_options_list(df, column_name):
-        # Pega valores únicos, converte para string, remove Nulos/NaN, ordena e adiciona "Todos"
         options = sorted(df[column_name].dropna().astype(str).unique())
         return ["Todos"] + options
 
@@ -414,6 +416,51 @@ def tela_dados_agencia():
             df_filtrado = df_filtrado[combined_mask]
     # --- FIM DA SEÇÃO 6 ---
 
+    # --- 6b. SEU CÓDIGO DE EXPORTAÇÃO (RESTAURADO) ---
+    if "show_export_popup" not in st.session_state:
+        st.session_state.show_export_popup = False
+    
+    st.markdown("### 📤 Exportação de Dados")
+    
+    if st.button("⬇️ Exportar Dados Filtrados"):
+        st.session_state.show_export_popup = True
+    
+    if st.session_state.show_export_popup:
+        with st.container():
+            st.markdown(
+                """
+                <div style='background-color:#f0f2f6; padding:20px; border-radius:12px; 
+                            box-shadow:0 0 10px rgba(0,0,0,0.2); margin-top:10px;'>
+                    <h4 style='margin-top:0;'>💾 Confirma a exportação?</h4>
+                    <p>O arquivo será gerado com base nos filtros aplicados.</p>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+    
+            col_a, col_b = st.columns(2)
+            with col_a:
+                confirmar = st.button("✅ Sim, exportar", key="confirmar_export")
+            with col_b:
+                cancelar = st.button("❌ Cancelar", key="cancelar_export")
+    
+            if confirmar:
+                buffer = io.BytesIO()
+                with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                    df_filtrado.to_excel(writer, index=False, sheet_name="Dados Filtrados")
+    
+                st.download_button(
+                    label="📥 Baixar Arquivo Excel",
+                    data=buffer.getvalue(),
+                    file_name="dados_filtrados.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+                st.session_state.show_export_popup = False
+    
+            elif cancelar:
+                st.session_state.show_export_popup = False
+                st.rerun() # Adicionado para fechar imediatamente ao cancelar
+    # --- FIM DA RESTAURAÇÃO DO CÓDIGO ---
 
     # --- 7. Painel de KPIs ---
     total_chamados = len(df_filtrado)
@@ -616,7 +663,9 @@ def tela_dados_agencia():
                                     nova_descricao = st.text_area("Descrição", value=first_row.get('Descrição', ''), key=f"{form_key_lote}_desc")
                                     nova_obs_pend = st.text_area("Observações e Pendencias", value=first_row.get('Observações e Pendencias', ''), key=f"{form_key_lote}_obs")
 
-                                    btn_salvar_lote = st.form_submit_button("💾 Salvar Alterações do Projeto", use_container_width=True)
+                                    # --- INÍCIO DA CORREÇÃO (use_container_width) ---
+                                    btn_salvar_lote = st.form_submit_button("💾 Salvar Alterações do Projeto", width='stretch')
+                                    # --- FIM DA CORREÇÃO ---
 
                                 if btn_salvar_lote:
                                     updates = {
@@ -710,7 +759,9 @@ def tela_dados_agencia():
                                                 key=f"desc_ind_{chamado_row['ID']}"
                                             )
                                             
-                                            btn_salvar_individual = st.form_submit_button("💾 Salvar Gatilho Individual", use_container_width=True)
+                                            # --- INÍCIO DA CORREÇÃO (use_container_width) ---
+                                            btn_salvar_individual = st.form_submit_button("💾 Salvar Gatilho Individual", width='stretch')
+                                            # --- FIM DA CORREÇÃO ---
 
                                         if btn_salvar_individual:
                                             with st.spinner(f"Salvando chamado {chamado_row['Nº Chamado']}..."):
@@ -751,9 +802,9 @@ def tela_dados_agencia():
             st.markdown("</div>", unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True) # Adiciona um espaço entre as agências
     
+    # --- FIM DA CORREÇÃO DO SYNTAXERROR (else movido) ---
     else:
         st.info("Nenhum projeto encontrado para os filtros selecionados.")
-
 
 # --- Ponto de Entrada ---
 tela_dados_agencia()
