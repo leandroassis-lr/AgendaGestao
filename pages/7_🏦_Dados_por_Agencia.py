@@ -4,14 +4,29 @@ import io
 import utils_chamados
 from datetime import datetime
 
-# ============================================================
-# FUNÇÃO PRINCIPAL
-# ============================================================
 def tela_dados_agencia():
     st.title("🏦 Dados por Agência")
 
     # --- 1. Carregar dados iniciais ---
     df_chamados_raw = utils_chamados.carregar_chamados_db()
+
+# --- 1.1 Criar coluna combinada de agência ---
+# Detecta colunas possíveis
+possiveis_num_agencia = ["Numero_Agencia", "N_Agencia", "Agencia_Numero", "Agencia Nº", "Agencia_N"]
+possiveis_nome_agencia = ["Nome_Agencia", "Agencia", "Agência", "Nome", "Agencia_Nome"]
+
+col_num_agencia = next((c for c in possiveis_num_agencia if c in df_chamados_raw.columns), None)
+col_nome_agencia = next((c for c in possiveis_nome_agencia if c in df_chamados_raw.columns), None)
+
+# Cria a coluna combinada se as duas existirem
+if col_num_agencia and col_nome_agencia:
+    df_chamados_raw["Agencia_Combinada"] = (
+        df_chamados_raw[col_num_agencia].astype(str).str.strip() + " - " +
+        df_chamados_raw[col_nome_agencia].astype(str).str.strip()
+    )
+else:
+    st.error("❌ Não foi possível criar a coluna 'Agencia_Combinada'. Verifique se o número e o nome da agência estão nas colunas corretas.")
+    st.stop()
 
     # --- 2. Preparar listas de opções ---
     agencia_list = ["Todos"] + sorted(df_chamados_raw["Agencia_Combinada"].dropna().unique().tolist())
@@ -128,3 +143,4 @@ def tela_dados_agencia():
             st.warning("Nenhum dado disponível para exportação com os filtros aplicados.")
 
 tela_dados_agencia()
+
