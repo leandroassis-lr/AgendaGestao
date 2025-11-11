@@ -123,7 +123,7 @@ def run_importer_dialog():
             
             if df_para_salvar is not None:
                 st.success(f"Sucesso! {len(df_raw)} linhas lidas de {len(uploaded_files)} arquivo(s). Pré-visualização:")
-                st.dataframe(df_para_salvar.head(), width='stretch') # CORRIGIDO
+                st.dataframe(df_para_salvar.head(), width='stretch') 
                 
                 if st.button("▶️ Iniciar Importação de Chamados"):
                     if df_para_salvar.empty: 
@@ -297,8 +297,9 @@ def tela_dados_agencia():
     
     c1, c2 = st.columns([3, 1])
     with c1:
-        # --- CORREÇÃO DO SYNTAXERROR ---
+        # --- INÍCIO DA CORREÇÃO DO SYNTAXERROR ---
         st.markdown("<div class='section-title-center'>GESTÃO DE DADOS POR AGÊNCIA</div>", unsafe_allow_html=True)
+        # --- FIM DA CORREÇÃO DO SYNTAXERROR ---
     with c2:
         if st.button("📥 Importar Novos Chamados", width='stretch'): # CORRIGIDO
             run_importer_dialog()
@@ -331,6 +332,7 @@ def tela_dados_agencia():
     ]
     
     def get_options_list(df, column_name):
+        # Pega valores únicos, converte para string, remove Nulos/NaN, ordena e adiciona "Todos"
         options = sorted(df[column_name].dropna().astype(str).unique())
         return ["Todos"] + options
 
@@ -338,13 +340,13 @@ def tela_dados_agencia():
     analista_list = get_options_list(df_chamados_raw, 'Analista')
     projeto_list_filtro = get_options_list(df_chamados_raw, 'Projeto') # Lista para o filtro
     gestor_list_filtro = get_options_list(df_chamados_raw, 'Gestor') # Lista para o filtro
-    status_list = get_options_list(df_chamados_raw, 'Status')
     sistema_list = get_options_list(df_chamados_raw, 'Sistema') # <-- NOVO FILTRO
+    status_list = get_options_list(df_chamados_raw, 'Status')
 
     # Listas para os formulários de edição (sem o "Todos")
     projeto_list_form = sorted([str(p) for p in df_chamados_raw['Projeto'].dropna().unique() if p])
     gestor_list_form = sorted([str(g) for g in df_chamados_raw['Gestor'].dropna().unique() if g])
-
+    
     # --- 5. FILTROS (SEU NOVO LAYOUT) ---
     with st.expander("🔎 Filtros Avançados e Busca", expanded=True):
         st.markdown("#### 🔎 Busca Total")
@@ -514,7 +516,7 @@ def tela_dados_agencia():
                     tag_html = "<span style='color: var(--red-alert); font-weight: bold;'>🟥 ATRASADO</span>"
                     urgency_text = f"Urgente: {earliest_date.strftime('%d/%m/%Y')}"
                 elif earliest_date == hoje_ts:
-                    tag_html = "<span style='color: #FFA726; font-weight: bold;'>🟧 PARA HOJE</span>"
+                    tag_html = "<span style'color: #FFA726; font-weight: bold;'>🟧 PARA HOJE</span>"
                     urgency_text = f"📅 {earliest_date.strftime('%d/%m/%Y')}"
                 else:
                     tag_html = "🟦"
@@ -792,7 +794,6 @@ def tela_dados_agencia():
             st.markdown("<br>", unsafe_allow_html=True) # Adiciona um espaço entre as agências
     
     # --- FIM DA CORREÇÃO DO SYNTAXERROR (else alinhado) ---
-    # (Este else corresponde ao 'if not agencias_agrupadas.groups:')
     else:
         st.info("Nenhum projeto encontrado para os filtros selecionados.")
 
