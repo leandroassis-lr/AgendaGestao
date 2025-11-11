@@ -328,7 +328,9 @@ def tela_dados_agencia():
     ]
     
     def get_options_list(df, column_name):
-        return ["Todos"] + sorted(df[column_name].dropna().astype(str).unique())
+        # Pega valores únicos, converte para string, remove Nulos/NaN, ordena e adiciona "Todos"
+        options = sorted(df[column_name].dropna().astype(str).unique())
+        return ["Todos"] + options
 
     agencia_list = get_options_list(df_chamados_raw, 'Agencia_Combinada')
     analista_list = get_options_list(df_chamados_raw, 'Analista')
@@ -748,7 +750,7 @@ def tela_dados_agencia():
             # Fecha o <div> do agency-card (Nível 1)
             st.markdown("</div>", unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True) # Adiciona um espaço entre as agências
-    # --- FIM DA CORREÇÃO DO SYNTAXERROR ---
+    
     else:
         st.info("Nenhum projeto encontrado para os filtros selecionados.")
 
