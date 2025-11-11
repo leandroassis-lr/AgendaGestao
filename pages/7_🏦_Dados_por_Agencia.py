@@ -297,9 +297,8 @@ def tela_dados_agencia():
     
     c1, c2 = st.columns([3, 1])
     with c1:
-        # --- INÍCIO DA CORREÇÃO DO SYNTAXERROR ---
+        # --- CORREÇÃO DO SYNTAXERROR (class=) ---
         st.markdown("<div class='section-title-center'>GESTÃO DE DADOS POR AGÊNCIA</div>", unsafe_allow_html=True)
-        # --- FIM DA CORREÇÃO DO SYNTAXERROR ---
     with c2:
         if st.button("📥 Importar Novos Chamados", width='stretch'): # CORRIGIDO
             run_importer_dialog()
@@ -426,7 +425,7 @@ def tela_dados_agencia():
             df_filtrado = df_filtrado[combined_mask]
     # --- FIM DA SEÇÃO 6 ---
 
-    # --- 6b. SEÇÃO DE EXPORTAÇÃO (NOVO) ---
+    # --- 6b. SEÇÃO DE EXPORTAÇÃO (SEU CÓDIGO) ---
     if "show_export_popup" not in st.session_state:
         st.session_state.show_export_popup = False
     
@@ -436,7 +435,9 @@ def tela_dados_agencia():
         st.session_state.show_export_popup = True
     
     if st.session_state.show_export_popup:
-        with st.modal("⬇️ Download do Excel"):
+        # --- INÍCIO DA CORREÇÃO: st.modal -> st.dialog ---
+        with st.dialog("⬇️ Download do Excel"):
+        # --- FIM DA CORREÇÃO ---
             st.success("Arquivo Excel gerado com sucesso!")
             
             buffer = io.BytesIO()
@@ -794,8 +795,8 @@ def tela_dados_agencia():
             st.markdown("<br>", unsafe_allow_html=True) # Adiciona um espaço entre as agências
     
     # --- FIM DA CORREÇÃO DO SYNTAXERROR (else alinhado) ---
-    # else: # <--- O 'else:' STRAY QUE CAUSOU O ERRO FOI REMOVIDO DAQUI
-    #     st.info("Nenhum projeto encontrado para os filtros selecionados.")
+    else:
+        st.info("Nenhum projeto encontrado para os filtros selecionados.")
 
 
 # --- Ponto de Entrada ---
