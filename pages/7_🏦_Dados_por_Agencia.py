@@ -120,7 +120,7 @@ def run_importer_dialog():
             
             if df_para_salvar is not None:
                 st.success(f"Sucesso! {len(df_raw)} linhas lidas de {len(uploaded_files)} arquivo(s). Pré-visualização:")
-                st.dataframe(df_para_salvar, width='stretch')
+                st.dataframe(df_para_salvar.head(), width='stretch')
                 
                 if st.button("▶️ Iniciar Importação de Chamados"):
                     if df_para_salvar.empty: 
@@ -414,7 +414,7 @@ def tela_dados_agencia():
             df_filtrado = df_filtrado[combined_mask]
     # --- FIM DA SEÇÃO 6 ---
 
-    # --- 6b. SEU CÓDIGO DE EXPORTAÇÃO (RESTAURADO) ---
+    # --- 6b. SEU CÓDIGO DE EXPORTAÇÃO (RESTAURADO E ATUALIZADO) ---
     if "show_export_popup" not in st.session_state:
         st.session_state.show_export_popup = False
     
@@ -424,40 +424,26 @@ def tela_dados_agencia():
         st.session_state.show_export_popup = True
     
     if st.session_state.show_export_popup:
-        with st.container():
-            st.markdown(
-                """
-                <div style='background-color:#f0f2f6; padding:20px; border-radius:12px; 
-                            box-shadow:0 0 10px rgba(0,0,0,0.2); margin-top:10px;'>
-                    <h4 style='margin-top:0;'>💾 Confirma a exportação?</h4>
-                    <p>O arquivo será gerado com base nos filtros aplicados.</p>
-                </div>
-                """,
-                unsafe_allow_html=True
+        # Usa o st.modal do seu código
+        with st.modal("⬇️ Download do Excel"):
+            st.success("Arquivo Excel gerado com sucesso!")
+            
+            buffer = io.BytesIO()
+            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                df_filtrado.to_excel(writer, index=False, sheet_name="Dados Filtrados")
+            buffer.seek(0)
+            
+            st.download_button(
+                label="📥 Baixar Arquivo Excel",
+                data=buffer,
+                file_name="dados_filtrados.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                width='stretch'
             )
-    
-            col_a, col_b = st.columns(2)
-            with col_a:
-                confirmar = st.button("✅ Sim, exportar", key="confirmar_export")
-            with col_b:
-                cancelar = st.button("❌ Cancelar", key="cancelar_export")
-    
-            if confirmar:
-                buffer = io.BytesIO()
-                with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                    df_filtrado.to_excel(writer, index=False, sheet_name="Dados Filtrados")
-    
-                st.download_button(
-                    label="📥 Baixar Arquivo Excel",
-                    data=buffer.getvalue(),
-                    file_name="dados_filtrados.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                )
+            
+            if st.button("Fechar", width='stretch'):
                 st.session_state.show_export_popup = False
-    
-            elif cancelar:
-                st.session_state.show_export_popup = False
-                st.rerun() # Adicionado para fechar imediatamente ao cancelar
+                st.rerun()
     # --- FIM DA RESTAURAÇÃO DO CÓDIGO ---
 
     # --- 7. Painel de KPIs ---
@@ -796,6 +782,7 @@ def tela_dados_agencia():
             st.markdown("</div>", unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True) # Adiciona um espaço entre as agências
     
+    # --- FIM DA CORREÇÃO DO SYNTAXERROR (else alinhado) ---
     else:
         st.info("Nenhum projeto encontrado para os filtros selecionados.")
 
