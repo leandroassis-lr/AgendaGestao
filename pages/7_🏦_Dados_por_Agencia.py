@@ -341,9 +341,9 @@ def tela_dados_agencia():
     # --- 5. FILTROS PRINCIPAIS (SEÇÃO REESCRITA) ---
     st.markdown("#### 🔎 Busca Total")
     busca_total = st.text_input(
-        "Busca Total",
-        placeholder="Buscar por Nº Chamado, Equipamento, Descrição, Obs., etc...",
-        label_visibility="collapsed",
+        "Busca Total", 
+        placeholder="Buscar por Nº Chamado, Equipamento, Descrição, Obs., etc...", 
+        label_visibility="collapsed", 
         key="filtro_busca_total"
     )
     
@@ -356,33 +356,25 @@ def tela_dados_agencia():
         filtro_analista = st.selectbox("Analista:", options=analista_list, key="filtro_analista")
     with col3:
         filtro_projeto = st.selectbox("Projeto:", options=projeto_list, key="filtro_projeto")
-    
+
     col4, col5, col6 = st.columns(3)
     with col4:
         filtro_gestor = st.selectbox("Gestor:", options=gestor_list, key="filtro_gestor")
     with col5:
         filtro_status = st.selectbox("Status:", options=status_list, key="filtro_status")
     with col6:
-        st.write("&nbsp;")  # Placeholder para alinhar
+        st.write("&nbsp;") # Placeholder para alinhar
     
     col7, col8 = st.columns(2)
     with col7:
-        filtro_data_inicio = st.date_input(
-            "Agendamento (De):",
-            value=None,
-            format="DD/MM/YYYY",
-            key="filtro_data_inicio"
-        )
+        filtro_data_inicio = st.date_input("Agendamento (De):", value=None, format="DD/MM/YYYY", key="filtro_data_inicio")
     with col8:
-        filtro_data_fim = st.date_input(
-            "Agendamento (Até):",
-            value=None,
-            format="DD/MM/YYYY",
-            key="filtro_data_fim"
-        )
+        filtro_data_fim = st.date_input("Agendamento (Até):", value=None, format="DD/MM/YYYY", key="filtro_data_fim")
     
     st.divider()
-    
+    # --- FIM DA SEÇÃO 5 ---
+
+
     # --- 6. Filtrar DataFrame Principal (SEÇÃO REESCRITA) ---
     df_filtrado = df_chamados_raw.copy()
     
@@ -405,70 +397,23 @@ def tela_dados_agencia():
     
     if busca_total:
         termo = busca_total.lower()
+        
         cols_to_search = [
             'Nº Chamado', 'Projeto', 'Gestor', 'Analista', 'Sistema', 'Serviço',
             'Equipamento', 'Descrição', 'Observações e Pendencias', 'Obs. Equipamento',
             'Link Externo', 'Nº Protocolo', 'Nº Pedido'
         ]
+        
         masks = []
         for col in cols_to_search:
-            if col in df_filtrado.columns:
+            if col in df_filtrado.columns: 
                 masks.append(df_filtrado[col].astype(str).str.lower().str.contains(termo, na=False))
+        
         if masks:
             combined_mask = pd.concat(masks, axis=1).any(axis=1)
             df_filtrado = df_filtrado[combined_mask]
-    
-    # --- Botão e Pop-up de Exportação (NOVO) ---
-    import io
-    
-    # Inicializa o controle do pop-up na sessão
-    if "show_export_popup" not in st.session_state:
-        st.session_state.show_export_popup = False
-    
-    st.markdown("### 📤 Exportação de Dados")
-    
-    # Botão principal para abrir o pop-up
-    if st.button("⬇️ Exportar Dados Filtrados"):
-        st.session_state.show_export_popup = True
-    
-    # Exibe o pop-up quando o botão for clicado
-    if st.session_state.show_export_popup:
-        with st.container():
-            st.markdown(
-                """
-                <div style='background-color:#f0f2f6; padding:20px; border-radius:12px; 
-                            box-shadow:0 0 10px rgba(0,0,0,0.2); margin-top:10px;'>
-                    <h4 style='margin-top:0;'>💾 Confirma a exportação?</h4>
-                    <p>O arquivo será gerado com base nos filtros aplicados.</p>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-    
-            col_a, col_b = st.columns(2)
-            with col_a:
-                confirmar = st.button("✅ Sim, exportar", key="confirmar_export")
-            with col_b:
-                cancelar = st.button("❌ Cancelar", key="cancelar_export")
-    
-            if confirmar:
-                # Converter DataFrame filtrado para Excel na memória
-                buffer = io.BytesIO()
-                with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                    df_filtrado.to_excel(writer, index=False, sheet_name="Dados Filtrados")
-    
-                st.download_button(
-                    label="📥 Baixar Arquivo Excel",
-                    data=buffer.getvalue(),
-                    file_name="dados_filtrados.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                )
-    
-                # Fecha o pop-up após gerar o botão de download
-                st.session_state.show_export_popup = False
-    
-            elif cancelar:
-                st.session_state.show_export_popup = False
+    # --- FIM DA SEÇÃO 6 ---
+
 
     # --- 7. Painel de KPIs ---
     total_chamados = len(df_filtrado)
@@ -812,4 +757,3 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia()
-
