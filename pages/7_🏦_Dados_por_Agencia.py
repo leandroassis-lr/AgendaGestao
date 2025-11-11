@@ -123,7 +123,7 @@ def run_importer_dialog():
             
             if df_para_salvar is not None:
                 st.success(f"Sucesso! {len(df_raw)} linhas lidas de {len(uploaded_files)} arquivo(s). Pré-visualização:")
-                st.dataframe(df_para_salvar.head(), width='stretch') 
+                st.dataframe(df_para_salvar.head(), width='stretch') # CORRIGIDO
                 
                 if st.button("▶️ Iniciar Importação de Chamados"):
                     if df_para_salvar.empty: 
@@ -516,7 +516,7 @@ def tela_dados_agencia():
                     tag_html = "<span style='color: var(--red-alert); font-weight: bold;'>🟥 ATRASADO</span>"
                     urgency_text = f"Urgente: {earliest_date.strftime('%d/%m/%Y')}"
                 elif earliest_date == hoje_ts:
-                    tag_html = "<span style'color: #FFA726; font-weight: bold;'>🟧 PARA HOJE</span>"
+                    tag_html = "<span style='color: #FFA726; font-weight: bold;'>🟧 PARA HOJE</span>"
                     urgency_text = f"📅 {earliest_date.strftime('%d/%m/%Y')}"
                 else:
                     tag_html = "🟦"
@@ -794,8 +794,8 @@ def tela_dados_agencia():
             st.markdown("<br>", unsafe_allow_html=True) # Adiciona um espaço entre as agências
     
     # --- FIM DA CORREÇÃO DO SYNTAXERROR (else alinhado) ---
-    else:
-        st.info("Nenhum projeto encontrado para os filtros selecionados.")
+    # else: # <--- O 'else:' STRAY QUE CAUSOU O ERRO FOI REMOVIDO DAQUI
+    #     st.info("Nenhum projeto encontrado para os filtros selecionados.")
 
 
 # --- Ponto de Entrada ---
