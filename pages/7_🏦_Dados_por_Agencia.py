@@ -5,7 +5,7 @@ import utils_chamados # <<< NOSSO ARQUIVO
 from datetime import date, datetime
 import re 
 import html 
-import io # Adicionado para a exportação
+import io # Para exportação
 
 # Configuração da Página
 st.set_page_config(page_title="Dados por Agência - GESTÃO", page_icon="🏦", layout="wide")
@@ -297,6 +297,7 @@ def tela_dados_agencia():
     
     c1, c2 = st.columns([3, 1])
     with c1:
+        # --- CORREÇÃO DO SYNTAXERROR ---
         st.markdown("<div class='section-title-center'>GESTÃO DE DADOS POR AGÊNCIA</div>", unsafe_allow_html=True)
     with c2:
         if st.button("📥 Importar Novos Chamados", width='stretch'): # CORRIGIDO
@@ -329,26 +330,22 @@ def tela_dados_agencia():
         "Pausado", "Cancelado", "Finalizado"
     ]
     
-    # --- INÍCIO DA MUDANÇA (Listas de Filtros) ---
     def get_options_list(df, column_name):
-        # Pega valores únicos, converte para string, remove Nulos/NaN, ordena e adiciona "Todos"
         options = sorted(df[column_name].dropna().astype(str).unique())
         return ["Todos"] + options
 
-    # Gera as listas para os filtros
     agencia_list = get_options_list(df_chamados_raw, 'Agencia_Combinada')
     analista_list = get_options_list(df_chamados_raw, 'Analista')
     projeto_list_filtro = get_options_list(df_chamados_raw, 'Projeto') # Lista para o filtro
     gestor_list_filtro = get_options_list(df_chamados_raw, 'Gestor') # Lista para o filtro
-    sistema_list = get_options_list(df_chamados_raw, 'Sistema')
     status_list = get_options_list(df_chamados_raw, 'Status')
+    sistema_list = get_options_list(df_chamados_raw, 'Sistema') # <-- NOVO FILTRO
 
-    # Gera as listas para os formulários de edição (sem o "Todos")
+    # Listas para os formulários de edição (sem o "Todos")
     projeto_list_form = sorted([str(p) for p in df_chamados_raw['Projeto'].dropna().unique() if p])
     gestor_list_form = sorted([str(g) for g in df_chamados_raw['Gestor'].dropna().unique() if g])
-    # --- FIM DA MUDANÇA ---
 
-    # --- 5. FILTROS PRINCIPAIS (SEÇÃO REESCRITA) ---
+    # --- 5. FILTROS (SEU NOVO LAYOUT) ---
     with st.expander("🔎 Filtros Avançados e Busca", expanded=True):
         st.markdown("#### 🔎 Busca Total")
         busca_total = st.text_input(
@@ -386,10 +383,9 @@ def tela_dados_agencia():
     # --- FIM DA SEÇÃO 5 ---
 
 
-    # --- 6. Filtrar DataFrame Principal (SEÇÃO REESCRITA) ---
+    # --- 6. Filtrar DataFrame Principal (SEU NOVO LAYOUT) ---
     df_filtrado = df_chamados_raw.copy()
     
-    # Aplica filtros específicos
     if filtro_agencia != "Todos":
         df_filtrado = df_filtrado[df_filtrado['Agencia_Combinada'] == filtro_agencia]
     if filtro_analista != "Todos":
@@ -403,14 +399,12 @@ def tela_dados_agencia():
     if filtro_sistema != "Todos":
         df_filtrado = df_filtrado[df_filtrado['Sistema'] == filtro_sistema]
     
-    # Converte Agendamento para datetime ANTES de filtrar datas
     df_filtrado['Agendamento'] = pd.to_datetime(df_filtrado['Agendamento'], errors='coerce')
     if filtro_data_inicio:
         df_filtrado = df_filtrado[df_filtrado['Agendamento'] >= pd.to_datetime(filtro_data_inicio)]
     if filtro_data_fim:
         df_filtrado = df_filtrado[df_filtrado['Agendamento'] <= pd.to_datetime(filtro_data_fim).replace(hour=23, minute=59)]
     
-    # Aplica Busca Total (por último)
     if busca_total:
         termo = busca_total.lower()
         
@@ -436,7 +430,7 @@ def tela_dados_agencia():
     
     st.markdown("### 📤 Exportação de Dados")
     
-    if st.button("⬇️ Exportar Dados Filtrados", width='stretch'):
+    if st.button("⬇️ Exportar Dados Filtrados", width='stretch'): # CORRIGIDO
         st.session_state.show_export_popup = True
     
     if st.session_state.show_export_popup:
@@ -797,8 +791,11 @@ def tela_dados_agencia():
             st.markdown("</div>", unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True) # Adiciona um espaço entre as agências
     
+    # --- FIM DA CORREÇÃO DO SYNTAXERROR (else alinhado) ---
+    # (Este else corresponde ao 'if not agencias_agrupadas.groups:')
     else:
         st.info("Nenhum projeto encontrado para os filtros selecionados.")
+
 
 # --- Ponto de Entrada ---
 tela_dados_agencia()
