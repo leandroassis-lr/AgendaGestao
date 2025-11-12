@@ -389,8 +389,7 @@ def tela_dados_agencia():
         
         if st.button("⬇️ Exportar Dados Filtrados", width='stretch'):
             st.session_state.show_export_popup = True
-        # --- FIM DA SEÇÃO MOVIDA ---
-    
+           
     # Esse divider fica FORA do expander
     st.divider()
     
@@ -437,28 +436,31 @@ def tela_dados_agencia():
             combined_mask = pd.concat(masks, axis=1).any(axis=1)
             df_filtrado = df_filtrado[combined_mask]
     
-    # --- 6b. LÓGICA DO MODAL DE EXPORTAÇÃO (Fica aqui fora) ---
-    if st.session_state.show_export_popup:
-        with st.modal("⬇️ Download do Excel"):
-            st.success("Arquivo Excel gerado com sucesso!")
-            
-            # A geração do arquivo deve usar o 'df_filtrado' (Seção 6)
-            buffer = io.BytesIO()
-            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                df_filtrado.to_excel(writer, index=False, sheet_name="Dados Filtrados")
-            buffer.seek(0)
-            
-            st.download_button(
-                label="📥 Baixar Arquivo Excel",
-                data=buffer,
-                file_name="dados_filtrados.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                width='stretch'
-            )
-            
-            if st.button("Fechar", width='stretch'):
-                st.session_state.show_export_popup = False
-                st.rerun()
+   # --- 6b. LÓGICA DO MODAL DE EXPORTAÇÃO (Fica aqui fora) ---
+if st.session_state.get("show_export_popup", False):
+
+    with st.expander("⬇️ Download do Excel", expanded=True):
+        st.success("Arquivo Excel gerado com sucesso!")
+
+        # --- Criação do buffer do arquivo Excel ---
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            df_filtrado.to_excel(writer, index=False, sheet_name="Dados Filtrados")
+        buffer.seek(0)
+
+        # --- Botão de download principal ---
+        st.download_button(
+            label="📥 Baixar Arquivo Excel",
+            data=buffer,
+            file_name="dados_filtrados.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
+
+        # --- Botão de fechamento do "popup" ---
+        if st.button("Fechar", use_container_width=True):
+            st.session_state.show_export_popup = False
+            st.rerun()
                 
     # --- 7. Painel de KPIs ---
     total_chamados = len(df_filtrado)
@@ -803,6 +805,7 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia()
+
 
 
 
