@@ -258,9 +258,7 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
         for chamado_id in ids_para_atualizar:
             utils_chamados.atualizar_chamado_db(chamado_id, updates)
         return True
-    
     return False
-
 
 # --- FUNÇÃO HELPER PARA LIMPAR VALORES ---
 def clean_val(val, default="N/A"):
@@ -397,7 +395,6 @@ def tela_dados_agencia():
     st.divider()
     # --- FIM DA SEÇÃO 5 ---
     
-    
     # --- 6. Filtrar DataFrame Principal (Sem alterações) ---
     df_filtrado = df_chamados_raw.copy()
     
@@ -405,13 +402,12 @@ def tela_dados_agencia():
         df_filtrado = df_filtrado[df_filtrado['Agencia_Combinada'] == filtro_agencia]
     # ... (todo o resto da sua lógica de filtro continua aqui) ...
     if busca_total:
+        pass # Coloque sua lógica de busca aqui, se houver
         # ... (lógica da busca total) ...
     # --- FIM DA SEÇÃO 6 ---
     
-    
     # --- 6b. LÓGICA DO MODAL DE EXPORTAÇÃO (Fica aqui fora) ---
-    # (Note que o botão e o título H3 foram removidos daqui)
-    
+     
     if st.session_state.show_export_popup:
         with st.modal("⬇️ Download do Excel"):
             st.success("Arquivo Excel gerado com sucesso!")
@@ -433,7 +429,7 @@ def tela_dados_agencia():
             if st.button("Fechar", width='stretch'):
                 st.session_state.show_export_popup = False
                 st.rerun()
-
+            
     # --- 7. Painel de KPIs ---
     total_chamados = len(df_filtrado)
     status_fechamento_kpi = ['fechado', 'concluido', 'resolvido', 'cancelado', 'encerrado', 'equipamento entregue - concluído', 'finalizado']
@@ -777,6 +773,7 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia()
+
 
 
 
