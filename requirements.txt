@@ -6,7 +6,5 @@ openpyxl
 xlsxwriter
 streamlit-option-menu
 streamlit-aggrid
-sqlalchemy-libsql
 sqlalchemy
 psycopg2-binary
-
