@@ -393,42 +393,57 @@ def tela_dados_agencia():
     
     # Esse divider fica FORA do expander
     st.divider()
-    # --- FIM DA SEÇÃO 5 ---
-    
-    # --- 6. Filtrar DataFrame Principal (Sem alterações) ---
+        
+    # --- 6. Filtrar DataFrame Principal (CORRIGIDO E COMPLETO) ---
     df_filtrado = df_chamados_raw.copy()
     
+    # Filtros específicos (Dropdowns)
     if filtro_agencia != "Todos":
         df_filtrado = df_filtrado[df_filtrado['Agencia_Combinada'] == filtro_agencia]
-    # ... (todo o resto da sua lógica de filtro continua aqui) ...
-    if busca_total:
-        pass # Coloque sua lógica de busca aqui, se houver
-        # ... (lógica da busca total) ...
-    # --- FIM DA SEÇÃO 6 ---
+    if filtro_analista != "Todos":
+        df_filtrado = df_filtrado[df_filtrado['Analista'] == filtro_analista]
+    if filtro_projeto != "Todos":
+        df_filtrado = df_filtrado[df_filtrado['Projeto'] == filtro_projeto]
+    if filtro_gestor != "Todos":
+        df_filtrado = df_filtrado[df_filtrado['Gestor'] == filtro_gestor]
+    if filtro_status != "Todos":
+        df_filtrado = df_filtrado[df_filtrado['Status'] == filtro_status]
+    if filtro_sistema != "Todos":
+        df_filtrado = df_filtrado[df_filtrado['Sistema'] == filtro_sistema]
     
-    # --- 6b. LÓGICA DO MODAL DE EXPORTAÇÃO (Fica aqui fora) ---
-     
-    if st.session_state.show_export_popup:
-        with st.modal("⬇️ Download do Excel"):
-            st.success("Arquivo Excel gerado com sucesso!")
-            
-            # A geração do arquivo deve usar o 'df_filtrado' (Seção 6)
-            buffer = io.BytesIO()
-            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                df_filtrado.to_excel(writer, index=False, sheet_name="Dados Filtrados")
-            buffer.seek(0)
-            
-            st.download_button(
-                label="📥 Baixar Arquivo Excel",
-                data=buffer,
-                file_name="dados_filtrados.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                width='stretch'
-            )
-            
-            if st.button("Fechar", width='stretch'):
-                st.session_state.show_export_popup = False
-                st.rerun()
+    # Filtro de Data (ESSA PARTE É A CAUSA DO ERRO)
+    # 1. Converte a coluna para datetime (MUITO IMPORTANTE)
+    df_filtrado['Agendamento'] = pd.to_datetime(df_filtrado['Agendamento'], errors='coerce')
+    
+    # 2. Filtra pelo range de data
+    if filtro_data_inicio:
+        df_filtrado = df_filtrado[df_filtrado['Agendamento'] >= pd.to_datetime(filtro_data_inicio)]
+    if filtro_data_fim:
+        # .replace garante que a data "Até" inclua o dia inteiro
+        df_filtrado = df_filtrado[df_filtrado['Agendamento'] <= pd.to_datetime(filtro_data_fim).replace(hour=23, minute=59)]
+    
+    # Filtro de Busca Total
+    if busca_total:
+        termo = busca_total.lower()
+        
+        # Lista de colunas onde a busca será aplicada
+        cols_to_search = [
+            'Nº Chamado', 'Projeto', 'Gestor', 'Analista', 'Sistema', 'Serviço',
+            'Equipamento', 'Descrição', 'Observações e Pendencias', 'Obs. Equipamento',
+            'Link Externo', 'Nº Protocolo', 'Nº Pedido', 'Agencia_Combinada' 
+            # Adicione mais colunas se precisar
+        ]
+        
+        masks = []
+        for col in cols_to_search:
+            if col in df_filtrado.columns: 
+                # Garante que a coluna seja string, minúscula, e compara
+                masks.append(df_filtrado[col].astype(str).str.lower().str.contains(termo, na=False))
+        
+        if masks:
+            # Combina todas as máscaras (OR) - se o termo estiver em QUALQUER coluna
+            combined_mask = pd.concat(masks, axis=1).any(axis=1)
+            df_filtrado = df_filtrado[combined_mask]
             
     # --- 7. Painel de KPIs ---
     total_chamados = len(df_filtrado)
@@ -773,6 +788,7 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia()
+
 
 
 
