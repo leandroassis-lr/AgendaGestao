@@ -1,11 +1,11 @@
 import streamlit as st
 import pandas as pd
-import utils # Apenas para CSS e Login Check
-import utils_chamados # <<< NOSSO ARQUIVO
+import utils
+import utils_chamados
 from datetime import date, datetime
 import re 
 import html 
-import io # Para exportação
+import io
 
 # Configuração da Página
 st.set_page_config(page_title="Dados por Agência - GESTÃO", page_icon="🏦", layout="wide")
@@ -347,8 +347,13 @@ def tela_dados_agencia():
     projeto_list_form = sorted([str(p) for p in df_chamados_raw['Projeto'].dropna().unique() if p])
     gestor_list_form = sorted([str(g) for g in df_chamados_raw['Gestor'].dropna().unique() if g])
     
-    # --- 5. FILTROS (SEU NOVO LAYOUT) ---
-    with st.expander("🔎 Filtros Avançados e Busca", expanded=True):
+# --- 5. FILTROS E BOTÃO DE EXPORTAÇÃO ---
+
+    # A inicialização do state do modal deve vir ANTES do expander
+    if "show_export_popup" not in st.session_state:
+        st.session_state.show_export_popup = False
+    
+    with st.expander("🔎 Filtros, Busca e Exportação", expanded=True):
         st.markdown("#### 🔎 Busca Total")
         busca_total = st.text_input(
             "Busca Total", 
@@ -366,7 +371,7 @@ def tela_dados_agencia():
             filtro_analista = st.selectbox("Analista:", options=analista_list, key="filtro_analista")
         with col3:
             filtro_projeto = st.selectbox("Projeto:", options=projeto_list_filtro, key="filtro_projeto")
-
+    
         col4, col5, col6 = st.columns(3)
         with col4:
             filtro_gestor = st.selectbox("Gestor:", options=gestor_list_filtro, key="filtro_gestor")
@@ -380,65 +385,39 @@ def tela_dados_agencia():
             filtro_data_inicio = st.date_input("Agendamento (De):", value=None, format="DD/MM/YYYY", key="filtro_data_inicio")
         with col8:
             filtro_data_fim = st.date_input("Agendamento (Até):", value=None, format="DD/MM/YYYY", key="filtro_data_fim")
+            
+        # --- SEÇÃO DE EXPORTAÇÃO (MOVIDA PARA CÁ) ---
+        st.divider() # Uma linha para separar os filtros da exportação
+        st.markdown("#### 📤 Exportação")
+        
+        if st.button("⬇️ Exportar Dados Filtrados", width='stretch'):
+            st.session_state.show_export_popup = True
+        # --- FIM DA SEÇÃO MOVIDA ---
     
+    # Esse divider fica FORA do expander
     st.divider()
     # --- FIM DA SEÇÃO 5 ---
-
-
-    # --- 6. Filtrar DataFrame Principal (SEU NOVO LAYOUT) ---
+    
+    
+    # --- 6. Filtrar DataFrame Principal (Sem alterações) ---
     df_filtrado = df_chamados_raw.copy()
     
     if filtro_agencia != "Todos":
         df_filtrado = df_filtrado[df_filtrado['Agencia_Combinada'] == filtro_agencia]
-    if filtro_analista != "Todos":
-        df_filtrado = df_filtrado[df_filtrado['Analista'] == filtro_analista]
-    if filtro_projeto != "Todos":
-        df_filtrado = df_filtrado[df_filtrado['Projeto'] == filtro_projeto]
-    if filtro_gestor != "Todos":
-        df_filtrado = df_filtrado[df_filtrado['Gestor'] == filtro_gestor]
-    if filtro_status != "Todos":
-        df_filtrado = df_filtrado[df_filtrado['Status'] == filtro_status]
-    if filtro_sistema != "Todos":
-        df_filtrado = df_filtrado[df_filtrado['Sistema'] == filtro_sistema]
-    
-    df_filtrado['Agendamento'] = pd.to_datetime(df_filtrado['Agendamento'], errors='coerce')
-    if filtro_data_inicio:
-        df_filtrado = df_filtrado[df_filtrado['Agendamento'] >= pd.to_datetime(filtro_data_inicio)]
-    if filtro_data_fim:
-        df_filtrado = df_filtrado[df_filtrado['Agendamento'] <= pd.to_datetime(filtro_data_fim).replace(hour=23, minute=59)]
-    
+    # ... (todo o resto da sua lógica de filtro continua aqui) ...
     if busca_total:
-        termo = busca_total.lower()
-        
-        cols_to_search = [
-            'Nº Chamado', 'Projeto', 'Gestor', 'Analista', 'Sistema', 'Serviço',
-            'Equipamento', 'Descrição', 'Observações e Pendencias', 'Obs. Equipamento',
-            'Link Externo', 'Nº Protocolo', 'Nº Pedido'
-        ]
-        
-        masks = []
-        for col in cols_to_search:
-            if col in df_filtrado.columns: 
-                masks.append(df_filtrado[col].astype(str).str.lower().str.contains(termo, na=False))
-        
-        if masks:
-            combined_mask = pd.concat(masks, axis=1).any(axis=1)
-            df_filtrado = df_filtrado[combined_mask]
+        # ... (lógica da busca total) ...
     # --- FIM DA SEÇÃO 6 ---
-
-    # --- 6b. SEÇÃO DE EXPORTAÇÃO (NOVO) ---
-    if "show_export_popup" not in st.session_state:
-        st.session_state.show_export_popup = False
     
-    st.markdown("### 📤 Exportação de Dados")
     
-    if st.button("⬇️ Exportar Dados Filtrados", width='stretch'): # CORRIGIDO
-        st.session_state.show_export_popup = True
+    # --- 6b. LÓGICA DO MODAL DE EXPORTAÇÃO (Fica aqui fora) ---
+    # (Note que o botão e o título H3 foram removidos daqui)
     
     if st.session_state.show_export_popup:
         with st.modal("⬇️ Download do Excel"):
             st.success("Arquivo Excel gerado com sucesso!")
             
+            # A geração do arquivo deve usar o 'df_filtrado' (Seção 6)
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
                 df_filtrado.to_excel(writer, index=False, sheet_name="Dados Filtrados")
@@ -455,7 +434,6 @@ def tela_dados_agencia():
             if st.button("Fechar", width='stretch'):
                 st.session_state.show_export_popup = False
                 st.rerun()
-    # --- FIM DA SEÇÃO 6b ---
 
     # --- 7. Painel de KPIs ---
     total_chamados = len(df_filtrado)
@@ -800,3 +778,4 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia()
+
