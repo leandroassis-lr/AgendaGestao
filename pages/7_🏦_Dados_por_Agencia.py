@@ -436,7 +436,7 @@ def tela_dados_agencia():
             combined_mask = pd.concat(masks, axis=1).any(axis=1)
             df_filtrado = df_filtrado[combined_mask]
     
-   # --- 6b. LÓGICA DO MODAL DE EXPORTAÇÃO (Fica aqui fora) ---
+# --- 6b. LÓGICA DO MODAL DE EXPORTAÇÃO (Fica aqui fora) ---
 if st.session_state.get("show_export_popup", False):
 
     with st.expander("⬇️ Download do Excel", expanded=True):
@@ -461,7 +461,7 @@ if st.session_state.get("show_export_popup", False):
         if st.button("Fechar", use_container_width=True):
             st.session_state.show_export_popup = False
             st.rerun()
-                
+            
     # --- 7. Painel de KPIs ---
     total_chamados = len(df_filtrado)
     status_fechamento_kpi = ['fechado', 'concluido', 'resolvido', 'cancelado', 'encerrado', 'equipamento entregue - concluído', 'finalizado']
@@ -805,6 +805,7 @@ if st.session_state.get("show_export_popup", False):
 
 # --- Ponto de Entrada ---
 tela_dados_agencia()
+
 
 
 
