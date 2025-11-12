@@ -343,7 +343,7 @@ def tela_dados_agencia():
     # Listas para os formulários de edição (sem o "Todos")
     projeto_list_form = sorted([str(p) for p in df_chamados_raw['Projeto'].dropna().unique() if p])
     gestor_list_form = sorted([str(g) for g in df_chamados_raw['Gestor'].dropna().unique() if g])
-    
+        
     # --- 5. FILTROS E BOTÃO DE EXPORTAÇÃO ---
     
     # A inicialização do state do modal deve vir ANTES do expander
@@ -393,8 +393,8 @@ def tela_dados_agencia():
     
     # Esse divider fica FORA do expander
     st.divider()
-        
-    # --- 6. Filtrar DataFrame Principal (CORRIGIDO E COMPLETO) ---
+    
+    # --- 6. Filtrar DataFrame Principal (COMPLETO) ---
     df_filtrado = df_chamados_raw.copy()
     
     # Filtros específicos (Dropdowns)
@@ -411,40 +411,55 @@ def tela_dados_agencia():
     if filtro_sistema != "Todos":
         df_filtrado = df_filtrado[df_filtrado['Sistema'] == filtro_sistema]
     
-    # Filtro de Data (ESSA PARTE É A CAUSA DO ERRO)
-    # 1. Converte a coluna para datetime (MUITO IMPORTANTE)
+    # Filtro de Data
     df_filtrado['Agendamento'] = pd.to_datetime(df_filtrado['Agendamento'], errors='coerce')
-    
-    # 2. Filtra pelo range de data
     if filtro_data_inicio:
         df_filtrado = df_filtrado[df_filtrado['Agendamento'] >= pd.to_datetime(filtro_data_inicio)]
     if filtro_data_fim:
-        # .replace garante que a data "Até" inclua o dia inteiro
         df_filtrado = df_filtrado[df_filtrado['Agendamento'] <= pd.to_datetime(filtro_data_fim).replace(hour=23, minute=59)]
     
     # Filtro de Busca Total
     if busca_total:
         termo = busca_total.lower()
         
-        # Lista de colunas onde a busca será aplicada
         cols_to_search = [
             'Nº Chamado', 'Projeto', 'Gestor', 'Analista', 'Sistema', 'Serviço',
             'Equipamento', 'Descrição', 'Observações e Pendencias', 'Obs. Equipamento',
-            'Link Externo', 'Nº Protocolo', 'Nº Pedido', 'Agencia_Combinada' 
-            # Adicione mais colunas se precisar
+            'Link Externo', 'Nº Protocolo', 'Nº Pedido', 'Agencia_Combinada'
         ]
         
         masks = []
         for col in cols_to_search:
             if col in df_filtrado.columns: 
-                # Garante que a coluna seja string, minúscula, e compara
                 masks.append(df_filtrado[col].astype(str).str.lower().str.contains(termo, na=False))
         
         if masks:
-            # Combina todas as máscaras (OR) - se o termo estiver em QUALQUER coluna
             combined_mask = pd.concat(masks, axis=1).any(axis=1)
             df_filtrado = df_filtrado[combined_mask]
+    
+    # --- 6b. LÓGICA DO MODAL DE EXPORTAÇÃO (Fica aqui fora) ---
+    if st.session_state.show_export_popup:
+        with st.modal("⬇️ Download do Excel"):
+            st.success("Arquivo Excel gerado com sucesso!")
             
+            # A geração do arquivo deve usar o 'df_filtrado' (Seção 6)
+            buffer = io.BytesIO()
+            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                df_filtrado.to_excel(writer, index=False, sheet_name="Dados Filtrados")
+            buffer.seek(0)
+            
+            st.download_button(
+                label="📥 Baixar Arquivo Excel",
+                data=buffer,
+                file_name="dados_filtrados.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                width='stretch'
+            )
+            
+            if st.button("Fechar", width='stretch'):
+                st.session_state.show_export_popup = False
+                st.rerun()
+                
     # --- 7. Painel de KPIs ---
     total_chamados = len(df_filtrado)
     status_fechamento_kpi = ['fechado', 'concluido', 'resolvido', 'cancelado', 'encerrado', 'equipamento entregue - concluído', 'finalizado']
@@ -452,13 +467,13 @@ def tela_dados_agencia():
         chamados_abertos_count = len(df_filtrado[~df_filtrado['Status'].astype(str).str.lower().isin(status_fechamento_kpi)])
     else:
         chamados_abertos_count = 0
+    
     st.markdown(f"### 📊 Resumo da Visão Filtrada")
     cols_kpi = st.columns(2) 
     cols_kpi[0].metric("Total de Chamados", total_chamados)
     cols_kpi[1].metric("Chamados Abertos", chamados_abertos_count)
     st.divider()
-
-
+    
     # --- 8. NOVA VISÃO HIERÁRQUICA (Agência -> Projeto -> Chamados) ---
     st.markdown("#### 📋 Visão por Projetos e Chamados")
     
@@ -788,6 +803,7 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia()
+
 
 
 
