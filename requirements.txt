@@ -1,4 +1,4 @@
-streamlit
+streamlit>=1.30.0
 pandas
 plotly
 streamlit-calendar
@@ -9,3 +9,4 @@ streamlit-aggrid
 sqlalchemy-libsql
 sqlalchemy
 psycopg2-binary
+
