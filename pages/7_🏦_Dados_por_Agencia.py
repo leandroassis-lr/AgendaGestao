@@ -269,7 +269,6 @@ def clean_val(val, default="N/A"):
         return default
     return str(val)
 
-
 # --- Tela Principal da Página ---
 def tela_dados_agencia():
     
@@ -347,10 +346,6 @@ def tela_dados_agencia():
     projeto_list_form = sorted([str(p) for p in df_chamados_raw['Projeto'].dropna().unique() if p])
     gestor_list_form = sorted([str(g) for g in df_chamados_raw['Gestor'].dropna().unique() if g])
     
-# Importe isso no início do seu script (necessário para o buffer do Excel)
-import io
-import pandas as pd
-
 # --- 5. FILTROS E BOTÃO DE EXPORTAÇÃO ---
 
 # A inicialização do state do modal deve vir ANTES do expander
@@ -782,5 +777,6 @@ if st.session_state.show_export_popup:
 
 # --- Ponto de Entrada ---
 tela_dados_agencia()
+
 
 
