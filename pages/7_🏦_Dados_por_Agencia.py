@@ -396,7 +396,7 @@ def tela_dados_agencia():
     # --- 6. Filtrar DataFrame Principal (COMPLETO) ---
     df_filtrado = df_chamados_raw.copy()
     
-    # Filtros específicos (Dropdowns)
+    # --- Filtros específicos (Dropdowns) ---
     if filtro_agencia != "Todos":
         df_filtrado = df_filtrado[df_filtrado['Agencia_Combinada'] == filtro_agencia]
     if filtro_analista != "Todos":
@@ -410,57 +410,58 @@ def tela_dados_agencia():
     if filtro_sistema != "Todos":
         df_filtrado = df_filtrado[df_filtrado['Sistema'] == filtro_sistema]
     
-    # Filtro de Data
+    # --- Filtro de Data ---
     df_filtrado['Agendamento'] = pd.to_datetime(df_filtrado['Agendamento'], errors='coerce')
     if filtro_data_inicio:
         df_filtrado = df_filtrado[df_filtrado['Agendamento'] >= pd.to_datetime(filtro_data_inicio)]
     if filtro_data_fim:
         df_filtrado = df_filtrado[df_filtrado['Agendamento'] <= pd.to_datetime(filtro_data_fim).replace(hour=23, minute=59)]
     
-    # Filtro de Busca Total
+    # --- Filtro de Busca Total ---
     if busca_total:
         termo = busca_total.lower()
-        
         cols_to_search = [
             'Nº Chamado', 'Projeto', 'Gestor', 'Analista', 'Sistema', 'Serviço',
             'Equipamento', 'Descrição', 'Observações e Pendencias', 'Obs. Equipamento',
             'Link Externo', 'Nº Protocolo', 'Nº Pedido', 'Agencia_Combinada'
         ]
-        
         masks = []
         for col in cols_to_search:
-            if col in df_filtrado.columns: 
+            if col in df_filtrado.columns:
                 masks.append(df_filtrado[col].astype(str).str.lower().str.contains(termo, na=False))
-        
         if masks:
             combined_mask = pd.concat(masks, axis=1).any(axis=1)
             df_filtrado = df_filtrado[combined_mask]
     
-# --- 6b. LÓGICA DO MODAL DE EXPORTAÇÃO (Fica aqui fora) ---
-if st.session_state.get("show_export_popup", False):
-
-    with st.expander("⬇️ Download do Excel", expanded=True):
-        st.success("Arquivo Excel gerado com sucesso!")
-
-        # --- Criação do buffer do arquivo Excel ---
-        buffer = io.BytesIO()
-        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-            df_filtrado.to_excel(writer, index=False, sheet_name="Dados Filtrados")
-        buffer.seek(0)
-
-        # --- Botão de download principal ---
-        st.download_button(
-            label="📥 Baixar Arquivo Excel",
-            data=buffer,
-            file_name="dados_filtrados.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
-        )
-
-        # --- Botão de fechamento do "popup" ---
-        if st.button("Fechar", use_container_width=True):
-            st.session_state.show_export_popup = False
-            st.rerun()
+    # --- 6b. LÓGICA DO MODAL DE EXPORTAÇÃO (Fica aqui fora) ---
+    # Garante que o estado esteja inicializado
+    if "show_export_popup" not in st.session_state:
+        st.session_state.show_export_popup = False
+    
+    if st.session_state.show_export_popup:
+    
+        with st.expander("⬇️ Download do Excel", expanded=True):
+            st.success("Arquivo Excel gerado com sucesso!")
+    
+            # --- Criação do buffer do arquivo Excel ---
+            buffer = io.BytesIO()
+            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                df_filtrado.to_excel(writer, index=False, sheet_name="Dados Filtrados")
+            buffer.seek(0)
+    
+            # --- Botão de download principal ---
+            st.download_button(
+                label="📥 Baixar Arquivo Excel",
+                data=buffer,
+                file_name="dados_filtrados.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+    
+            # --- Botão de fechamento do "popup" ---
+            if st.button("Fechar", use_container_width=True):
+                st.session_state.show_export_popup = False
+                st.rerun()
             
     # --- 7. Painel de KPIs ---
     total_chamados = len(df_filtrado)
@@ -805,6 +806,7 @@ if st.session_state.get("show_export_popup", False):
 
 # --- Ponto de Entrada ---
 tela_dados_agencia()
+
 
 
 
