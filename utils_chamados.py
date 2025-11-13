@@ -7,21 +7,45 @@ import psycopg2
 from psycopg2 import sql
 import numpy as np 
 
-# --- 1. FUNÇÃO DE CONEXÃO (Independente) ---
+# --- 1. GERENCIAMENTO DE CONEXÃO ROBUSTO ---
+
 @st.cache_resource
-def get_db_connection_chamados():
-    """Cria uma conexão SÓ PARA ESTA PÁGINA."""
+def _get_cached_connection():
+    """
+    Cria a conexão bruta e armazena em cache. 
+    NÃO chame esta função diretamente. Use get_valid_conn().
+    """
     try:
         secrets = st.secrets["postgres"]
-        conn = psycopg2.connect(host=secrets["PGHOST"], port=secrets["PGPORT"], user=secrets["PGUSER"], password=secrets["PGPASSWORD"], dbname=secrets["PGDATABASE"])
-        conn.autocommit = False # Desliga autocommit para transações
+        conn = psycopg2.connect(
+            host=secrets["PGHOST"], 
+            port=secrets["PGPORT"], 
+            user=secrets["PGUSER"], 
+            password=secrets["PGPASSWORD"], 
+            dbname=secrets["PGDATABASE"],
+            connect_timeout=10
+        )
+        conn.autocommit = False 
         return conn
-    except KeyError as e: st.error(f"Erro Crítico: Credencial '{e}' não encontrada."); return None
-    except Exception as e: st.error(f"Erro ao conectar ao DB: {e}"); return None
+    except Exception as e: 
+        st.error(f"Erro ao conectar ao PostgreSQL: {e}")
+        return None
 
-conn = get_db_connection_chamados() 
+def get_valid_conn():
+    """
+    Verifica se a conexão em cache está ativa. 
+    Se caiu (closed != 0), limpa o cache e reconecta.
+    """
+    conn = _get_cached_connection()
+    
+    # Se a conexão for None ou estiver fechada (0 = aberta, >0 = fechada)
+    if conn is None or conn.closed != 0:
+        st.cache_resource.clear() # Limpa o cache antigo
+        conn = _get_cached_connection() # Tenta criar nova
+        
+    return conn
 
-# --- VARIÁVEL GLOBAL DE COLUNAS (CORREÇÃO) ---
+# --- VARIÁVEL GLOBAL DE COLUNAS ---
 colunas_necessarias = {
     'agencia_id': 'TEXT', 'agencia_nome': 'TEXT', 'agencia_uf': 'TEXT',
     'servico': 'TEXT', 'projeto_nome': 'TEXT', 'data_agendamento': 'DATE',
@@ -43,17 +67,16 @@ colunas_necessarias = {
     'prazo': 'TEXT',
     'descricao_projeto': 'TEXT', 
     'observacao_pendencias': 'TEXT',
-    # --- NOVA COLUNA ADICIONADA (v11) ---
     'sub_status': 'TEXT'
 }
-# --- FIM DA VARIÁVEL GLOBAL ---
 
-
-# --- 2. FUNÇÃO PARA CRIAR/ATUALIZAR A TABELA 'chamados' ---
+# --- 2. FUNÇÃO PARA CRIAR/ATUALIZAR A TABELA ---
 def criar_tabela_chamados():
-    """Cria a tabela 'chamados' e adiciona colunas ausentes se não existirem."""
+    """Cria a tabela e verifica colunas."""
     global colunas_necessarias
+    conn = get_valid_conn() # Pega conexão validada
     if not conn: return
+
     try:
         with conn.cursor() as cur:
             cur.execute("""
@@ -68,21 +91,25 @@ def criar_tabela_chamados():
             
             for coluna, tipo_coluna in colunas_necessarias.items():
                 if coluna not in colunas_existentes:
-                    st.warning(f"Atualizando BD (Chamados): Adicionando coluna '{coluna}'...")
+                    # st.warning(f"Atualizando BD: Adicionando '{coluna}'...") # Comentado para limpar a tela
                     cur.execute(f"ALTER TABLE chamados ADD COLUMN {coluna} {tipo_coluna};")
             conn.commit()
             
     except Exception as e:
-        st.error(f"Erro ao criar/verificar tabela 'chamados': {e}")
-        try: conn.rollback()
-        except: pass
+        conn.rollback()
+        st.error(f"Erro ao verificar tabela: {e}")
 
 
 # --- 3. FUNÇÃO PARA CARREGAR CHAMADOS ---
 @st.cache_data(ttl=60)
 def carregar_chamados_db(agencia_id_filtro=None):
-    """ Carrega chamados, opcionalmente filtrados por ID de agência. """
+    """ Carrega chamados com tratamento de queda de conexão. """
+    # Não usamos get_valid_conn aqui diretamente pois st.cache_data não gosta de objetos de conexão
+    # Precisamos recriar a lógica para garantir que o dado venha fresco
+    
+    conn = get_valid_conn()
     if not conn: return pd.DataFrame()
+
     try:
         query = "SELECT * FROM chamados"
         params = []
@@ -111,24 +138,28 @@ def carregar_chamados_db(agencia_id_filtro=None):
             'observacao_equipamento': 'Obs. Equipamento',
             'prazo': 'Prazo', 'descricao_projeto': 'Descrição',
             'observacao_pendencias': 'Observações e Pendencias',
-            # --- NOVA COLUNA ADICIONADA (v11) ---
             'sub_status': 'Sub-Status'
         }
         df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
         
-        # Garante que as colunas existam no DF
-        for col in ['Analista', 'Técnico', 'Link Externo', 'Nº Protocolo', 'Nº Pedido', 'Obs. Equipamento', 'Prazo', 'Descrição', 'Observações e Pendencias', 'Sub-Status']:
+        # Colunas garantidas
+        cols_text = ['Analista', 'Técnico', 'Link Externo', 'Nº Protocolo', 'Nº Pedido', 'Obs. Equipamento', 'Prazo', 'Descrição', 'Observações e Pendencias', 'Sub-Status']
+        for col in cols_text:
              if col not in df.columns: df[col] = None
+        
         if 'Prioridade' not in df.columns: df['Prioridade'] = 'Média'
         if 'Data Envio' not in df.columns: df['Data Envio'] = pd.NaT
 
         return df
     except Exception as e:
-        st.error(f"Erro ao carregar chamados: {e}"); return pd.DataFrame()
+        # Se der erro de conexão aqui, forçamos limpeza do cache de conexão para a próxima tentativa
+        st.cache_resource.clear()
+        st.error(f"Erro ao ler banco (tente recarregar a página): {e}")
+        return pd.DataFrame()
 
 # --- 4. FUNÇÃO PARA IMPORTAR CHAMADOS ---
 def bulk_insert_chamados_db(df: pd.DataFrame):
-    """ Importa um DataFrame de chamados para o banco (UPSERT). """
+    conn = get_valid_conn()
     if not conn: return False, 0
     
     column_map = {
@@ -141,10 +172,7 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
     df_to_insert = df.rename(columns={k: v for k, v in column_map.items() if k in df.columns})
 
     if 'chamado_id' not in df_to_insert.columns:
-        st.error("Erro: A planilha deve conter a coluna 'Chamado' (ID do chamado).")
-        return False, 0
-    if 'agencia_id' not in df_to_insert.columns:
-        st.error("Erro: A planilha deve conter a coluna 'Codigo_Ponto' (ID da Agência).")
+        st.error("Erro: Coluna 'Chamado' obrigatória.")
         return False, 0
 
     df_to_insert['data_abertura'] = date.today()
@@ -167,23 +195,22 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         'data_abertura', 'status_chamado', 'valor_chamado',
         'analista', 'tecnico', 'prioridade'
     ]
-                       
+                        
     df_final = df_to_insert[[col for col in cols_to_insert if col in df_to_insert.columns]]
     
     values = []
     for record in df_final.to_records(index=False):
-        processed_record = []
+        processed = []
         for cell in record:
-            if pd.isna(cell) or cell is pd.NaT: processed_record.append(None)
-            elif isinstance(cell, (np.int64, np.int32, np.int16, np.int8, pd.Int64Dtype.type)): processed_record.append(int(cell))
-            elif isinstance(cell, (np.float64, np.float32)): processed_record.append(float(cell))
-            elif isinstance(cell, (pd.Timestamp, datetime, np.datetime64)):
-                processed_record.append(pd.to_datetime(cell).date())
-            else:
-                processed_record.append(str(cell) if cell is not None else None) 
-        values.append(tuple(processed_record))
+            if pd.isna(cell) or cell is pd.NaT: processed.append(None)
+            elif isinstance(cell, (np.integer, int)): processed.append(int(cell))
+            elif isinstance(cell, (np.floating, float)): processed.append(float(cell))
+            elif isinstance(cell, (pd.Timestamp, datetime, np.datetime64)): processed.append(pd.to_datetime(cell).date())
+            else: processed.append(str(cell) if cell is not None else None) 
+        values.append(tuple(processed))
     
-    cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns)); placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
+    cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns))
+    placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
     
     update_clause = sql.SQL(', ').join(
         sql.SQL("{} = EXCLUDED.{}").format(sql.Identifier(col), sql.Identifier(col))
@@ -194,14 +221,17 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
     try:
         with conn.cursor() as cur: 
             cur.executemany(query, values) 
-        conn.commit(); st.cache_data.clear(); return True, len(values)
+        conn.commit()
+        st.cache_data.clear()
+        return True, len(values)
     except Exception as e: 
-        conn.rollback(); st.error(f"Erro ao salvar chamados no banco: {e}"); return False, 0
+        conn.rollback()
+        st.error(f"Erro ao salvar: {e}")
+        return False, 0
 
-# --- 5. FUNÇÃO PARA SALVAR EDIÇÕES DE CHAMADOS ---
+# --- 5. FUNÇÃO PARA ATUALIZAR CHAMADO ---
 def atualizar_chamado_db(chamado_id_interno, updates: dict):
-    """ Atualiza um chamado existente no banco de dados e gera log. """
-    global colunas_necessarias
+    conn = get_valid_conn()
     if not conn: return False
     
     usuario_logado = st.session_state.get('usuario', 'Sistema') 
@@ -216,135 +246,92 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
                     agencia_id, data_abertura,
                     link_externo, protocolo, numero_pedido, data_envio, observacao_equipamento,
                     prazo, descricao_projeto, observacao_pendencias,
-                    sub_status -- (v11)
+                    sub_status
                 FROM chamados WHERE id = %s
             """, (chamado_id_interno,))
-            current_data_tuple = cur.fetchone()
-            if not current_data_tuple:
-                st.error(f"Erro: Chamado com ID interno {chamado_id_interno} não encontrado.")
-                return False
+            current_data = cur.fetchone()
+            
+            if not current_data: return False
 
-            (current_agendamento, current_fechamento, current_log,
-             current_sistema, current_servico,
-             current_analista, current_tecnico, current_prioridade, current_status,
-             current_projeto, current_gestor, current_agencia_id, current_abertura,
-             current_link, current_protocolo, current_pedido, current_envio, current_obs_equip,
-             current_prazo, current_desc_proj, current_obs_pend,
-             current_sub_status) = current_data_tuple
+            (c_agend, c_fech, c_log, c_sis, c_serv, c_analista, c_tec, c_prio, c_status, c_proj, c_gest, c_ag_id, c_abert,
+             c_link, c_proto, c_ped, c_env, c_obs_eq, c_prazo, c_desc, c_obs_pend, c_sub_s) = current_data
              
-            current_log = current_log or "" 
+            c_log = c_log or "" 
 
-            db_updates_raw = {}
-            for key, value in updates.items():
-                k = str(key).lower().replace(" ", "_")
-                
-                mapa_nomes = {
-                    'agendamento': 'data_agendamento', 'finalização': 'data_fechamento', 'fechamento': 'data_fechamento',
-                    'sistema': 'sistema', 'serviço': 'servico',
-                    'analista': 'analista', 'técnico': 'tecnico', 'prioridade': 'prioridade',
-                    'status': 'status_chamado', 'projeto': 'projeto_nome', 'gestor': 'gestor',
-                    'agência': 'agencia_id', 'abertura': 'data_abertura',
-                    'link_externo': 'link_externo', 'protocolo': 'protocolo',
-                    'nº_pedido': 'numero_pedido', 'data_envio': 'data_envio',
-                    'obs._equipamento': 'observacao_equipamento',
-                    'prazo': 'prazo', 'descrição': 'descricao_projeto', 
-                    'observações_e_pendencias': 'observacao_pendencias',
-                    'sub-status': 'sub_status' # (v11)
-                }
-                
-                db_key = None
-                for form_key, db_col in mapa_nomes.items():
-                    if form_key in k:
-                        db_key = db_col
-                        break
-                
-                if not db_key: db_key = k
-
-                if isinstance(value, (datetime, date)): db_updates_raw[db_key] = value.strftime('%Y-%m-%d')
-                elif pd.isna(value): db_updates_raw[db_key] = None
-                else: db_updates_raw[db_key] = str(value)
-
-            log_entries = []; hoje_str = date.today().strftime('%d/%m/%Y')
+            db_updates = {}
+            # Mapeamento simplificado
+            mapa = {
+                'agendamento': 'data_agendamento', 'fechamento': 'data_fechamento', 'finalização': 'data_fechamento',
+                'sistema': 'sistema', 'serviço': 'servico', 'analista': 'analista', 'técnico': 'tecnico',
+                'status': 'status_chamado', 'projeto': 'projeto_nome', 'gestor': 'gestor', 'agência': 'agencia_id',
+                'abertura': 'data_abertura', 'link_externo': 'link_externo', 'protocolo': 'protocolo',
+                'nº_pedido': 'numero_pedido', 'data_envio': 'data_envio', 'obs._equipamento': 'observacao_equipamento',
+                'prazo': 'prazo', 'descrição': 'descricao_projeto', 'observações_e_pendencias': 'observacao_pendencias',
+                'sub-status': 'sub_status', 'prioridade': 'prioridade'
+            }
             
-            def log_change(field_name, new_val, old_val, is_date=False):
-                if new_val is None: new_val = "" 
-                if old_val is None: old_val = "" 
+            for k_orig, v in updates.items():
+                k_clean = str(k_orig).lower().replace(" ", "_")
+                db_k = next((db_col for form_k, db_col in mapa.items() if form_k in k_clean), k_clean)
                 
-                if is_date:
-                    try: new_val_date = datetime.strptime(new_val, '%Y-%m-%d').date() if new_val else None
-                    except ValueError: new_val_date = old_val
-                    if new_val_date != old_val:
-                        old_str = old_val.strftime('%d/%m/%Y') if isinstance(old_val, date) else "N/A"
-                        new_str = new_val_date.strftime('%d/%m/%Y') if isinstance(new_val_date, date) else "N/A"
-                        log_entries.append(f"Em {hoje_str} por {usuario_logado}: {field_name} de '{old_str}' para '{new_str}'.")
-                elif str(new_val).strip() != str(old_val).strip():
-                       log_entries.append(f"Em {hoje_str} por {usuario_logado}: {field_name} de '{old_val}' para '{new_val}'.")
+                if isinstance(v, (datetime, date)): db_updates[db_k] = v.strftime('%Y-%m-%d')
+                elif pd.isna(v): db_updates[db_k] = None
+                else: db_updates[db_k] = str(v)
 
-            # Log para todos os campos
-            log_change("Status", db_updates_raw.get('status_chamado'), current_status)
-            log_change("Sub-Status", db_updates_raw.get('sub_status'), current_sub_status) # (v11)
-            log_change("Agendamento", db_updates_raw.get('data_agendamento'), current_agendamento, is_date=True)
-            log_change("Abertura", db_updates_raw.get('data_abertura'), current_abertura, is_date=True)
-            log_change("Fechamento", db_updates_raw.get('data_fechamento'), current_fechamento, is_date=True)
-            log_change("Analista", db_updates_raw.get('analista'), current_analista)
-            log_change("Técnico", db_updates_raw.get('tecnico'), current_tecnico)
-            log_change("Prioridade", db_updates_raw.get('prioridade'), current_prioridade)
-            log_change("Projeto", db_updates_raw.get('projeto_nome'), current_projeto)
-            log_change("Gestor", db_updates_raw.get('gestor'), current_gestor)
-            log_change("Agência ID", db_updates_raw.get('agencia_id'), current_agencia_id)
-            log_change("Link Externo", db_updates_raw.get('link_externo'), current_link)
-            log_change("Protocolo", db_updates_raw.get('protocolo'), current_protocolo)
-            log_change("Nº Pedido", db_updates_raw.get('numero_pedido'), current_pedido)
-            log_change("Data Envio", db_updates_raw.get('data_envio'), current_envio, is_date=True)
-            log_change("Obs. Equipamento", db_updates_raw.get('observacao_equipamento'), current_obs_equip)
-            log_change("Prazo", db_updates_raw.get('prazo'), current_prazo)
-            log_change("Descrição", db_updates_raw.get('descricao_projeto'), current_desc_proj)
-            log_change("Observações/Pendencias", db_updates_raw.get('observacao_pendencias'), current_obs_pend)
-            log_change("Sistema", db_updates_raw.get('sistema'), current_sistema)
-            log_change("Serviço", db_updates_raw.get('servico'), current_servico)
+            # Geração de Log (Resumido)
+            log_entries = []
+            hoje = date.today().strftime('%d/%m/%Y')
             
-            log_final = current_log; 
-            if log_entries: log_final += ("\n" if current_log else "") + "\n".join(log_entries)
-            
-            updates_final = {}
-            for k in db_updates_raw:
-                if k in colunas_necessarias:
-                    updates_final[k] = db_updates_raw[k]
+            # Helper Log
+            def do_log(nome, novo, velho, is_d=False):
+                if novo is None: novo = ""
+                if velho is None: velho = ""
+                if is_d:
+                    try: n_d = datetime.strptime(novo, '%Y-%m-%d').date() if novo else None
+                    except: n_d = velho
+                    if n_d != velho:
+                        v_s = velho.strftime('%d/%m') if isinstance(velho, date) else "-"
+                        n_s = n_d.strftime('%d/%m') if isinstance(n_d, date) else "-"
+                        log_entries.append(f"{hoje} {usuario_logado}: {nome} {v_s}->{n_s}")
+                elif str(novo).strip() != str(velho).strip():
+                     log_entries.append(f"{hoje} {usuario_logado}: {nome} alterado.")
 
-            if not updates_final and not log_entries:
-                return True 
-
-            updates_final['log_chamado'] = log_final if log_final else None
+            # Executa Log para campos críticos
+            do_log("Status", db_updates.get('status_chamado'), c_status)
+            do_log("Sub", db_updates.get('sub_status'), c_sub_s)
+            do_log("Agend", db_updates.get('data_agendamento'), c_agend, True)
+            do_log("Envio", db_updates.get('data_envio'), c_env, True)
             
-            set_clause = sql.SQL(', ').join(sql.SQL("{} = {}").format(sql.Identifier(k), sql.Placeholder()) for k in updates_final.keys())
-            query = sql.SQL("UPDATE chamados SET {} WHERE id = {}").format(set_clause, sql.Placeholder())
-            vals = list(updates_final.values()) + [chamado_id_interno]
+            if log_entries:
+                new_log = (c_log + "\n" + "\n".join(log_entries)).strip()
+                db_updates['log_chamado'] = new_log
+
+            if not db_updates: return True
+
+            set_c = sql.SQL(', ').join(sql.SQL("{} = {}").format(sql.Identifier(k), sql.Placeholder()) for k in db_updates.keys())
+            query = sql.SQL("UPDATE chamados SET {} WHERE id = {}").format(set_c, sql.Placeholder())
+            vals = list(db_updates.values()) + [chamado_id_interno]
             
             cur.execute(query, vals)
-            conn.commit() 
-        
+            conn.commit()
         return True
     except Exception as e:
         conn.rollback()
-        st.toast(f"Erro CRÍTICO ao atualizar chamado ID {chamado_id_interno}: {e}", icon="🔥"); 
+        st.error(f"Erro ao atualizar: {e}")
         return False
 
-# --- 6. Funções de Cor (Independentes) ---
+# --- 6. Funções de Cor ---
 def get_status_color(status):
     s = str(status or "").strip().lower()
-    if 'finalizad' in s or 'fechado' in s or 'concluido' in s: return "#66BB6A" 
-    elif 'pendencia' in s or 'pendência' in s: return "#FFA726" 
-    elif 'nao iniciad' in s or 'não iniciad' in s: return "#B0BEC5" 
-    elif 'cancelad' in s: return "#EF5350" 
-    elif 'pausad' in s: return "#FFEE58" 
-    else: return "#64B5F6"  
+    if any(x in s for x in ['finalizad', 'fechado', 'conclui', 'concluí']): return "#66BB6A" 
+    if any(x in s for x in ['pendencia', 'pendência']): return "#FFA726" 
+    if any(x in s for x in ['nao iniciad', 'não iniciad']): return "#B0BEC5" 
+    if 'cancelad' in s: return "#EF5350" 
+    if 'pausad' in s: return "#FFEE58" 
+    return "#64B5F6"  
 
 def get_color_for_name(name_str):
-    COLORS_LIST = ["#D32F2F", "#1976D2", "#388E3C", "#F57C00", "#7B1FA2", "#00796B", "#C2185B", "#5D4037", "#455A64"]
-    if name_str is None or name_str == "N/A": return "#555" 
-    name_normalized = str(name_str).strip().upper() 
-    if not name_normalized: return "#555"
-    try:
-        hash_val = hash(name_normalized); color_index = hash_val % len(COLORS_LIST)
-        return COLORS_LIST[color_index]
-    except Exception: return "#555"
+    COLORS = ["#D32F2F", "#1976D2", "#388E3C", "#F57C00", "#7B1FA2", "#00796B", "#C2185B", "#5D4037", "#455A64"]
+    if not name_str or name_str == "N/A": return "#555"
+    try: return COLORS[hash(str(name_str).upper()) % len(COLORS)]
+    except: return "#555"
