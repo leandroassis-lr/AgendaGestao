@@ -439,12 +439,13 @@ def tela_dados_agencia():
     st.divider()
     
     # --- 8. NOVA VISÃO HIERÁRQUICA (Agência -> Projeto -> Chamados) ---
-    st.markdown("#### 📋 Projetos por Agência")
+    st.markdown("#### 📋 Visão por Projetos e Chamados")
     
     if df_filtrado.empty:
         st.info("Nenhum chamado encontrado para os filtros selecionados.")
         st.stop() 
 
+    # Bloco de preparação de chaves
     try:
         df_filtrado['Agendamento_str'] = df_filtrado['Agendamento'].dt.strftime('%d/%m/%Y').fillna('Sem Data')
         chave_agencia = 'Agencia_Combinada'
@@ -453,13 +454,51 @@ def tela_dados_agencia():
         st.error(f"Erro ao processar datas para agrupamento: {e}")
         st.stop()
     
-    agencias_agrupadas = df_filtrado.groupby(chave_agencia)
+    # --- INÍCIO DA NOVA LÓGICA DE ORDENAÇÃO ---
     
+    # 1. Definir o que é um status "fechado"
+    status_fechamento_sort = ['concluído', 'cancelado', 'equipamento entregue - concluído', 'finalizado', 'fechado', 'resolvido', 'encerrado']
+    
+    # 2. Criar DF apenas com chamados "abertos" para encontrar a data de urgência
+    df_abertos_sort = df_filtrado[~df_filtrado['Status'].astype(str).str.lower().isin(status_fechamento_sort)].copy()
+    
+    # 3. Garantir que a data de agendamento é datetime (já foi feito, mas reforçamos)
+    df_abertos_sort['Agendamento'] = pd.to_datetime(df_abertos_sort['Agendamento'], errors='coerce')
+    
+    # 4. Encontrar a data mínima (mais urgente) para cada agência
+    min_dates_open = df_abertos_sort.groupby('Agencia_Combinada')['Agendamento'].min()
+    
+    # 5. Pegar TODAS as agências da visão filtrada
+    all_agencies_in_view = df_filtrado['Agencia_Combinada'].unique()
+    
+    # 6. Criar um DataFrame de ordenação
+    sort_df = pd.DataFrame(index=all_agencies_in_view)
+    sort_df['MinDate'] = sort_df.index.map(min_dates_open) # Mapeia as datas mínimas
+    sort_df = sort_df.reset_index().rename(columns={'index': 'Agencia_Combinada'})
+    
+    # 7. Ordenar: datas ascendentes (antigas primeiro), NaT (sem data aberta) por último
+    sort_df = sort_df.sort_values(by='MinDate', ascending=True, na_position='last')
+    
+    # 8. Obter a lista ordenada de nomes de agência
+    sorted_agency_list = sort_df['Agencia_Combinada'].tolist()
+    
+    # 9. Agrupar o DF *original* para ter os dados
+    agencias_agrupadas = df_filtrado.groupby(chave_agencia)
+    agencia_dfs_dict = dict(list(agencias_agrupadas))
+    # --- FIM DA NOVA LÓGICA DE ORDENAÇÃO ---
+
+    
+    # --- NÍVEL 1: Loop pelas Agências (MODIFICADO) ---
     if not agencias_agrupadas.groups:
         st.info("Nenhum projeto agrupado encontrado para os filtros selecionados.")
     else:
-        for nome_agencia, df_agencia in agencias_agrupadas:
+        # Loop MODIFICADO: iterar pela lista ordenada
+        for nome_agencia in sorted_agency_list:
+            df_agencia = agencia_dfs_dict.get(nome_agencia)
+            if df_agencia is None: # Segurança, mas não deve acontecer
+                continue
             
+            # O restante do loop (cálculo de tag_html, etc.) continua igual...
             status_fechamento_proj = ['concluído', 'cancelado', 'equipamento entregue - concluído', 'finalizado']
             df_agencia_aberta = df_agencia[~df_agencia['Status'].astype(str).str.lower().isin(status_fechamento_proj)]
             
@@ -467,17 +506,15 @@ def tela_dados_agencia():
             datas_abertas = pd.to_datetime(df_agencia_aberta['Agendamento'], errors='coerce')
             
             tag_html = "🟦"
-            urgency_text = "Sem Agendamentos" # Default se o DF da agência estiver vazio
+            urgency_text = "Sem Agendamentos"
             
             if not datas_abertas.empty:
                 earliest_date = datas_abertas.min()
                 
-                # --- CORREÇÃO (Verifica se a data é NaT) ---
                 if pd.isna(earliest_date):
                     tag_html = "🟦"
                     urgency_text = "Sem Data Válida"
                 elif earliest_date < hoje_ts:
-                # --- FIM DA CORREÇÃO ---
                     tag_html = "<span style='color: var(--red-alert); font-weight: bold;'>🟥 ATRASADO</span>"
                     urgency_text = f"Urgente: {earliest_date.strftime('%d/%m/%Y')}"
                 elif earliest_date == hoje_ts:
@@ -742,5 +779,3 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia ()
-
-
