@@ -439,7 +439,7 @@ def tela_dados_agencia():
     st.divider()
     
     # --- 8. NOVA VISÃO HIERÁRQUICA (Agência -> Projeto -> Chamados) ---
-    st.markdown("#### 📋 Visão por Projetos e Chamados")
+    st.markdown("#### 📋 Projeos por Agência")
     
     if df_filtrado.empty:
         st.info("Nenhum chamado encontrado para os filtros selecionados.")
@@ -467,17 +467,23 @@ def tela_dados_agencia():
             datas_abertas = pd.to_datetime(df_agencia_aberta['Agendamento'], errors='coerce')
             
             tag_html = "🟦"
-            urgency_text = "Sem Agendamentos"
+            urgency_text = "Sem Agendamentos" # Default se o DF da agência estiver vazio
             
             if not datas_abertas.empty:
                 earliest_date = datas_abertas.min()
-                if earliest_date < hoje_ts:
+                
+                # --- CORREÇÃO (Verifica se a data é NaT) ---
+                if pd.isna(earliest_date):
+                    tag_html = "🟦"
+                    urgency_text = "Sem Data Válida"
+                elif earliest_date < hoje_ts:
+                # --- FIM DA CORREÇÃO ---
                     tag_html = "<span style='color: var(--red-alert); font-weight: bold;'>🟥 ATRASADO</span>"
                     urgency_text = f"Urgente: {earliest_date.strftime('%d/%m/%Y')}"
                 elif earliest_date == hoje_ts:
                     tag_html = "<span style='color: #FFA726; font-weight: bold;'>🟧 PARA HOJE</span>"
                     urgency_text = f"📅 {earliest_date.strftime('%d/%m/%Y')}"
-                else:
+                else: # Agora esta linha é segura
                     tag_html = "🟦"
                     urgency_text = f"📅 {earliest_date.strftime('%d/%m/%Y')}"
 
@@ -736,3 +742,4 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia ()
+
