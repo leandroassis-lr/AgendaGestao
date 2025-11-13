@@ -242,7 +242,6 @@ def clean_val(val, default="N/A"):
         return default
     return str(val)
 
-# --- TELA PRINCIPAL (MODIFICADA) ---
 def tela_dados_agencia():
     
     # CSS
@@ -253,38 +252,37 @@ def tela_dados_agencia():
             .card-action-text { text-align: center; font-size: 0.9em; font-weight: 600; margin-top: 8px; color: var(--primary-dark); background-color: #F0F2F5; padding: 4px; border-radius: 5px; } 
             .project-card [data-testid="stExpander"] { border: 1px solid var(--gray-border); border-radius: var(--std-radius); margin-top: 15px; }
             .section-title-center { text-align: center; font-size: 1.8rem; font-weight: bold; margin-bottom: 20px; color: #333; }
-            /* Ajuste para alinhar botões com input text */
-            div[data-testid="column"] button {
-                margin-top: 29px; /* Empurra o botão para alinhar com o input */
-                width: 100%;
-            }
         </style>
     """, unsafe_allow_html=True)
     
     # 1. Título Centralizado
     st.markdown("<div class='section-title-center'>GESTÃO DE DADOS POR AGÊNCIA</div>", unsafe_allow_html=True)
     
-    # 2. Carregar Dados
+    # 2. Carregar Dados com Tentativa de Reconexão
     utils_chamados.criar_tabela_chamados()
-    with st.spinner("Carregando dados..."):
-        df_chamados_raw = utils_chamados.carregar_chamados_db()
+    
+    try:
+        with st.spinner("Carregando dados..."):
+            df_chamados_raw = utils_chamados.carregar_chamados_db()
+    except Exception as e:
+        st.warning(f"⚠️ Conexão oscilou. Reconectando... ({e})")
+        st.cache_data.clear()
+        st.cache_resource.clear()
+        import time; time.sleep(1)
+        st.rerun()
 
     if df_chamados_raw.empty:
-        st.info("Nenhum dado encontrado. Use o botão de importação.")
-        # Precisa de um botão aqui caso esteja vazio
-        if st.button("📥 Importar"): run_importer_dialog()
+        st.info("Nenhum dado encontrado no banco.")
+        if st.button("📥 Importar Arquivo"): run_importer_dialog()
         st.stop()
 
-    # Preparar Dados
+    # Preparar Dados (Formatação e Listas)
     if 'Cód. Agência' in df_chamados_raw.columns:
         df_chamados_raw['Agencia_Combinada'] = df_chamados_raw.apply(
-            lambda row: formatar_agencia_excel(row['Cód. Agência'], row['Nome Agência']), 
-            axis=1
+            lambda row: formatar_agencia_excel(row['Cód. Agência'], row['Nome Agência']), axis=1
         )
-    else:
-        st.error("Tabela incompleta."); st.stop()
+    else: st.error("Tabela incompleta."); st.stop()
 
-    # Listas para Filtros
     def get_options_list(df, column_name):
         options = sorted(df[column_name].dropna().astype(str).unique())
         return ["Todos"] + options
@@ -296,38 +294,35 @@ def tela_dados_agencia():
     sistema_list = get_options_list(df_chamados_raw, 'Sistema')
     status_list = get_options_list(df_chamados_raw, 'Status')
 
-    # Inicializar estado do popup de exportação
-    if "show_export_popup" not in st.session_state:
-        st.session_state.show_export_popup = False
+    if "show_export_popup" not in st.session_state: st.session_state.show_export_popup = False
 
-    # --- BARRA DE CONTROLES SUPERIOR (BUSCA + BOTÕES LADO A LADO) ---
-    # Dividindo: Busca (Grande), Importar (Pequeno), Exportar (Pequeno)
-    col_search, col_imp, col_exp = st.columns([4, 1, 1])
+    # --- TOPO: BOTÕES DE AÇÃO (ALINHADOS À DIREITA) ---
+    # Colunas: Espaço vazio grande | Botão Importar | Botão Exportar
+    c_spacer, c_btn_imp, c_btn_exp = st.columns([6, 1.5, 1.5])
     
-    with col_search:
-        busca_total = st.text_input("🔎 Busca Rápida", placeholder="Digite Nº Chamado, Agência, ou qualquer termo...", label_visibility="visible")
-    
-    with col_imp:
-        # Botão Importar
+    with c_btn_imp:
         if st.button("📥 Importar", use_container_width=True):
             run_importer_dialog()
             
-    with col_exp:
-        # Botão Exportar
+    with c_btn_exp:
         if st.button("⬇️ Exportar", use_container_width=True):
             st.session_state.show_export_popup = True
 
-    # --- BARRA DE FILTROS DIVIDIDA (4 COLUNAS) ---
-    with st.expander("🎛️ Filtros Avançados", expanded=True):
+    # --- FILTROS E BUSCA (TUDO DENTRO DO EXPANDER) ---
+    with st.expander("🔎 Filtros e Busca Avançada", expanded=True):
         
-        # Linha 1 de Filtros (4 Colunas)
+        # 1. Busca Rápida (Topo do Expander)
+        busca_total = st.text_input("🔎 Busca Rápida (Digite ID, Agência, Projeto...)", placeholder="Ex: AG 0123 ou Instalação...")
+        
+        st.write("") # Espaçamento
+        
+        # 2. Grid de Filtros (4 Colunas)
         f1, f2, f3, f4 = st.columns(4)
         with f1: filtro_agencia = st.selectbox("Agência", options=agencia_list)
         with f2: filtro_analista = st.selectbox("Analista", options=analista_list)
         with f3: filtro_projeto = st.selectbox("Projeto", options=projeto_list_filtro)
         with f4: filtro_gestor = st.selectbox("Gestor", options=gestor_list_filtro)
         
-        # Linha 2 de Filtros (4 Colunas)
         f5, f6, f7, f8 = st.columns(4)
         with f5: filtro_status = st.selectbox("Status", options=status_list)
         with f6: filtro_sistema = st.selectbox("Sistema", options=sistema_list)
@@ -336,7 +331,7 @@ def tela_dados_agencia():
 
     st.divider()
 
-    # --- FILTRAGEM DOS DADOS ---
+    # --- APLICAÇÃO DOS FILTROS ---
     df_filtrado = df_chamados_raw.copy()
     
     if filtro_agencia != "Todos": df_filtrado = df_filtrado[df_filtrado['Agencia_Combinada'] == filtro_agencia]
@@ -350,9 +345,10 @@ def tela_dados_agencia():
     if filtro_data_inicio: df_filtrado = df_filtrado[df_filtrado['Agendamento'] >= pd.to_datetime(filtro_data_inicio)]
     if filtro_data_fim: df_filtrado = df_filtrado[df_filtrado['Agendamento'] <= pd.to_datetime(filtro_data_fim).replace(hour=23, minute=59)]
 
+    # Aplicação da Busca Rápida
     if busca_total:
         termo = busca_total.lower()
-        cols_to_search = ['Nº Chamado', 'Projeto', 'Gestor', 'Analista', 'Sistema', 'Agencia_Combinada', 'Equipamento']
+        cols_to_search = ['Nº Chamado', 'Projeto', 'Gestor', 'Analista', 'Sistema', 'Agencia_Combinada', 'Equipamento', 'Observação']
         masks = []
         for col in cols_to_search:
             if col in df_filtrado.columns:
@@ -361,21 +357,18 @@ def tela_dados_agencia():
             combined_mask = pd.concat(masks, axis=1).any(axis=1)
             df_filtrado = df_filtrado[combined_mask]
 
-    # --- LÓGICA DO MODAL DE EXPORTAÇÃO ---
+    # --- MODAL DE EXPORTAÇÃO ---
     if st.session_state.show_export_popup:
         with st.expander("⬇️ Confirmar Download", expanded=True):
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
                 df_filtrado.to_excel(writer, index=False, sheet_name="Dados Filtrados")
             buffer.seek(0)
-            
             c_down, c_close = st.columns([3,1])
-            with c_down:
-                st.download_button(label="📥 Baixar Excel", data=buffer, file_name="dados.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
-            with c_close:
+            with c_down: st.download_button(label="📥 Baixar Excel", data=buffer, file_name="dados_filtrados.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+            with c_close: 
                 if st.button("Fechar X", use_container_width=True):
-                    st.session_state.show_export_popup = False
-                    st.rerun()
+                    st.session_state.show_export_popup = False; st.rerun()
 
     # --- KPIs ---
     total_chamados = len(df_filtrado)
@@ -387,7 +380,7 @@ def tela_dados_agencia():
     col_kpi2.metric("Pendentes", abertos)
     st.divider()
 
-    # --- VISUALIZAÇÃO HIERÁRQUICA (Agência -> Projeto) ---
+    # --- VISÃO HIERÁRQUICA ---
     if df_filtrado.empty:
         st.info("Nenhum registro encontrado.")
         st.stop()
@@ -395,17 +388,15 @@ def tela_dados_agencia():
     df_filtrado['Agendamento_str'] = df_filtrado['Agendamento'].dt.strftime('%d/%m/%Y').fillna('Sem Data')
     agencias_agrupadas = df_filtrado.groupby('Agencia_Combinada')
     
-    # Listas para formulários
     projeto_list_form = sorted([str(p) for p in df_chamados_raw['Projeto'].dropna().unique() if p])
     gestor_list_form = sorted([str(g) for g in df_chamados_raw['Gestor'].dropna().unique() if g])
     status_manual_options = ["(Status Automático)", "Pendência de Infra", "Pendência de Equipamento", "Pausado", "Cancelado", "Finalizado"]
 
     for nome_agencia, df_agencia in agencias_agrupadas:
         
-        # Lógica de cores/urgência da agência
         hoje_ts = pd.Timestamp.now().normalize()
-        status_fechamento_proj = ['concluído', 'cancelado', 'equipamento entregue - concluído', 'finalizado']
-        df_agencia_aberta = df_agencia[~df_agencia['Status'].astype(str).str.lower().isin(status_fechamento_proj)]
+        status_fech = ['concluído', 'cancelado', 'equipamento entregue - concluído', 'finalizado']
+        df_agencia_aberta = df_agencia[~df_agencia['Status'].astype(str).str.lower().isin(status_fech)]
         datas_abertas = pd.to_datetime(df_agencia_aberta['Agendamento'], errors='coerce')
         
         tag_html = "🟦"
@@ -417,9 +408,9 @@ def tela_dados_agencia():
                 urgency_text = f"Urgente: {earliest.strftime('%d/%m/%Y')}"
             elif earliest == hoje_ts:
                 tag_html = "<span style='color:orange;font-weight:bold;'>🟧 HOJE</span>"
-                urgency_text = f"Para Hoje: {earliest.strftime('%d/%m/%Y')}"
+                urgency_text = f"Hoje: {earliest.strftime('%d/%m/%Y')}"
             else:
-                urgency_text = f"Próximo: {earliest.strftime('%d/%m/%Y')}"
+                urgency_text = f"Próx: {earliest.strftime('%d/%m/%Y')}"
         
         num_projetos = len(df_agencia.groupby(['Projeto', 'Gestor', 'Agendamento_str']))
 
@@ -432,63 +423,59 @@ def tela_dados_agencia():
         c4.markdown(f"**{num_projetos} Projetos**")
         
         with st.expander("Ver Projetos"):
-            try:
-                projetos_agrupados = df_agencia.groupby(['Projeto', 'Gestor', 'Agendamento_str'])
+            try: projetos_agrupados = df_agencia.groupby(['Projeto', 'Gestor', 'Agendamento_str'])
             except: continue
 
             for (nome_projeto, nome_gestor, data_agend), df_projeto in projetos_agrupados:
-                first_row = df_projeto.iloc[0]
+                first = df_projeto.iloc[0]
                 chamado_ids = df_projeto['ID'].tolist()
-                status_atual = clean_val(first_row.get('Status'), "Não Iniciado")
-                sub_status = clean_val(first_row.get('Sub-Status'), "")
+                st_atual = clean_val(first.get('Status'), "Não Iniciado")
+                sub_st = clean_val(first.get('Sub-Status'), "")
                 
-                # Card Projeto
                 st.markdown('<div style="border-top:1px solid #eee; padding-top:10px; margin-top:10px;">', unsafe_allow_html=True)
                 cp1, cp2, cp3, cp4 = st.columns([2, 2, 2, 2])
                 cp1.markdown(f"📅 **{data_agend}**\n##### {clean_val(nome_projeto).upper()}")
-                cp2.markdown(f"**Analista:** {clean_val(first_row.get('Analista'))}")
+                cp2.markdown(f"**Analista:** {clean_val(first.get('Analista'))}")
                 cp3.markdown(f"**Gestor:** {clean_val(nome_gestor)}")
                 
-                status_color = utils_chamados.get_status_color(status_atual)
-                cp4.markdown(f"<div class='card-status-badge' style='background-color:{status_color}'>{status_atual.upper()}</div>", unsafe_allow_html=True)
-                if sub_status: cp4.markdown(f"<div class='card-action-text'>{sub_status}</div>", unsafe_allow_html=True)
+                st_color = utils_chamados.get_status_color(st_atual)
+                cp4.markdown(f"<div class='card-status-badge' style='background-color:{st_color}'>{st_atual.upper()}</div>", unsafe_allow_html=True)
+                if sub_st: cp4.markdown(f"<div class='card-action-text'>{sub_st}</div>", unsafe_allow_html=True)
 
-                # Edição
-                with st.expander(f"Editar Projeto (IDs: {min(chamado_ids)}...)", expanded=False):
-                    with st.form(key=f"form_{first_row['ID']}"):
-                        st.write("Edição em Lote")
+                with st.expander(f"Editar (ID: {first['ID']}...)", expanded=False):
+                    with st.form(key=f"form_{first['ID']}"):
+                        st.markdown("###### Edição em Lote (Projeto)")
                         ec1, ec2, ec3 = st.columns(3)
-                        n_prazo = ec1.text_input("Prazo", value=first_row.get('Prazo',''))
+                        n_prazo = ec1.text_input("Prazo", value=first.get('Prazo',''))
                         
-                        st_idx = status_manual_options.index(status_atual) if status_atual in status_manual_options else 0
-                        n_status = ec2.selectbox("Status Manual", options=status_manual_options, index=st_idx)
+                        idx_st = status_manual_options.index(st_atual) if st_atual in status_manual_options else 0
+                        n_status = ec2.selectbox("Status Manual", options=status_manual_options, index=idx_st)
                         
-                        abert_val = _to_date_safe(first_row.get('Abertura')) or date.today()
-                        n_abert = ec3.date_input("Abertura", value=abert_val, format="DD/MM/YYYY")
+                        dt_ab_val = _to_date_safe(first.get('Abertura')) or date.today()
+                        n_abertura = ec3.date_input("Abertura", value=dt_ab_val, format="DD/MM/YYYY")
                         
-                        desc = st.text_area("Descrição", value=first_row.get('Descrição',''))
+                        desc = st.text_area("Descrição", value=first.get('Descrição',''))
                         
-                        if st.form_submit_button("Salvar Lote"):
-                            # Lógica de salvamento simplificada para o exemplo
-                            updates = {"Prazo": n_prazo, "Data Abertura": n_abert, "Descrição": desc}
+                        if st.form_submit_button("💾 Salvar Tudo"):
+                            ups = {"Prazo": n_prazo, "Data Abertura": n_abertura, "Descrição": desc}
                             if n_status != "(Status Automático)": 
-                                updates['Status'] = n_status
-                                updates['Sub-Status'] = None
+                                ups['Status'] = n_status; ups['Sub-Status'] = None
                             
-                            for cid in chamado_ids:
-                                utils_chamados.atualizar_chamado_db(cid, updates)
+                            for cid in chamado_ids: utils_chamados.atualizar_chamado_db(cid, ups)
                             
-                            df_recalc = utils_chamados.carregar_chamados_db()
-                            df_p_recalc = df_recalc[df_recalc['ID'].isin(chamado_ids)]
-                            calcular_e_atualizar_status_projeto(df_p_recalc, chamado_ids)
+                            # Recalcular
+                            df_r = utils_chamados.carregar_chamados_db()
+                            df_sub = df_r[df_r['ID'].isin(chamado_ids)]
+                            calcular_e_atualizar_status_projeto(df_sub, chamado_ids)
                             st.rerun()
                     
-                    # Listar Individuais
                     st.markdown("---")
+                    st.caption("Chamados Individuais:")
                     for _, row_ind in df_projeto.iterrows():
-                         st.text(f"{row_ind['Nº Chamado']} - {row_ind['Equipamento']}")
+                         st.text(f"• {row_ind['Nº Chamado']} | {row_ind['Equipamento']} | Qtd: {row_ind['Qtd.']}")
 
-        st.markdown("</div>", unsafe_allow_html=True) # Fecha card agência
-
+        st.markdown("</div>", unsafe_allow_html=True)
+        
 # Ponto de Entrada
 tela_dados_agencia()
+
