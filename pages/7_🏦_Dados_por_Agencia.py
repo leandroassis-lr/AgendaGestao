@@ -120,7 +120,7 @@ def run_importer_dialog():
             
             if df_para_salvar is not None:
                 st.success(f"Sucesso! {len(df_raw)} linhas lidas.")
-                st.dataframe(df_para_salvar.head(), width=None) 
+                st.dataframe(df_para_salvar.head(), use_container_width=True)
                 
                 if st.button("▶️ Iniciar Importação"):
                     if df_para_salvar.empty: 
@@ -478,4 +478,5 @@ def tela_dados_agencia():
         
 # Ponto de Entrada
 tela_dados_agencia()
+
 
