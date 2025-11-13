@@ -300,7 +300,7 @@ def tela_dados_agencia():
         </style>
     """, unsafe_allow_html=True)
     
-    st.markdown("<div class='section-title-center'>GESTÃO DE DADOS POR AGÊNCIA</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-title-center'>GESTÃO DE PROJETOS</div>", unsafe_allow_html=True)
     
     # --- 2. Carregar Dados ---
     utils_chamados.criar_tabela_chamados()
@@ -370,7 +370,7 @@ def tela_dados_agencia():
             st.session_state.show_export_popup = True
 
     # --- FILTROS E BUSCA (TUDO DENTRO DO EXPANDER) ---
-    with st.expander("🔎 Filtros e Busca Avançada", expanded=True):
+    with st.expander("🔎 Filtros", expanded=True):
         
         busca_total = st.text_input(
             "🔎 Busca Rápida (Digite ID, Agência, Projeto...)", 
@@ -432,14 +432,14 @@ def tela_dados_agencia():
     status_fechamento_kpi = ['fechado', 'concluido', 'resolvido', 'cancelado', 'encerrado', 'equipamento entregue - concluído', 'finalizado']
     chamados_abertos_count = len(df_filtrado[~df_filtrado['Status'].astype(str).str.lower().isin(status_fechamento_kpi)]) if not df_filtrado.empty else 0
     
-    st.markdown(f"### 📊 Resumo da Visão Filtrada")
+    st.markdown(f"### 📊 Resumo")
     cols_kpi = st.columns(2) 
     cols_kpi[0].metric("Total de Chamados", total_chamados)
     cols_kpi[1].metric("Chamados Abertos", chamados_abertos_count)
     st.divider()
     
     # --- 8. NOVA VISÃO HIERÁRQUICA (Agência -> Projeto -> Chamados) ---
-    st.markdown("#### 📋 Projeos por Agência")
+    st.markdown("#### 📋 Projetos por Agência")
     
     if df_filtrado.empty:
         st.info("Nenhum chamado encontrado para os filtros selecionados.")
@@ -742,4 +742,5 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia ()
+
 
