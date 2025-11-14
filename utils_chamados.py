@@ -352,7 +352,7 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
         st.error(f"Erro ao atualizar: {e}")
         return False
 
-# --- FUNÇÃO DE LIMPEZA (ZONA DE PERIGO) ---
+# --- 7. FUNÇÃO DE LIMPEZA (ZONA DE PERIGO) ---
 def limpar_tabela_chamados():
     """ Apaga PERMANENTEMENTE todos os dados da tabela chamados. """
     conn = get_valid_conn()
@@ -385,3 +385,4 @@ def get_color_for_name(name_str):
     if not name_str or name_str == "N/A": return "#555"
     try: return COLORS[hash(str(name_str).upper()) % len(COLORS)]
     except: return "#555"
+
