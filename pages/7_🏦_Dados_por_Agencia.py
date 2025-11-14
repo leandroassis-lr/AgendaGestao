@@ -29,28 +29,6 @@ def _to_date_safe(val):
         return ts.date()
     except Exception: return None
 
-# --- Funções Helper da Página ---
-def extrair_e_mapear_colunas(df, col_map):
-    df_extraido = pd.DataFrame()
-    colunas_originais = df.columns.tolist()
-    
-    if len(colunas_originais) < 20: 
-        st.error(f"Erro: O arquivo carregado parece ter apenas {len(colunas_originais)} colunas.")
-        return None
-    try:
-        col_indices = list(col_map.keys())
-        col_nomes_originais = {idx: colunas_originais[idx] for idx in col_indices if idx < len(colunas_originais)}
-        df_para_renomear = df[list(col_nomes_originais.values())].copy() 
-        col_rename_map = {orig_name: db_name for idx, db_name in col_map.items() if idx in col_nomes_originais and (orig_name := col_nomes_originais[idx])}
-        
-        df_extraido = df_para_renomear.rename(columns=col_rename_map)
-    except KeyError as e:
-        st.error(f"Erro ao mapear colunas. Coluna esperada {e} não encontrada.")
-        return None
-    except Exception as e:
-        st.error(f"Erro ao processar colunas: {e}"); return None
-    return df_extraido
-
 def formatar_agencia_excel(id_agencia, nome_agencia):
     try:
         id_agencia_limpo = str(id_agencia).split('.')[0]
@@ -61,18 +39,17 @@ def formatar_agencia_excel(id_agencia, nome_agencia):
           nome_str = nome_str[len(id_agencia_limpo):].strip(" -")
     return f"{id_str} - {nome_str}"
 
-# --- 1. DIALOG (POP-UP) DE IMPORTAÇÃO (COM MULTI-UPLOAD E UTF-8) ---
-@st.dialog("Importar Novos Chamados (Excel/CSV)", width="large") # <-- MUDANÇA 1: width="large"
+# No arquivo 7_🏦_Dados_por_Agencia.py
+@st.dialog("Importar Novos Chamados (Template Padrão)", width="large")
 def run_importer_dialog():
     st.info(f"""
-             Arraste seu arquivo Excel de chamados (formato `.xlsx` ou `.csv` com `;`) aqui.
-             O sistema espera que a **primeira linha** contenha os cabeçalhos.
-             As colunas necessárias (A, B, C, D, J, K, L, M, N, O, Q, T) serão lidas automaticamente.
-             Se um `Chamado` (Coluna A) já existir, ele será **atualizado**.
+             Arraste seu **Template Padrão** (formato `.xlsx` ou `.csv` com `;`) aqui.
+             O sistema agora lê os dados pelo **Nome do Cabeçalho**, não pela posição.
+             Colunas obrigatórias: `CHAMADO` e `N° AGENCIA`.
      """)
     
     uploaded_files = st.file_uploader(
-        "Selecione o(s) arquivo(s) Excel/CSV de chamados", 
+        "Selecione o(s) arquivo(s) do Template Padrão", 
         type=["xlsx", "xls", "csv"], 
         key="chamado_uploader_dialog",
         accept_multiple_files=True
@@ -111,41 +88,25 @@ def run_importer_dialog():
                 st.error(f"Erro ao combinar arquivos: {e}")
                 return
 
-            col_map = {
-                0: 'chamado_id', 1: 'agencia_id', 2: 'agencia_nome', 3: 'agencia_uf',
-                9: 'servico', 10: 'projeto_nome', 11: 'data_agendamento', 12: 'sistema',
-                13: 'cod_equipamento', 14: 'nome_equipamento', 
-                16: 'quantidade', # Coluna Q (Quantidade_Solicitada)
-                19: 'gestor'
-            }
-            df_para_salvar = extrair_e_mapear_colunas(df_raw, col_map)
+            # LÓGICA ANTIGA (col_map, extrair_e_mapear_colunas, reverse_map) FOI REMOVIDA
             
-            if df_para_salvar is not None:
-                st.success(f"Sucesso! {len(df_raw)} linhas lidas de {len(uploaded_files)} arquivo(s). Pré-visualização:")
-                # Correção da Pré-visualização para usar a largura do container
-                st.dataframe(df_para_salvar.head(), use_container_width=True) 
-                
-                if st.button("▶️ Iniciar Importação de Chamados"):
-                    if df_para_salvar.empty: 
-                        st.error("Planilha vazia ou colunas não encontradas.")
-                    else:
-                        with st.spinner("Importando e atualizando chamados..."):
-                            reverse_map = {
-                                'chamado_id': 'Chamado', 'agencia_id': 'Codigo_Ponto', 'agencia_nome': 'Nome',
-                                'agencia_uf': 'UF', 'servico': 'Servico', 'projeto_nome': 'Projeto',
-                                'data_agendamento': 'Data_Agendamento', 'sistema': 'Tipo_De_Solicitacao',
-                                'cod_equipamento': 'Sistema', 'nome_equipamento': 'Codigo_Equipamento',
-                                'quantidade': 'Quantidade_Solicitada', 
-                                'gestor': 'Substitui_Outro_Equipamento_(Sim/Não)'
-                            }
-                            df_final_para_salvar = df_para_salvar.rename(columns=reverse_map)
-                            sucesso, num_importados = utils_chamados.bulk_insert_chamados_db(df_final_para_salvar)
-                            if sucesso:
-                                st.success(f"🎉 {num_importados} chamados importados/atualizados com sucesso!")
-                                st.balloons()
-                                st.session_state.importer_done = True 
-                            else:
-                                st.error("A importação de chamados falhou.")
+            st.success(f"Sucesso! {len(df_raw)} linhas lidas de {len(uploaded_files)} arquivo(s). Pré-visualização:")
+            st.dataframe(df_raw.head(), use_container_width=True) 
+            
+            if st.button("▶️ Iniciar Importação de Chamados"):
+                if df_raw.empty: 
+                    st.error("Planilha vazia.")
+                else:
+                    with st.spinner("Importando e atualizando chamados..."):
+                        # Agora passamos o df_raw diretamente!
+                        sucesso, num_importados = utils_chamados.bulk_insert_chamados_db(df_raw)
+                        
+                        if sucesso:
+                            st.success(f"🎉 {num_importados} chamados importados/atualizados com sucesso!")
+                            st.balloons()
+                            st.session_state.importer_done = True 
+                        else:
+                            st.error("A importação de chamados falhou. Verifique se os cabeçalhos 'CHAMADO' e 'N° AGENCIA' existem.")
         elif not all_files_ok:
             st.error("Processamento interrompido devido a erro na leitura de um arquivo.")
         elif not dfs_list:
@@ -157,7 +118,7 @@ def run_importer_dialog():
 
     if st.button("Cancelar"):
         st.rerun()
-
+        
 # --- MUDANÇA 2: DIALOG (POP-UP) DE EXPORTAÇÃO (CORRIGIDO) ---
 @st.dialog("⬇️ Exportar Dados Filtrados", width="small")
 def run_exporter_dialog(df_data_to_export):
@@ -796,4 +757,5 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia ()
+
 
