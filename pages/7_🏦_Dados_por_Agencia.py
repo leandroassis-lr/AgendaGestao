@@ -158,16 +158,35 @@ def run_importer_dialog():
     if st.button("Cancelar"):
         st.rerun()
 
-# --- MUDANÇA 2: DIALOG (POP-UP) DE EXPORTAÇÃO ---
+# --- MUDANÇA 2: DIALOG (POP-UP) DE EXPORTAÇÃO (CORRIGIDO) ---
 @st.dialog("⬇️ Exportar Dados Filtrados", width="small")
 def run_exporter_dialog(df_data_to_export):
-    """Cria o pop-up de confirmação de download."""
+    """Cria o pop-up de confirmação de download com colunas ORDENADAS e FILTRADAS."""
     
     st.info(f"Preparando {len(df_data_to_export)} linhas para download.")
+        
+    # 1. Esta é a lista exata de colunas que você pediu, na ordem correta
+    colunas_exportacao_ordenadas = [
+        'ID', 'Abertura', 'Nº Chamado', 'Cód. Agência', 'Nome Agência', 'UF', 'Projeto', 
+        'Agendamento', 'Sistema', 'Serviço', 'Cód. Equip.', 'Equipamento', 'Qtd.', 
+        'Gestor', 'Fechamento', 'Status', 'Analista', 'Técnico', 'Prioridade', 
+        'Link Externo', 'Nº Protocolo', 'Nº Pedido', 'Data Envio', 'Obs. Equipamento', 
+        'Prazo', 'Descrição', 'Observações e Pendencias', 'Sub-Status', 
+        'Status Financeiro', 'Observação', 'Log do Chamado', 'Agencia_Combinada'
+    ]
+    
+    # 2. Verificamos quais dessas colunas realmente existem no DataFrame
+   
+    colunas_presentes_no_df = [col for col in colunas_exportacao_ordenadas if col in df_data_to_export.columns]
+    
+    # 3. Criamos o DataFrame final para exportar, contendo APENAS as colunas
+   
+    df_para_exportar = df_data_to_export[colunas_presentes_no_df]
     
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-        df_data_to_export.to_excel(writer, index=False, sheet_name="Dados Filtrados")
+        # 4. Usamos o novo DataFrame 'df_para_exportar'
+        df_para_exportar.to_excel(writer, index=False, sheet_name="Dados Filtrados")
     buffer.seek(0)
     
     st.download_button(
@@ -178,11 +197,9 @@ def run_exporter_dialog(df_data_to_export):
         use_container_width=True
     )
     
-    # Botão para fechar o pop-up e resetar o state
     if st.button("Fechar", use_container_width=True):
         st.session_state.show_export_popup = False
         st.rerun()
-
 # --- FUNÇÃO "CÉREBRO" DE STATUS (v11.1) ---
 def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
     
@@ -779,3 +796,4 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia ()
+
