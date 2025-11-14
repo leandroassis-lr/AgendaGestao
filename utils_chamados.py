@@ -175,7 +175,7 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         'AGENDAMENTO': 'data_agendamento',
         
         # Mapeamento do Equipamento (baseado na sua lista)
-        'TIPO DE SOLICITAÇÃO': 'sistema',           # Ex: "Sistema de Alarme"
+        'SISTEMA': 'sistema',           # Ex: "Sistema de Alarme"
         'CODIGO': 'cod_equipamento',                # Ex: "437"
         'DESCRIÇÃO EQUIPAMENTO': 'nome_equipamento', # Ex: "SENSOR..."
         
@@ -367,4 +367,5 @@ def get_color_for_name(name_str):
     if not name_str or name_str == "N/A": return "#555"
     try: return COLORS[hash(str(name_str).upper()) % len(COLORS)]
     except: return "#555"
+
 
