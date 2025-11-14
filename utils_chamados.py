@@ -352,6 +352,24 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
         st.error(f"Erro ao atualizar: {e}")
         return False
 
+# --- FUNÇÃO DE LIMPEZA (ZONA DE PERIGO) ---
+def limpar_tabela_chamados():
+    """ Apaga PERMANENTEMENTE todos os dados da tabela chamados. """
+    conn = get_valid_conn()
+    if not conn: 
+        st.error("Erro: Não foi possível conectar ao banco.")
+        return False
+    try:
+        with conn.cursor() as cur:
+            # TRUNCATE é mais rápido que DELETE e reseta os IDs
+            cur.execute("TRUNCATE TABLE chamados RESTART IDENTITY;")
+        conn.commit()
+        return True
+    except Exception as e:
+        conn.rollback()
+        st.error(f"Erro ao limpar tabela: {e}")
+        return False
+
 # --- 6. Funções de Cor ---
 def get_status_color(status):
     s = str(status or "").strip().lower()
@@ -367,5 +385,3 @@ def get_color_for_name(name_str):
     if not name_str or name_str == "N/A": return "#555"
     try: return COLORS[hash(str(name_str).upper()) % len(COLORS)]
     except: return "#555"
-
-
