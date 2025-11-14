@@ -39,13 +39,11 @@ def formatar_agencia_excel(id_agencia, nome_agencia):
           nome_str = nome_str[len(id_agencia_limpo):].strip(" -")
     return f"{id_str} - {nome_str}"
 
-# No arquivo 7_🏦_Dados_por_Agencia.py
+# Importação --- #
 @st.dialog("Importar Novos Chamados (Template Padrão)", width="large")
 def run_importer_dialog():
     st.info(f"""
              Arraste seu **Template Padrão** (formato `.xlsx` ou `.csv` com `;`) aqui.
-             O sistema agora lê os dados pelo **Nome do Cabeçalho**, não pela posição.
-             Colunas obrigatórias: `CHAMADO` e `N° AGENCIA`.
      """)
     
     uploaded_files = st.file_uploader(
@@ -757,5 +755,6 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia ()
+
 
 
