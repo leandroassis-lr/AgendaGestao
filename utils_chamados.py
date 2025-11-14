@@ -158,23 +158,56 @@ def carregar_chamados_db(agencia_id_filtro=None):
         return pd.DataFrame()
 
 # --- 4. FUNÇÃO PARA IMPORTAR CHAMADOS ---
+
 def bulk_insert_chamados_db(df: pd.DataFrame):
+    """ Importa um DataFrame (UPSERT) lendo pelos Nomes de Cabeçalho. """
     conn = get_valid_conn()
     if not conn: return False, 0
     
-    column_map = {
-        'Chamado': 'chamado_id', 'Codigo_Ponto': 'agencia_id', 'Nome': 'agencia_nome',
-        'UF': 'agencia_uf', 'Servico': 'servico', 'Projeto': 'projeto_nome',
-        'Data_Agendamento': 'data_agendamento', 'Tipo_De_Solicitacao': 'sistema',
-        'Sistema': 'cod_equipamento', 'Codigo_Equipamento': 'nome_equipamento',
-        'Quantidade_Solicitada': 'quantidade', 'Substitui_Outro_Equipamento_(Sim/Não)': 'gestor'
+    # Mapeia do "Nome no Excel" (em maiúsculo) para o "Nome no BD"
+    NEW_COLUMN_MAP = {
+        'CHAMADO': 'chamado_id',
+        'N° AGENCIA': 'agencia_id',
+        'NOME AGÊNCIA': 'agencia_nome',
+        'UF': 'agencia_uf',
+        'TIPO DO SERVIÇO': 'servico',
+        'NOME DO PROJETO': 'projeto_nome',
+        'AGENDAMENTO': 'data_agendamento',
+        
+        # Mapeamento do Equipamento (baseado na sua lista)
+        'TIPO DE SOLICITAÇÃO': 'sistema',           # Ex: "Sistema de Alarme"
+        'CODIGO': 'cod_equipamento',                # Ex: "437"
+        'DESCRIÇÃO EQUIPAMENTO': 'nome_equipamento', # Ex: "SENSOR..."
+        
+        'QTD': 'quantidade',
+        'GESTOR ITAU': 'gestor',
+        'RESPONSÁVEL': 'analista'            
     }
-    df_to_insert = df.rename(columns={k: v for k, v in column_map.items() if k in df.columns})
 
+    # Renomear colunas do DataFrame baseado no mapa (de forma robusta)
+    df_renamed = df.copy()
+    # Normaliza os cabeçalhos (Tira espaços, põe em maiúsculo)
+    df_renamed.columns = [str(col).strip().upper() for col in df_renamed.columns]
+    
+    # Filtra o mapa para conter apenas colunas que realmente existem no DF
+    headers_no_excel = df_renamed.columns
+    map_para_renomear = {
+        excel_header: db_col 
+        for excel_header, db_col in NEW_COLUMN_MAP.items() 
+        if excel_header in headers_no_excel
+    }
+    
+    df_to_insert = df_renamed.rename(columns=map_para_renomear)
+
+    # Verificar colunas obrigatórias
     if 'chamado_id' not in df_to_insert.columns:
-        st.error("Erro: Coluna 'Chamado' obrigatória.")
+        st.error("Erro: A planilha deve conter um cabeçalho 'CHAMADO'.")
+        return False, 0
+    if 'agencia_id' not in df_to_insert.columns:
+        st.error("Erro: A planilha deve conter um cabeçalho 'N° AGENCIA'.")
         return False, 0
 
+    # O resto da função (processamento de datas, upsert) continua igual...
     df_to_insert['data_abertura'] = date.today()
     
     cols_data = ['data_abertura', 'data_fechamento', 'data_agendamento']
@@ -189,14 +222,13 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
     if 'quantidade' in df_to_insert.columns:
          df_to_insert['quantidade'] = pd.to_numeric(df_to_insert['quantidade'], errors='coerce').astype('Int64')
 
-    cols_to_insert = [
-        'chamado_id', 'agencia_id', 'agencia_nome', 'agencia_uf', 'servico', 'projeto_nome', 
-        'data_agendamento', 'sistema', 'cod_equipamento', 'nome_equipamento', 'quantidade', 'gestor',
-        'data_abertura', 'status_chamado', 'valor_chamado',
-        'analista', 'tecnico', 'prioridade'
-    ]
-                        
-    df_final = df_to_insert[[col for col in cols_to_insert if col in df_to_insert.columns]]
+    # Lista de colunas do DB que queremos inserir/atualizar
+    # (Pega da variável global 'colunas_necessarias' definida no topo do utils_chamados)
+    global colunas_necessarias
+    cols_db_validas = list(colunas_necessarias.keys()) + ['chamado_id']
+    
+    # Pega apenas as colunas que agora têm nomes de DB válidos
+    df_final = df_to_insert[[col for col in df_to_insert.columns if col in cols_db_validas]]
     
     values = []
     for record in df_final.to_records(index=False):
@@ -226,9 +258,9 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         return True, len(values)
     except Exception as e: 
         conn.rollback()
-        st.error(f"Erro ao salvar: {e}")
+        st.error(f"Erro ao salvar no banco: {e}")
         return False, 0
-
+        
 # --- 5. FUNÇÃO PARA ATUALIZAR CHAMADO ---
 def atualizar_chamado_db(chamado_id_interno, updates: dict):
     conn = get_valid_conn()
@@ -335,3 +367,4 @@ def get_color_for_name(name_str):
     if not name_str or name_str == "N/A": return "#555"
     try: return COLORS[hash(str(name_str).upper()) % len(COLORS)]
     except: return "#555"
+
