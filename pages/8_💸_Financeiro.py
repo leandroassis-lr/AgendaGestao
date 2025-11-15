@@ -5,6 +5,17 @@ import utils_financeiro # Nosso novo arquivo
 import re
 import time
 
+def formatar_agencia_excel(id_agencia, nome_agencia):
+    """Cria o nome combinado da agência (AG XXXX - Nome)"""
+    try:
+        id_agencia_limpo = str(id_agencia).split('.')[0]
+        id_str = f"AG {int(id_agencia_limpo):04d}"
+    except (ValueError, TypeError): id_str = str(id_agencia).strip() 
+    nome_str = str(nome_agencia).strip()
+    if nome_str.startswith(id_agencia_limpo):
+          nome_str = nome_str[len(id_agencia_limpo):].strip(" -")
+    return f"{id_str} - {nome_str}"
+
 st.set_page_config(page_title="Gestão Financeira", page_icon="💸", layout="wide")
 
 # --- Controle de Login ---
@@ -140,6 +151,10 @@ st.markdown("### 💰 Cálculo de Valores por Chamado (LPU)")
 def carregar_dados_completos():
     """Carrega chamados e todos os dicionários de preço."""
     df_chamados = utils_chamados.carregar_chamados_db()
+    if 'Cód. Agência' in df_chamados.columns and 'Nome Agência' in df_chamados.columns:
+        df_chamados['Agencia_Combinada'] = df_chamados.apply(
+            lambda row: formatar_agencia_excel(row['Cód. Agência'], row['Nome Agência']), axis=1
+        )    
     lpu_fixo = utils_financeiro.carregar_lpu_fixo()
     lpu_servico = utils_financeiro.carregar_lpu_servico()
     lpu_equip = utils_financeiro.carregar_lpu_equipamento()
@@ -244,3 +259,4 @@ try:
 
 except Exception as e:
     st.error(f"Ocorreu um erro ao gerar a página: {e}")
+
