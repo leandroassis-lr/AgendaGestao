@@ -436,7 +436,7 @@ def tela_dados_agencia():
                 with col4:
                     analista_color = utils_chamados.get_color_for_name(analista_urgente_nome)
                     analista_html = f"<span style='color: {analista_color}; font-weight: 500;'>{analista_urgente_nome}</span>"
-                    st.markdown(f"###### <br>{analista_html}", unsafe_allow_html=True)
+                    st.markdown(f"##### <br>{analista_html}", unsafe_allow_html=True)
                 with col5: st.markdown(f"**{num_projetos} {'Projetos' if num_projetos > 1 else 'Projeto'}**", unsafe_allow_html=True)
 
                 # --- Nível 2 (Serviços/Projetos) ---
@@ -606,6 +606,7 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia ()
+
 
 
 
