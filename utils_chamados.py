@@ -381,8 +381,22 @@ def get_status_color(status):
     return "#64B5F6"  
 
 def get_color_for_name(name_str):
+    """Gera uma cor determinística para um nome."""
     COLORS = ["#D32F2F", "#1976D2", "#388E3C", "#F57C00", "#7B1FA2", "#00796B", "#C2185B", "#5D4037", "#455A64"]
-    if not name_str or name_str == "N/A": return "#555"
-    try: return COLORS[hash(str(name_str).upper()) % len(COLORS)]
-    except: return "#555"
+    
+    # 1. Normaliza o nome
+    name_clean = str(name_str).strip().upper()
+
+    # 2. Retorna Cinza para casos genéricos
+    if not name_clean or name_clean in ["N/A", "SEM ANALISTA", "MÚLTIPLOS"]: 
+        return "#555" # Cor Padrão (Cinza)
+    
+    try:
+        # 3. Cria um "hash" simples e determinístico somando os valores das letras
+        simple_hash = sum(ord(char) for char in name_clean)
+        color_index = simple_hash % len(COLORS)
+        return COLORS[color_index]
+    except Exception: 
+        return "#555" # Cor Padrão em caso de erro
+
 
