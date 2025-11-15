@@ -32,7 +32,6 @@ SERVICOS_SEM_EQUIPAMENTO = [
     "visita técnica",
     "vistoria conjunta"
 ]
-# --- FIM DA NOVA LÓGICA ---
 
 # --- Controle Principal de Login ---
 if "logado" not in st.session_state or not st.session_state.logado:
@@ -49,9 +48,6 @@ def _to_date_safe(val):
         return ts.date()
     except Exception: return None
 
-# (Não precisamos mais desta função, foi movida para o utils_chamados)
-# def extrair_e_mapear_colunas(df, col_map): ...
-
 def formatar_agencia_excel(id_agencia, nome_agencia):
     try:
         id_agencia_limpo = str(id_agencia).split('.')[0]
@@ -66,8 +62,7 @@ def formatar_agencia_excel(id_agencia, nome_agencia):
 @st.dialog("Importar Novos Chamados (Template Padrão)", width="large")
 def run_importer_dialog():
     st.info(f"""
-             Arraste seu **Template Padrão** (formato `.xlsx` ou `.csv` com `;`) aqui.
-             O sistema agora lê os dados pelo **Nome do Cabeçalho**, não pela posição.
+             Arraste seu **Template Padrão** (formato `.xlsx` ou `.csv`) aqui.
              Colunas obrigatórias: `CHAMADO` e `N° AGENCIA`.
      """)
     
@@ -323,7 +318,7 @@ def tela_dados_agencia():
         st.stop()
         
     # --- 7. Painel de KPIs (REFEITO) ---
-    st.markdown(f"### 📊 Resumo da Visão Filtrada")
+    st.markdown(f"### 📊 Resumo")
     
     # Listas de status
     status_fechamento_kpi = ['fechado', 'concluido', 'resolvido', 'cancelado', 'encerrado', 'equipamento entregue - concluído', 'finalizado']
@@ -366,7 +361,7 @@ def tela_dados_agencia():
     kpi4.metric("Projetos Finalizados", projetos_finalizados_count)
 
     # 3. KPI de Quantidade por Status
-    st.markdown("#### 📊 Resumo por Status")
+    st.markdown("#### 📊 Status")
     status_counts = df_filtrado['Status'].fillna('N/A').value_counts()
     
     # Exibir em colunas para economizar espaço
@@ -384,11 +379,9 @@ def tela_dados_agencia():
         st.info("Nenhum status para exibir.")
     
     st.divider()
-    # --- FIM DA MUDANÇA (KPIs) ---
-
-    
+       
     # --- 8. NOVA VISÃO HIERÁRQUICA (Agência -> Projeto -> Chamados) ---
-    st.markdown("#### 📋 Visão por Projetos e Chamados")
+    st.markdown("#### 📋 Projetos e Chamados")
     
     if df_filtrado.empty:
         st.info("Nenhum chamado encontrado para os filtros selecionados.")
@@ -425,7 +418,7 @@ def tela_dados_agencia():
                 earliest_date = datas_abertas.min()
                 if pd.isna(earliest_date): urgency_text = "Sem Data Válida"
                 else:
-                    if earliest_date < hoje_ts: tag_html = "<span style='color: var(--red-alert); font-weight: bold;'>🟥 ATRASADO</span>"; urgency_text = f"Urgente: {earliest_date.strftime('%d/%m/%Y')}"
+                    if earliest_date < hoje_ts: tag_html = "<span style='color: var(--red-alert); font-weight: bold;'>🟥 ATRASADO</span>"; urgency_text = f"📅 {earliest_date.strftime('%d/%m/%Y')}"
                     elif earliest_date == hoje_ts: tag_html = "<span style='color: #FFA726; font-weight: bold;'>🟧 PARA HOJE</span>"; urgency_text = f"📅 {earliest_date.strftime('%d/%m/%Y')}"
                     else: urgency_text = f"📅 {earliest_date.strftime('%d/%m/%Y')}"
                     analistas_urgentes = df_agencia_aberta[df_agencia_aberta['Agendamento'] == earliest_date]['Analista'].dropna().unique()
@@ -444,7 +437,7 @@ def tela_dados_agencia():
                 with col5: st.markdown(f"**{num_projetos} {'Projs' if num_projetos > 1 else 'Proj'}**", unsafe_allow_html=True)
 
                 # --- Nível 2 (Serviços/Projetos) ---
-                with st.expander("Ver Serviços/Projetos desta Agência"):
+                with st.expander("Ver Projetos"):
                     try:
                         projetos_agrupados = df_agencia.groupby(chave_projeto) 
                         if not projetos_agrupados.groups:
@@ -471,22 +464,22 @@ def tela_dados_agencia():
                             
                             col1, col2, col3 = st.columns([3, 2, 2])
                             with col1: st.markdown(f"##### {clean_val(nome_projeto, 'Sem Projeto').upper()}", unsafe_allow_html=True)
-                            with col2: st.markdown(f"**📅 Agendamento:**\n{dt_ag}", unsafe_allow_html=True)
+                            with col2: st.markdown(f"**📅:**\n{dt_ag}", unsafe_allow_html=True)
                             with col3:
                                 status_html = html.escape(status_proj.upper())
                                 st.markdown(f"""<div class="card-status-badge" style="background-color: {status_color};">{status_html}</div>""", unsafe_allow_html=True)
                             
                             col4, col5, col6 = st.columns([3, 2, 2])
-                            with col4: st.markdown(f"**Serviço:**\n{clean_val(nome_servico, 'N/D')}", unsafe_allow_html=True)
+                            with col4: st.markdown(f"##### {clean_val(nome_servico, 'N/D')}", unsafe_allow_html=True)
                             with col5:
                                 gestor_html = f"<span style='color: {gestor_color}; font-weight: 500;'>{clean_val(nome_gestor, 'N/D')}</span>"
-                                st.markdown(f"**Gestor:**\n{gestor_html}", unsafe_allow_html=True)
+                                st.markdown(f"##### {gestor_html}", unsafe_allow_html=True)
                             with col6:
                                 if sub_status_proj:
-                                    st.markdown(f"**Ação:**")
+                                    st.markdown(f"#####")
                                     st.markdown(f"""<div class="card-action-text">{sub_status_proj}</div>""", unsafe_allow_html=True)
                                 else:
-                                    st.markdown(f"**Ação:**\n-", unsafe_allow_html=True)
+                                    st.markdown(f"#####", unsafe_allow_html=True)
                             
                             # --- NÍVEL 3 (Expander com formulários) ---
                             expander_title = f"Ver/Editar {len(chamado_ids_internos_list)} Chamado(s) (ID: {first_row['ID']})"
@@ -495,7 +488,7 @@ def tela_dados_agencia():
                                 # (Formulário de Lote Nível 2)
                                 form_key_lote = f"form_lote_edit_{first_row['ID']}"
                                 with st.form(key=form_key_lote):
-                                    st.markdown(f"**Editar todos os {len(df_projeto)} chamados deste Serviço/Projeto:**")
+                                    st.markdown(f"****")
                                     # (Campos do form... omitidos por brevidade)
                                     c1, c2 = st.columns(2); novo_prazo = c1.text_input("Prazo", value=first_row.get('Prazo', ''), key=f"{form_key_lote}_prazo")
                                     status_manual_atual = status_proj if status_proj in status_manual_options else "(Status Automático)"
@@ -610,3 +603,4 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia ()
+
