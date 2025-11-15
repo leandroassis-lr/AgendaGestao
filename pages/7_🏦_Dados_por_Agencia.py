@@ -433,7 +433,7 @@ def tela_dados_agencia():
                 with col1: st.markdown(tag_html, unsafe_allow_html=True)
                 with col2: st.markdown(f"<span style='font-size: 1.15rem; font-weight: bold;'>{nome_agencia}</span>", unsafe_allow_html=True)
                 with col3: st.markdown(urgency_text, unsafe_allow_html=True)
-                with col4: st.markdown(f"**** {analista_urgente_nome}", unsafe_allow_html=True)
+                with col4: st.markdown(f"###### {analista_urgente_nome}", unsafe_allow_html=True)
                 with col5: st.markdown(f"**{num_projetos} {'Projetos' if num_projetos > 1 else 'Projeto'}**", unsafe_allow_html=True)
 
                 # --- Nível 2 (Serviços/Projetos) ---
@@ -603,6 +603,7 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia ()
+
 
 
 
