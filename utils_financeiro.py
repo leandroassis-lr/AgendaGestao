@@ -207,6 +207,7 @@ def carregar_lpu_equipamento():
         return df.set_index(df['equipamento'].str.lower())['preco'].to_dict()
     except Exception as e:
         st.error(f"Erro ao carregar LPU Equipamento: {e}")
+        
         return {}
 
 # Tabela de Book -----
@@ -292,6 +293,7 @@ def importar_planilha_books(df_books: pd.DataFrame):
         conn.rollback()
         return False, f"Erro ao importar books: {e}"
 
+
 @st.cache_data(ttl=60) # Cache curto
 def carregar_books_db():
     """Carrega a tabela de books para conciliação."""
@@ -303,4 +305,3 @@ def carregar_books_db():
     except Exception as e:
         st.error(f"Erro ao carregar books: {e}")
         return pd.DataFrame(columns=['chamado', 'book_pronto'])
-
