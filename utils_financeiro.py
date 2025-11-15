@@ -207,5 +207,100 @@ def carregar_lpu_equipamento():
         return df.set_index(df['equipamento'].str.lower())['preco'].to_dict()
     except Exception as e:
         st.error(f"Erro ao carregar LPU Equipamento: {e}")
-
         return {}
+
+# Tabela de Book -----
+
+def criar_tabela_books():
+    """Cria a tabela para rastrear os books de faturamento, se não existir."""
+    conn = get_valid_conn_fin()
+    if not conn: return
+    
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS books_faturamento (
+                    id SERIAL PRIMARY KEY,
+                    chamado TEXT UNIQUE NOT NULL,
+                    servico TEXT,
+                    sistema TEXT,
+                    protocolo TEXT,
+                    data_conclusao DATE,
+                    book_pronto TEXT,
+                    data_envio DATE
+                );
+            """)
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        st.error(f"Erro ao criar tabela books_faturamento: {e}")
+
+def importar_planilha_books(df_books: pd.DataFrame):
+    """
+    Limpa e insere/atualiza a tabela de books.
+    Esta função APENAS rastreia. A lógica de "write-back" fica na página.
+    """
+    conn = get_valid_conn_fin()
+    if not conn: return False, "Falha na conexão"
+    
+    # Normaliza cabeçalhos
+    df_books.columns = [str(col).strip().upper() for col in df_books.columns]
+    
+    # Validação mínima
+    if 'CHAMADO' not in df_books.columns:
+        return False, "Erro: Coluna 'CHAMADO' não encontrada."
+    if 'PROTOCOLO' not in df_books.columns:
+        return False, "Erro: Coluna 'PROTOCOLO' não encontrada."
+        
+    try:
+        with conn.cursor() as cur:
+            # Limpa a tabela para ter sempre a visão mais recente
+            cur.execute("TRUNCATE books_faturamento RESTART IDENTITY;")
+            
+            # Prepara os dados para inserção
+            vals_books = []
+            for _, row in df_books.iterrows():
+                vals_books.append((
+                    str(row['CHAMADO']),
+                    str(row.get('SERVIÇO')),
+                    str(row.get('SISTEMA')),
+                    str(row.get('PROTOCOLO')),
+                    pd.to_datetime(row.get('DATA CONCLUSAO'), errors='coerce'),
+                    str(row.get('BOOK PRONTO?')),
+                    pd.to_datetime(row.get('DATA ENVIO'), errors='coerce')
+                ))
+            
+            query = """
+                INSERT INTO books_faturamento 
+                (chamado, servico, sistema, protocolo, data_conclusao, book_pronto, data_envio) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (chamado) DO UPDATE SET
+                    servico = EXCLUDED.servico,
+                    sistema = EXCLUDED.sistema,
+                    protocolo = EXCLUDED.protocolo,
+                    data_conclusao = EXCLUDED.data_conclusao,
+                    book_pronto = EXCLUDED.book_pronto,
+                    data_envio = EXCLUDED.data_envio
+            """
+            cur.executemany(query, vals_books)
+            
+        conn.commit()
+        st.cache_data.clear() # Limpa o cache
+        return True, f"{len(vals_books)} registros de book importados/atualizados."
+        
+    except Exception as e:
+        conn.rollback()
+        return False, f"Erro ao importar books: {e}"
+
+@st.cache_data(ttl=60) # Cache curto
+def carregar_books_db():
+    """Carrega a tabela de books para conciliação."""
+    conn = get_valid_conn_fin()
+    if not conn: return pd.DataFrame(columns=['chamado', 'book_pronto'])
+    try:
+        df = pd.read_sql("SELECT chamado, book_pronto FROM books_faturamento", conn)
+        return df
+    except Exception as e:
+        st.error(f"Erro ao carregar books: {e}")
+        return pd.DataFrame(columns=['chamado', 'book_pronto'])
+
