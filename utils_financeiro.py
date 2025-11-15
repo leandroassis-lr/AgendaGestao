@@ -236,6 +236,8 @@ def criar_tabela_books():
         conn.rollback()
         st.error(f"Erro ao criar tabela books_faturamento: {e}")
 
+# No arquivo: utils_financeiro.py
+
 def importar_planilha_books(df_books: pd.DataFrame):
     """
     Limpa e insere/atualiza a tabela de books.
@@ -261,14 +263,27 @@ def importar_planilha_books(df_books: pd.DataFrame):
             # Prepara os dados para inserção
             vals_books = []
             for _, row in df_books.iterrows():
+                
+                # --- INÍCIO DA CORREÇÃO ---
+                # 1. Processa as datas
+                data_conc = pd.to_datetime(row.get('DATA CONCLUSAO'), errors='coerce')
+                data_env = pd.to_datetime(row.get('DATA ENVIO'), errors='coerce')
+                
+                # 2. Converte NaT (Pandas) para None (Python/SQL)
+                if pd.isna(data_conc):
+                    data_conc = None
+                if pd.isna(data_env):
+                    data_env = None
+                # --- FIM DA CORREÇÃO ---
+                    
                 vals_books.append((
                     str(row['CHAMADO']),
                     str(row.get('SERVIÇO')),
                     str(row.get('SISTEMA')),
                     str(row.get('PROTOCOLO')),
-                    pd.to_datetime(row.get('DATA CONCLUSAO'), errors='coerce'),
+                    data_conc,  # <-- Corrigido
                     str(row.get('BOOK PRONTO?')),
-                    pd.to_datetime(row.get('DATA ENVIO'), errors='coerce')
+                    data_env    # <-- Corrigido
                 ))
             
             query = """
@@ -292,8 +307,7 @@ def importar_planilha_books(df_books: pd.DataFrame):
     except Exception as e:
         conn.rollback()
         return False, f"Erro ao importar books: {e}"
-
-
+        
 @st.cache_data(ttl=60) # Cache curto
 def carregar_books_db():
     """Carrega a tabela de books para conciliação."""
