@@ -1,0 +1,194 @@
+import streamlit as st
+import pandas as pd
+import psycopg2
+from psycopg2 import sql
+import numpy as np
+import re
+
+# --- 1. GERENCIAMENTO DE CONEXÃO (Copiado do utils_chamados) ---
+# Usamos a mesma conexão, mas a função é copiada aqui
+# para que este arquivo seja independente.
+
+@st.cache_resource
+def _get_cached_connection_fin():
+    try:
+        secrets = st.secrets["postgres"]
+        conn = psycopg2.connect(
+            host=secrets["PGHOST"], 
+            port=secrets["PGPORT"], 
+            user=secrets["PGUSER"], 
+            password=secrets["PGPASSWORD"], 
+            dbname=secrets["PGDATABASE"],
+            connect_timeout=10
+        )
+        conn.autocommit = False 
+        return conn
+    except Exception as e: 
+        st.error(f"Erro ao conectar ao PostgreSQL: {e}")
+        return None
+
+def get_valid_conn_fin():
+    conn = _get_cached_connection_fin()
+    if conn is None or conn.closed != 0:
+        st.cache_resource.clear() 
+        conn = _get_cached_connection_fin() 
+    return conn
+
+# --- 2. CRIAÇÃO DAS TABELAS LPU ---
+
+def criar_tabelas_lpu():
+    """Cria as 3 tabelas para armazenar os preços da LPU, se não existirem."""
+    conn = get_valid_conn_fin()
+    if not conn: return
+    
+    try:
+        with conn.cursor() as cur:
+            # Tabela 1: Valores Fixos (por Serviço)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS lpu_valores_fixos (
+                    id SERIAL PRIMARY KEY,
+                    servico TEXT UNIQUE NOT NULL,
+                    valor NUMERIC(10, 2) DEFAULT 0.00
+                );
+            """)
+            
+            # Tabela 2: Preços de Equipamentos (Instalação)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS lpu_equipamentos (
+                    id SERIAL PRIMARY KEY,
+                    equipamento TEXT UNIQUE NOT NULL,
+                    codigo_equipamento TEXT,
+                    sistema TEXT,
+                    preco NUMERIC(10, 2) DEFAULT 0.00
+                );
+            """)
+            
+            # Tabela 3: Preços de Serviços de Equipamentos (D/R)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS lpu_servicos_equip (
+                    id SERIAL PRIMARY KEY,
+                    equipamento TEXT UNIQUE NOT NULL,
+                    codigo_equipamento TEXT,
+                    sistema TEXT,
+                    desativacao NUMERIC(10, 2) DEFAULT 0.00,
+                    reinstalacao NUMERIC(10, 2) DEFAULT 0.00
+                );
+            """)
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        st.error(f"Erro ao criar tabelas LPU: {e}")
+
+
+# --- 3. IMPORTAÇÃO DA LPU ---
+
+def _normalize_key(key):
+    """Função interna para limpar chaves de texto (serviço/equipamento)"""
+    if not isinstance(key, str): return ""
+    return key.strip().lower()
+
+def importar_lpu(df_fixo: pd.DataFrame, df_servico: pd.DataFrame, df_equip: pd.DataFrame):
+    """Limpa as tabelas LPU e insere os novos dados dos DataFrames."""
+    conn = get_valid_conn_fin()
+    if not conn: return False, "Falha na conexão"
+    
+    try:
+        with conn.cursor() as cur:
+            # --- 1. Processar Valores Fixos ---
+            cur.execute("TRUNCATE lpu_valores_fixos RESTART IDENTITY;")
+            if 'TIPO DO SERVIÇO' in df_fixo.columns and 'VALOR' in df_fixo.columns:
+                vals_fixo = [
+                    (_normalize_key(row['TIPO DO SERVIÇO']), pd.to_numeric(row['VALOR'], errors='coerce'))
+                    for _, row in df_fixo.iterrows()
+                ]
+                vals_fixo = [(s, v) for s, v in vals_fixo if s and pd.notna(v)]
+                
+                query_fixo = "INSERT INTO lpu_valores_fixos (servico, valor) VALUES (%s, %s) ON CONFLICT (servico) DO UPDATE SET valor = EXCLUDED.valor"
+                cur.executemany(query_fixo, vals_fixo)
+            
+            # --- 2. Processar Equipamentos (Preço) ---
+            cur.execute("TRUNCATE lpu_equipamentos RESTART IDENTITY;")
+            if 'Equipamento' in df_equip.columns and 'Preco' in df_equip.columns:
+                vals_equip = [
+                    (
+                        _normalize_key(row['Equipamento']),
+                        str(row.get('CodigoEquipamento', '')),
+                        str(row.get('Sistema', '')),
+                        pd.to_numeric(row['Preco'], errors='coerce')
+                    )
+                    for _, row in df_equip.iterrows()
+                ]
+                vals_equip = [(e, c, s, p) for e, c, s, p in vals_equip if e and pd.notna(p)]
+                
+                query_equip = "INSERT INTO lpu_equipamentos (equipamento, codigo_equipamento, sistema, preco) VALUES (%s, %s, %s, %s) ON CONFLICT (equipamento) DO UPDATE SET codigo_equipamento = EXCLUDED.codigo_equipamento, sistema = EXCLUDED.sistema, preco = EXCLUDED.preco"
+                cur.executemany(query_equip, vals_equip)
+
+            # --- 3. Processar Serviços de Equipamentos (D/R) ---
+            cur.execute("TRUNCATE lpu_servicos_equip RESTART IDENTITY;")
+            if 'Equipamento' in df_servico.columns:
+                vals_serv = [
+                    (
+                        _normalize_key(row['Equipamento']),
+                        str(row.get('CodigoEquipamento', '')),
+                        str(row.get('Sistema', '')),
+                        pd.to_numeric(row.get('DESATIVAÇÃO'), errors='coerce'),
+                        pd.to_numeric(row.get('REINSTALAÇÂO'), errors='coerce')
+                    )
+                    for _, row in df_servico.iterrows()
+                ]
+                vals_serv = [(e, c, s, d, r) for e, c, s, d, r in vals_serv if e and (pd.notna(d) or pd.notna(r))]
+
+                query_serv = "INSERT INTO lpu_servicos_equip (equipamento, codigo_equipamento, sistema, desativacao, reinstalacao) VALUES (%s, %s, %s, %s, %s) ON CONFLICT (equipamento) DO UPDATE SET codigo_equipamento = EXCLUDED.codigo_equipamento, sistema = EXCLUDED.sistema, desativacao = EXCLUDED.desativacao, reinstalacao = EXCLUDED.reinstalacao"
+                cur.executemany(query_serv, vals_serv)
+
+        conn.commit()
+        st.cache_data.clear() # Limpa o cache para carregar novos preços
+        return True, "LPU importada com sucesso."
+    
+    except Exception as e:
+        conn.rollback()
+        return False, f"Erro ao importar LPU: {e}"
+
+# --- 4. FUNÇÕES DE LEITURA (PARA A PÁGINA) ---
+
+@st.cache_data(ttl=3600) # Cache de 1 hora
+def carregar_lpu_fixo():
+    """Carrega LPU Fixo como um dicionário para consulta rápida."""
+    conn = get_valid_conn_fin()
+    if not conn: return {}
+    try:
+        df = pd.read_sql("SELECT servico, valor FROM lpu_valores_fixos", conn)
+        # Converte para minúsculo para matching
+        return df.set_index(df['servico'].str.lower())['valor'].to_dict()
+    except Exception as e:
+        st.error(f"Erro ao carregar LPU Fixo: {e}")
+        return {}
+
+@st.cache_data(ttl=3600)
+def carregar_lpu_servico():
+    """Carrega LPU Serviço (D/R) como um dicionário para consulta rápida."""
+    conn = get_valid_conn_fin()
+    if not conn: return {}
+    try:
+        df = pd.read_sql("SELECT equipamento, desativacao, reinstalacao FROM lpu_servicos_equip", conn)
+        df.set_index(df['equipamento'].str.lower(), inplace=True)
+        # Preenche NaT/NaN com 0.0 para evitar erros no dict
+        df['desativacao'] = df['desativacao'].fillna(0.0)
+        df['reinstalacao'] = df['reinstalacao'].fillna(0.0)
+        return df[['desativacao', 'reinstalacao']].to_dict('index')
+    except Exception as e:
+        st.error(f"Erro ao carregar LPU Serviço: {e}")
+        return {}
+
+@st.cache_data(ttl=3600)
+def carregar_lpu_equipamento():
+    """Carrega LPU Equipamento (Preço) como um dicionário."""
+    conn = get_valid_conn_fin()
+    if not conn: return {}
+    try:
+        df = pd.read_sql("SELECT equipamento, preco FROM lpu_equipamentos", conn)
+        df['preco'] = df['preco'].fillna(0.0)
+        return df.set_index(df['equipamento'].str.lower())['preco'].to_dict()
+    except Exception as e:
+        st.error(f"Erro ao carregar LPU Equipamento: {e}")
+        return {}
