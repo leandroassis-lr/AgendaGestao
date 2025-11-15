@@ -14,6 +14,26 @@ try:
 except:
     pass 
 
+# --- INÍCIO DA NOVA LÓGICA (LISTA DE EXCEÇÃO) ---
+# Lista de serviços que NÃO mostram equipamentos.
+# Normalizados para minúsculas para verificação segura.
+SERVICOS_SEM_EQUIPAMENTO = [
+    "vistoria",
+    "adequação de gerador (recall)",
+    "desinstalação e descarte de porta giratoria - item para desmontagem e recolhimento para descarte ecológico incluindo transporte",
+    "desinstalação total",
+    "modernização central de alarme honeywell para commbox até 12 sensores",
+    "modernização central de alarme honeywell para commbox até 24 sensores",
+    "modernização central de alarme honeywell para commbox até 48 sensores",
+    "modernização central de alarme honeywell para commbox até 60 sensores",
+    "modernização central de alarme honeywell para commbox até 90 sensores",
+    "montagem e desmontagem da porta para intervenção",
+    "recolhimento de eqto",
+    "visita técnica",
+    "vistoria conjunta"
+]
+# --- FIM DA NOVA LÓGICA ---
+
 # --- Controle Principal de Login ---
 if "logado" not in st.session_state or not st.session_state.logado:
     st.warning("Por favor, faça o login na página principal (app.py) antes de acessar esta página.")
@@ -29,6 +49,9 @@ def _to_date_safe(val):
         return ts.date()
     except Exception: return None
 
+# (Não precisamos mais desta função, foi movida para o utils_chamados)
+# def extrair_e_mapear_colunas(df, col_map): ...
+
 def formatar_agencia_excel(id_agencia, nome_agencia):
     try:
         id_agencia_limpo = str(id_agencia).split('.')[0]
@@ -39,11 +62,13 @@ def formatar_agencia_excel(id_agencia, nome_agencia):
           nome_str = nome_str[len(id_agencia_limpo):].strip(" -")
     return f"{id_str} - {nome_str}"
 
-# Importação --- #
+# --- 1. DIALOG (POP-UP) DE IMPORTAÇÃO ---
 @st.dialog("Importar Novos Chamados (Template Padrão)", width="large")
 def run_importer_dialog():
     st.info(f"""
              Arraste seu **Template Padrão** (formato `.xlsx` ou `.csv` com `;`) aqui.
+             O sistema agora lê os dados pelo **Nome do Cabeçalho**, não pela posição.
+             Colunas obrigatórias: `CHAMADO` e `N° AGENCIA`.
      """)
     
     uploaded_files = st.file_uploader(
@@ -64,67 +89,44 @@ def run_importer_dialog():
                         df_individual = pd.read_csv(uploaded_file, sep=';', header=0, encoding='utf-8', keep_default_na=False, dtype=str) 
                     else:
                         df_individual = pd.read_excel(uploaded_file, header=0, keep_default_na=False, dtype=str) 
-
                     df_individual.dropna(how='all', inplace=True)
-                    if not df_individual.empty:
-                        dfs_list.append(df_individual)
-                    else:
-                        st.warning(f"Arquivo '{uploaded_file.name}' está vazio e será ignorado.")
-                
+                    if not df_individual.empty: dfs_list.append(df_individual)
+                    else: st.warning(f"Arquivo '{uploaded_file.name}' está vazio e será ignorado.")
                 except Exception as e:
                     st.error(f"Erro ao ler o arquivo '{uploaded_file.name}': {e}")
-                    all_files_ok = False
-                    break 
+                    all_files_ok = False; break 
 
         if dfs_list and all_files_ok:
             try:
                 df_raw = pd.concat(dfs_list, ignore_index=True)
-                if df_raw.empty:
-                    st.error("Erro: Nenhum dado válido encontrado nos arquivos.")
-                    return
-            except Exception as e:
-                st.error(f"Erro ao combinar arquivos: {e}")
-                return
+                if df_raw.empty: st.error("Erro: Nenhum dado válido encontrado."); return
+            except Exception as e: st.error(f"Erro ao combinar arquivos: {e}"); return
 
-            # LÓGICA ANTIGA (col_map, extrair_e_mapear_colunas, reverse_map) FOI REMOVIDA
-            
             st.success(f"Sucesso! {len(df_raw)} linhas lidas de {len(uploaded_files)} arquivo(s). Pré-visualização:")
             st.dataframe(df_raw.head(), use_container_width=True) 
             
             if st.button("▶️ Iniciar Importação de Chamados"):
-                if df_raw.empty: 
-                    st.error("Planilha vazia.")
+                if df_raw.empty: st.error("Planilha vazia.")
                 else:
                     with st.spinner("Importando e atualizando chamados..."):
-                        # Agora passamos o df_raw diretamente!
                         sucesso, num_importados = utils_chamados.bulk_insert_chamados_db(df_raw)
-                        
                         if sucesso:
                             st.success(f"🎉 {num_importados} chamados importados/atualizados com sucesso!")
-                            st.balloons()
-                            st.session_state.importer_done = True 
+                            st.balloons(); st.session_state.importer_done = True 
                         else:
                             st.error("A importação de chamados falhou. Verifique se os cabeçalhos 'CHAMADO' e 'N° AGENCIA' existem.")
-        elif not all_files_ok:
-            st.error("Processamento interrompido devido a erro na leitura de um arquivo.")
-        elif not dfs_list:
-            st.info("Nenhum dado válido encontrado nos arquivos selecionados.")
+        elif not all_files_ok: st.error("Processamento interrompido.")
+        elif not dfs_list: st.info("Nenhum dado válido encontrado.")
 
     if st.session_state.get("importer_done", False):
-        st.session_state.importer_done = False 
-        st.rerun()
+        st.session_state.importer_done = False; st.rerun()
+    if st.button("Cancelar"): st.rerun()
 
-    if st.button("Cancelar"):
-        st.rerun()
-        
-# --- MUDANÇA 2: DIALOG (POP-UP) DE EXPORTAÇÃO (CORRIGIDO) ---
+# --- DIALOG (POP-UP) DE EXPORTAÇÃO ---
 @st.dialog("⬇️ Exportar Dados Filtrados", width="small")
 def run_exporter_dialog(df_data_to_export):
-    """Cria o pop-up de confirmação de download com colunas ORDENADAS e FILTRADAS."""
-    
     st.info(f"Preparando {len(df_data_to_export)} linhas para download.")
-        
-    # 1. Esta é a lista exata de colunas que você pediu, na ordem correta
+    
     colunas_exportacao_ordenadas = [
         'ID', 'Abertura', 'Nº Chamado', 'Cód. Agência', 'Nome Agência', 'UF', 'Projeto', 
         'Agendamento', 'Sistema', 'Serviço', 'Cód. Equip.', 'Equipamento', 'Qtd.', 
@@ -133,45 +135,31 @@ def run_exporter_dialog(df_data_to_export):
         'Prazo', 'Descrição', 'Observações e Pendencias', 'Sub-Status', 
         'Status Financeiro', 'Observação', 'Log do Chamado', 'Agencia_Combinada'
     ]
-    
-    # 2. Verificamos quais dessas colunas realmente existem no DataFrame
-   
     colunas_presentes_no_df = [col for col in colunas_exportacao_ordenadas if col in df_data_to_export.columns]
-    
-    # 3. Criamos o DataFrame final para exportar, contendo APENAS as colunas
-   
     df_para_exportar = df_data_to_export[colunas_presentes_no_df]
     
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-        # 4. Usamos o novo DataFrame 'df_para_exportar'
         df_para_exportar.to_excel(writer, index=False, sheet_name="Dados Filtrados")
     buffer.seek(0)
     
     st.download_button(
-        label="📥 Baixar Arquivo Excel",
-        data=buffer,
-        file_name="dados_filtrados.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True
+        label="📥 Baixar Arquivo Excel", data=buffer, file_name="dados_filtrados.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True
     )
-    
     if st.button("Fechar", use_container_width=True):
-        st.session_state.show_export_popup = False
-        st.rerun()
+        st.session_state.show_export_popup = False; st.rerun()
+
 # --- FUNÇÃO "CÉREBRO" DE STATUS (v11.1) ---
 def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
-    
     status_atual = str(df_projeto.iloc[0].get('Status', 'Não Iniciado')).strip()
     status_manual_list = ["Pendência de Infra", "Pendência de Equipamento", "Pausado", "Cancelado", "Finalizado"]
     if status_atual in status_manual_list:
         sub_status_atual_val = df_projeto.iloc[0].get('Sub-Status')
         sub_status_atual = "" if pd.isna(sub_status_atual_val) else str(sub_status_atual_val).strip()
-        
         if sub_status_atual != "":
             updates = {"Sub-Status": None}
-            for chamado_id in ids_para_atualizar:
-                utils_chamados.atualizar_chamado_db(chamado_id, updates)
+            for chamado_id in ids_para_atualizar: utils_chamados.atualizar_chamado_db(chamado_id, updates)
             return True 
         return False 
     
@@ -179,13 +167,10 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
     has_E = df_projeto['Nº Chamado'].str.contains('-E-').any()
     
     def check_col_present(df, col_name):
-        if col_name in df.columns:
-            return df[col_name].fillna('').astype(str).str.strip().ne('').any()
+        if col_name in df.columns: return df[col_name].fillna('').astype(str).str.strip().ne('').any()
         return False
-
     def check_date_present(df, col_name):
-        if col_name in df.columns:
-            return df[col_name].notna().any()
+        if col_name in df.columns: return df[col_name].notna().any()
         return False
     
     link_presente = check_col_present(df_projeto, 'Link Externo')
@@ -193,44 +178,26 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
     pedido_presente = check_col_present(df_projeto, 'Nº Pedido')
     envio_presente = check_date_present(df_projeto, 'Data Envio')
     tecnico_presente = check_col_present(df_projeto, 'Técnico')
-    
-    novo_status = "Não Iniciado"
-    novo_sub_status = ""
+    novo_status = "Não Iniciado"; novo_sub_status = ""
 
-    # --- Cenário 1: Só Serviço (S-Only) ---
+    # (Lógica de status...)
     if has_S and not has_E:
-        if protocolo_presente:
-            novo_status = "Concluído"; novo_sub_status = "Enviar Book"
-        elif tecnico_presente:
-            novo_status = "Em Andamento"; novo_sub_status = "Enviar Status Cliente"
-        elif link_presente:
-            novo_status = "Em Andamento"; novo_sub_status = "Acionar técnico"
-        else:
-            novo_status = "Não Iniciado"; novo_sub_status = "Pendente Link"
-    # --- Cenário 2: Misto (S e E) ---
+        if protocolo_presente: novo_status = "Concluído"; novo_sub_status = "Enviar Book"
+        elif tecnico_presente: novo_status = "Em Andamento"; novo_sub_status = "Enviar Status Cliente"
+        elif link_presente: novo_status = "Em Andamento"; novo_sub_status = "Acionar técnico"
+        else: novo_status = "Não Iniciado"; novo_sub_status = "Pendente Link"
     elif has_S and has_E:
-        if protocolo_presente:
-            novo_status = "Concluído"; novo_sub_status = "Enviar Book"
-        elif tecnico_presente:
-            novo_status = "Em Andamento"; novo_sub_status = "Enviar Status Cliente"
-        elif envio_presente:
-            novo_status = "Em Andamento"; novo_sub_status = "Equipamento entregue - Acionar técnico"
-        elif pedido_presente:
-            novo_status = "Em Andamento"; novo_sub_status = "Equipamento Solicitado"
-        elif link_presente:
-            novo_status = "Em Andamento"; novo_sub_status = "Solicitar Equipamento"
-        else:
-            novo_status = "Não Iniciado"; novo_sub_status = "Pendente Link"
-    # --- Cenário 3: Só Equipamento (E-Only) ---
+        if protocolo_presente: novo_status = "Concluído"; novo_sub_status = "Enviar Book"
+        elif tecnico_presente: novo_status = "Em Andamento"; novo_sub_status = "Enviar Status Cliente"
+        elif envio_presente: novo_status = "Em Andamento"; novo_sub_status = "Equipamento entregue - Acionar técnico"
+        elif pedido_presente: novo_status = "Em Andamento"; novo_sub_status = "Equipamento Solicitado"
+        elif link_presente: novo_status = "Em Andamento"; novo_sub_status = "Solicitar Equipamento"
+        else: novo_status = "Não Iniciado"; novo_sub_status = "Pendente Link"
     elif not has_S and has_E:
-        if envio_presente:
-            novo_status = "Concluído"; novo_sub_status = "Equipamento entregue"
-        elif pedido_presente:
-            novo_status = "Em Andamento"; novo_sub_status = "Equipamento Solicitado"
-        else:
-            novo_status = "Não Iniciado"; novo_sub_status = "Solicitar Equipamento"
-    else: 
-        novo_status = "Não Iniciado"; novo_sub_status = "Verificar Chamados"
+        if envio_presente: novo_status = "Concluído"; novo_sub_status = "Equipamento entregue"
+        elif pedido_presente: novo_status = "Em Andamento"; novo_sub_status = "Equipamento Solicitado"
+        else: novo_status = "Não Iniciado"; novo_sub_status = "Solicitar Equipamento"
+    else: novo_status = "Não Iniciado"; novo_sub_status = "Verificar Chamados"
 
     sub_status_atual_val = df_projeto.iloc[0].get('Sub-Status')
     sub_status_atual = "" if pd.isna(sub_status_atual_val) else str(sub_status_atual_val).strip()
@@ -238,8 +205,7 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
     if status_atual != novo_status or sub_status_atual != novo_sub_status:
         st.info(f"Status do projeto mudou de '{status_atual} | {sub_status_atual}' para '{novo_status} | {novo_sub_status}'")
         updates = {"Status": novo_status, "Sub-Status": novo_sub_status}
-        for chamado_id in ids_para_atualizar:
-            utils_chamados.atualizar_chamado_db(chamado_id, updates)
+        for chamado_id in ids_para_atualizar: utils_chamados.atualizar_chamado_db(chamado_id, updates)
         return True
     return False
 
@@ -249,10 +215,10 @@ def clean_val(val, default="N/A"):
         return default
     return str(val)
 
-# --- Tela Principal da Página (VERSÃO COM CARD NÍVEL 2 AJUSTADO) ---
+# --- Tela Principal da Página ---
 def tela_dados_agencia():
     
-    # CSS (com os estilos do Nível 2 simplificados)
+    # CSS
     st.markdown("""
         <style>
             .card-status-badge { background-color: #B0BEC5; color: white; padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 0.85em; display: inline-block; width: 100%; text-align: center; }
@@ -326,7 +292,6 @@ def tela_dados_agencia():
     
     # --- 6. Filtrar DataFrame Principal ---
     df_filtrado = df_chamados_raw.copy()
-    # (Filtros são aplicados aqui...)
     if filtro_agencia != "Todos": df_filtrado = df_filtrado[df_filtrado['Agencia_Combinada'] == filtro_agencia]
     if filtro_analista != "Todos": df_filtrado = df_filtrado[df_filtrado['Analista'] == filtro_analista]
     if filtro_projeto != "Todos": df_filtrado = df_filtrado[df_filtrado['Projeto'] == filtro_projeto]
@@ -367,7 +332,6 @@ def tela_dados_agencia():
     try:
         df_filtrado['Agendamento_str'] = df_filtrado['Agendamento'].dt.strftime('%d/%m/%Y').fillna('Sem Data')
         chave_agencia = 'Agencia_Combinada'
-        # Chave Nível 2 (incluindo Serviço)
         chave_projeto = ['Projeto', 'Gestor', 'Serviço', 'Agendamento_str']
     except Exception as e:
         st.error(f"Erro ao processar datas para agrupamento: {e}")
@@ -395,7 +359,6 @@ def tela_dados_agencia():
             if df_agencia is None: continue
             
             # --- Card Nível 1 (Agência) ---
-            # (Lógica para tag de urgência e analista)
             status_fechamento_proj = ['concluído', 'cancelado', 'equipamento entregue - concluído', 'finalizado']
             df_agencia_aberta = df_agencia[~df_agencia['Status'].astype(str).str.lower().isin(status_fechamento_proj)]
             hoje_ts = pd.Timestamp.now().normalize()
@@ -414,7 +377,6 @@ def tela_dados_agencia():
                     else: analista_urgente_nome = "Múltiplos"
             num_projetos = len(df_agencia.groupby(chave_projeto))
             
-            # Layout Nível 1
             st.markdown('<div class="project-card">', unsafe_allow_html=True)
             with st.container():
                 col1, col2, col3, col4, col5 = st.columns([1, 3, 2, 2, 1])
@@ -435,73 +397,49 @@ def tela_dados_agencia():
                         st.error("Falha ao agrupar por Projeto/Gestor/Serviço/Agendamento.")
                         continue
 
+                    # (Loop Nível 2)
                     for (nome_projeto, nome_gestor, nome_servico, data_agend), df_projeto in projetos_agrupados:
                         
                         first_row = df_projeto.iloc[0]
                         chamado_ids_internos_list = df_projeto['ID'].tolist()
                         
-                        # --- INÍCIO DA MUDANÇA (Layout Card Nível 2) ---
-                        
                         st.markdown('<div class="project-card" style="margin-top: 10px;">', unsafe_allow_html=True)
                         with st.container(border=True): 
                             
-                            # 1. Pegar os dados para o novo layout
                             status_proj = clean_val(first_row.get('Status'), "Não Iniciado")
                             sub_status_proj = clean_val(first_row.get('Sub-Status'), "")
                             status_color = utils_chamados.get_status_color(status_proj)
                             gestor_color = utils_chamados.get_color_for_name(nome_gestor)
-                            
                             dt_ag = data_agend if data_agend != "Sem Data" else "Sem Agendamento"
                             
-                            # Linha 1: Nome do projeto - Agendamento - Status
                             col1, col2, col3 = st.columns([3, 2, 2])
-                            
-                            with col1:
-                                # Título principal agora é o Projeto
-                                st.markdown(f"##### {clean_val(nome_projeto, 'Sem Projeto').upper()}", unsafe_allow_html=True)
-                            with col2:
-                                st.markdown(f"**📅 Agendamento:**\n{dt_ag}", unsafe_allow_html=True)
+                            with col1: st.markdown(f"##### {clean_val(nome_projeto, 'Sem Projeto').upper()}", unsafe_allow_html=True)
+                            with col2: st.markdown(f"**📅 Agendamento:**\n{dt_ag}", unsafe_allow_html=True)
                             with col3:
-                                # Badge de Status
                                 status_html = html.escape(status_proj.upper())
-                                st.markdown(f"""
-                                <div class="card-status-badge" style="background-color: {status_color};">
-                                    {status_html}
-                                </div>
-                                """, unsafe_allow_html=True)
-
-                            # Linha 2: Serviço - Gestor - sub status
-                            col4, col5, col6 = st.columns([3, 2, 2])
+                                st.markdown(f"""<div class="card-status-badge" style="background-color: {status_color};">{status_html}</div>""", unsafe_allow_html=True)
                             
-                            with col4:
-                                st.markdown(f"**Serviço:**\n{clean_val(nome_servico, 'N/D')}", unsafe_allow_html=True)
+                            col4, col5, col6 = st.columns([3, 2, 2])
+                            with col4: st.markdown(f"**Serviço:**\n{clean_val(nome_servico, 'N/D')}", unsafe_allow_html=True)
                             with col5:
                                 gestor_html = f"<span style='color: {gestor_color}; font-weight: 500;'>{clean_val(nome_gestor, 'N/D')}</span>"
                                 st.markdown(f"**Gestor:**\n{gestor_html}", unsafe_allow_html=True)
                             with col6:
-                                # Sub-status (Ação)
                                 if sub_status_proj:
-                                    st.markdown(f"**Ação:**") # Label
-                                    st.markdown(f"""
-                                    <div class="card-action-text">
-                                        {sub_status_proj}
-                                    </div>
-                                    """, unsafe_allow_html=True)
+                                    st.markdown(f"**Ação:**")
+                                    st.markdown(f"""<div class="card-action-text">{sub_status_proj}</div>""", unsafe_allow_html=True)
                                 else:
                                     st.markdown(f"**Ação:**\n-", unsafe_allow_html=True)
                             
-                            # --- FIM DA MUDANÇA ---
-
-
                             # --- NÍVEL 3 (Expander com formulários) ---
                             expander_title = f"Ver/Editar {len(chamado_ids_internos_list)} Chamado(s) (ID: {first_row['ID']})"
                             with st.expander(expander_title):
                                 
-                                # Formulário de Lote (Nível 2)
+                                # (Formulário de Lote Nível 2)
                                 form_key_lote = f"form_lote_edit_{first_row['ID']}"
                                 with st.form(key=form_key_lote):
                                     st.markdown(f"**Editar todos os {len(df_projeto)} chamados deste Serviço/Projeto:**")
-                                    # (O resto do form... c1, c2, c3... btn_salvar_lote)
+                                    # (Campos do form... omitidos por brevidade)
                                     c1, c2 = st.columns(2); novo_prazo = c1.text_input("Prazo", value=first_row.get('Prazo', ''), key=f"{form_key_lote}_prazo")
                                     status_manual_atual = status_proj if status_proj in status_manual_options else "(Status Automático)"
                                     status_idx = status_manual_options.index(status_manual_atual); novo_status_manual = c2.selectbox("Forçar Status Manual", options=status_manual_options, index=status_idx, key=f"{form_key_lote}_status")
@@ -570,27 +508,55 @@ def tela_dados_agencia():
                                                         st.success("Chamado salvo!"); df_chamados_atualizado = utils_chamados.carregar_chamados_db(); df_projeto_atualizado = df_chamados_atualizado[df_chamados_atualizado['ID'].isin(chamado_ids_internos_list)]; calcular_e_atualizar_status_projeto(df_projeto_atualizado, chamado_ids_internos_list); st.cache_data.clear(); st.rerun()
                                                     else: st.error("Falha ao salvar o chamado.")
                                 
-                                # Descrição de Equipamentos (Agrupada por Sistema)
+                                # --- INÍCIO DA MUDANÇA (LÓGICA DE DESCRIÇÃO CONDICIONAL) ---
                                 st.markdown("---")
                                 st.markdown("##### Descrição (Total de Equipamentos do Projeto)")
+
+                                # Normalizar o nome do serviço (do Nível 2)
+                                # A variável 'nome_servico' vem do loop 'for' do Nível 2
+                                nome_servico_norm = str(nome_servico).strip().lower()
+                                servico_recolhimento = "recolhimento de eqto"
+
+                                # Regra 1 e 2: O serviço está na lista especial?
+                                # Usamos a lista 'SERVICOS_SEM_EQUIPAMENTO' definida no topo do arquivo
+                                if nome_servico_norm in SERVICOS_SEM_EQUIPAMENTO:
+                                    
+                                    if nome_servico_norm == servico_recolhimento:
+                                        descricao_texto = f"Realizar o {nome_servico}" # "Realizar o Recolhimento de Eqto"
+                                    else:
+                                        descricao_texto = f"Realizar a {nome_servico}" # "Realizar a Vistoria"
+                                    
+                                    # Exibe a frase simples
+                                    st.markdown(f"""
+                                    <div style='background-color: #f0f2f5; border-radius: 5px; padding: 10px; font-size: 0.95rem; font-weight: 500;'>
+                                        {descricao_texto}
+                                    </div>
+                                    """, unsafe_allow_html=True)
                                 
-                                descricao_list_agrupada = []
-                                for nome_sistema, df_sistema in sistemas_no_projeto:
-                                    nome_sis_limpo = clean_val(nome_sistema, "Sistema não Definido")
-                                    descricao_list_agrupada.append(f"**{nome_sis_limpo}**")
-                                    for _, chamado_row_desc in df_sistema.iterrows():
-                                        qtd_val_numeric = pd.to_numeric(chamado_row_desc.get('Qtd.'), errors='coerce')
-                                        qtd_int = int(qtd_val_numeric) if pd.notna(qtd_val_numeric) else 0
-                                        equip_str = str(chamado_row_desc.get('Equipamento', 'N/A'))
-                                        descricao_list_agrupada.append(f"{qtd_int:02d} - {equip_str}")
-                                    descricao_list_agrupada.append("") 
+                                # Regra 3: O serviço é normal (mostra lista de equipamentos)
+                                else:
+                                    # Agrupa os chamados DENTRO do projeto por Sistema
+                                    # (Esta variável 'sistemas_no_projeto' foi definida acima, antes do form individual)
+                                    
+                                    descricao_list_agrupada = []
+                                    for nome_sistema, df_sistema in sistemas_no_projeto:
+                                        nome_sis_limpo = clean_val(nome_sistema, "Sistema não Definido")
+                                        descricao_list_agrupada.append(f"**{nome_sis_limpo}**")
+                                        
+                                        for _, chamado_row_desc in df_sistema.iterrows():
+                                            qtd_val_numeric = pd.to_numeric(chamado_row_desc.get('Qtd.'), errors='coerce')
+                                            qtd_int = int(qtd_val_numeric) if pd.notna(qtd_val_numeric) else 0
+                                            equip_str = str(chamado_row_desc.get('Equipamento', 'N/A'))
+                                            descricao_list_agrupada.append(f"{qtd_int:02d} - {equip_str}")
+                                        descricao_list_agrupada.append("") # Linha em branco
                                 
-                                descricao_texto = "<br>".join(descricao_list_agrupada)
-                                st.markdown(f"""
-                                <div style='background-color: #f0f2f5; border-radius: 5px; padding: 10px; font-size: 0.9rem; max-height: 200px; overflow-y: auto;'>
-                                    {descricao_texto}
-                                </div>
-                                """, unsafe_allow_html=True)
+                                    descricao_texto = "<br>".join(descricao_list_agrupada)
+                                    st.markdown(f"""
+                                    <div style='background-color: #f0f2f5; border-radius: 5px; padding: 10px; font-size: 0.9rem; max-height: 200px; overflow-y: auto;'>
+                                        {descricao_texto}
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                # --- FIM DA MUDANÇA ---
                         
                         st.markdown("</div>", unsafe_allow_html=True) # Fecha card Nível 2
             
