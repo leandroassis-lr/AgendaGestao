@@ -464,7 +464,7 @@ def tela_dados_agencia():
                             
                             col1, col2, col3 = st.columns([3, 2, 2])
                             with col1: st.markdown(f"##### {clean_val(nome_projeto, 'Sem Projeto').upper()}", unsafe_allow_html=True)
-                            with col2: st.markdown(f"**📅:**\n{dt_ag}", unsafe_allow_html=True)
+                            with col2: st.markdown(f"**📅**\n{dt_ag}", unsafe_allow_html=True)
                             with col3:
                                 status_html = html.escape(status_proj.upper())
                                 st.markdown(f"""<div class="card-status-badge" style="background-color: {status_color};">{status_html}</div>""", unsafe_allow_html=True)
@@ -492,12 +492,12 @@ def tela_dados_agencia():
                                     # (Campos do form... omitidos por brevidade)
                                     c1, c2 = st.columns(2); novo_prazo = c1.text_input("Prazo", value=first_row.get('Prazo', ''), key=f"{form_key_lote}_prazo")
                                     status_manual_atual = status_proj if status_proj in status_manual_options else "(Status Automático)"
-                                    status_idx = status_manual_options.index(status_manual_atual); novo_status_manual = c2.selectbox("Forçar Status Manual", options=status_manual_options, index=status_idx, key=f"{form_key_lote}_status")
+                                    status_idx = status_manual_options.index(status_manual_atual); novo_status_manual = c2.selectbox("Status", options=status_manual_options, index=status_idx, key=f"{form_key_lote}_status")
                                     c3, c4, c5 = st.columns(3); abertura_val = _to_date_safe(first_row.get('Abertura')) or date.today(); nova_abertura = c3.date_input("Data Abertura", value=abertura_val, format="DD/MM/YYYY", key=f"{form_key_lote}_abertura")
                                     agend_val = _to_date_safe(first_row.get('Agendamento')); novo_agendamento = c4.date_input("Data Agendamento", value=agend_val, format="DD/MM/YYYY", key=f"{form_key_lote}_agend")
                                     final_val = _to_date_safe(first_row.get('Fechamento')); nova_finalizacao = c5.date_input("Data Finalização", value=final_val, format="DD/MM/YYYY", key=f"{form_key_lote}_final")
                                     st.markdown("<h6>Detalhes do Projeto</h6>", unsafe_allow_html=True); c6, c7, c8 = st.columns(3)
-                                    proj_val = first_row.get('Projeto', ''); proj_idx = projeto_list_form.index(proj_val) if proj_val in projeto_list_form else 0; novo_projeto = c6.selectbox("Nome do projeto", options=projeto_list_form, index=proj_idx, key=f"{form_key_lote}_proj")
+                                    proj_val = first_row.get('Projeto', ''); proj_idx = projeto_list_form.index(proj_val) if proj_val in projeto_list_form else 0; novo_projeto = c6.selectbox("Projeto", options=projeto_list_form, index=proj_idx, key=f"{form_key_lote}_proj")
                                     analista_val = first_row.get('Analista', ''); novo_analista = c7.text_input("Analista", value=analista_val, key=f"{form_key_lote}_analista")
                                     gestor_val = first_row.get('Gestor', ''); gestor_idx = gestor_list_form.index(gestor_val) if gestor_val in gestor_list_form else 0; novo_gestor = c8.selectbox("Gestor", options=gestor_list_form, index=gestor_idx, key=f"{form_key_lote}_gestor")
                                     c9, c10, c11 = st.columns(3); novo_sistema = c9.text_input("Sistema", value=first_row.get('Sistema', ''), key=f"{form_key_lote}_sistema")
@@ -527,29 +527,29 @@ def tela_dados_agencia():
                                 
                                 # Edição Individual (Agrupada por Sistema)
                                 st.markdown("---")
-                                st.markdown("##### 🔎 Detalhes por Chamado Individual (Agrupados por Sistema)")
+                                st.markdown("##### 🔎 Detalhes por Chamado")
                                 
                                 sistemas_no_projeto = df_projeto.groupby('Sistema')
                                 for nome_sistema, df_sistema in sistemas_no_projeto:
-                                    st.markdown(f"**Sistema: {clean_val(nome_sistema, 'N/D')}**")
+                                    st.markdown(f"** {clean_val(nome_sistema, 'N/D')}**")
                                     
                                     for _, chamado_row in df_sistema.iterrows():
-                                        with st.expander(f"▶️ Chamado: {chamado_row['Nº Chamado']} (Equip: {chamado_row['Equipamento']})"):
+                                        with st.expander(f"▶️ {chamado_row['Nº Chamado']} "):
                                             
                                             form_key_ind = f"form_ind_edit_{chamado_row['ID']}"
                                             with st.form(key=form_key_ind):
                                                 # (Formulário individual)
                                                 is_servico = '-S-' in chamado_row['Nº Chamado']; is_equipamento = '-E-' in chamado_row['Nº Chamado']; updates_individuais = {}
                                                 if is_servico:
-                                                    st.markdown("**Gatilhos de Serviço (-S-)**"); c1, c2 = st.columns(2); link_val = chamado_row.get('Link Externo', ''); novo_link = c1.text_input("Link Externo", value=link_val, key=f"link_{chamado_row['ID']}"); updates_individuais['Link Externo'] = novo_link
+                                                    st.markdown("****"); c1, c2 = st.columns(2); link_val = chamado_row.get('Link Externo', ''); novo_link = c1.text_input("Link Externo", value=link_val, key=f"link_{chamado_row['ID']}"); updates_individuais['Link Externo'] = novo_link
                                                     proto_val = chamado_row.get('Nº Protocolo', ''); novo_protocolo = c2.text_input("Nº Protocolo", value=proto_val, key=f"proto_{chamado_row['ID']}"); updates_individuais['Nº Protocolo'] = novo_protocolo
                                                 if is_equipamento:
-                                                    st.markdown("**Gatilhos de Equipamento (-E-)**"); c1, c2 = st.columns(2); pedido_val = chamado_row.get('Nº Pedido', ''); novo_pedido = c1.text_input("Nº Pedido", value=pedido_val, key=f"pedido_{chamado_row['ID']}"); updates_individuais['Nº Pedido'] = novo_pedido
+                                                    st.markdown("****"); c1, c2 = st.columns(2); pedido_val = chamado_row.get('Nº Pedido', ''); novo_pedido = c1.text_input("Nº Pedido", value=pedido_val, key=f"pedido_{chamado_row['ID']}"); updates_individuais['Nº Pedido'] = novo_pedido
                                                     envio_val = _to_date_safe(chamado_row.get('Data Envio')); nova_data_envio = c2.date_input("Data Envio", value=envio_val, format="DD/MM/YYYY", key=f"envio_{chamado_row['ID']}"); updates_individuais['Data Envio'] = nova_data_envio
                                                     obs_val = chamado_row.get('Obs. Equipamento', ''); nova_obs_equip = st.text_area("Obs. Equipamento", value=obs_val, height=100, key=f"obs_equip_{chamado_row['ID']}"); updates_individuais['Obs. Equipamento'] = nova_obs_equip
                                                 qtd_val_numeric_ind = pd.to_numeric(chamado_row.get('Qtd.'), errors='coerce'); qtd_int_ind = int(qtd_val_numeric_ind) if pd.notna(qtd_val_numeric_ind) else 0; equip_str_ind = str(chamado_row.get('Equipamento', 'N/A'))
                                                 st.text_area("Descrição (equipamento deste chamado)", value=f"{qtd_int_ind:02d} - {equip_str_ind}", disabled=True, height=50, key=f"desc_ind_{chamado_row['ID']}")
-                                                btn_salvar_individual = st.form_submit_button("💾 Salvar Gatilho Individual", use_container_width=True)
+                                                btn_salvar_individual = st.form_submit_button("💾 Atualizar", use_container_width=True)
 
                                             if btn_salvar_individual:
                                                 # (Lógica de salvamento individual)
@@ -603,4 +603,5 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia ()
+
 
