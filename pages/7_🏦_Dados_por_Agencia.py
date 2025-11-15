@@ -531,7 +531,7 @@ def tela_dados_agencia():
                                 
                                 sistemas_no_projeto = df_projeto.groupby('Sistema')
                                 for nome_sistema, df_sistema in sistemas_no_projeto:
-                                    st.markdown(f"# {clean_val(nome_sistema, 'N/D')}#")
+                                    st.markdown(f"##### {clean_val(nome_sistema, 'N/D')}")
                                     
                                     for _, chamado_row in df_sistema.iterrows():
                                         with st.expander(f"▶️ {chamado_row['Nº Chamado']} "):
@@ -581,7 +581,7 @@ def tela_dados_agencia():
                                     descricao_list_agrupada = []
                                     for nome_sistema, df_sistema in sistemas_no_projeto:
                                         nome_sis_limpo = clean_val(nome_sistema, "Sistema não Definido")
-                                        descricao_list_agrupada.append(f"**{nome_sis_limpo}**")
+                                        descricao_list_agrupada.append(f"{nome_sis_limpo}")
                                         for _, chamado_row_desc in df_sistema.iterrows():
                                             qtd_val_numeric = pd.to_numeric(chamado_row_desc.get('Qtd.'), errors='coerce')
                                             qtd_int = int(qtd_val_numeric) if pd.notna(qtd_val_numeric) else 0
@@ -603,6 +603,7 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia ()
+
 
 
 
