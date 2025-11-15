@@ -430,17 +430,24 @@ def tela_dados_agencia():
             st.markdown('<div class="project-card">', unsafe_allow_html=True)
             with st.container():
                 col1, col2, col3, col4, col5 = st.columns([1, 3, 2, 2, 1])
-                with col1: st.markdown(tag_html, unsafe_allow_html=True)
-                with col2: st.markdown(f"<span style='font-size: 1.15rem; font-weight: bold;'>{nome_agencia}</span>", unsafe_allow_html=True)
-                with col3: st.markdown(urgency_text, unsafe_allow_html=True)
-                with col4:
-                # --- INÍCIO DO TESTE DE DEBUG ---
-                # Vamos apenas escrever o que a variável contém, sem cor
-                st.markdown(f"**Analista (Teste):**")
-                st.write(analista_urgente_nome)
-                # --- FIM DO TESTE DE DEBUG ---
-                with col5: st.markdown(f"**{num_projetos} {'Projetos' if num_projetos > 1 else 'Projeto'}**", unsafe_allow_html=True)
-
+                
+                with col1: 
+                    st.markdown(tag_html, unsafe_allow_html=True)
+                
+                with col2: 
+                    st.markdown(f"<span style='font-size: 1.15rem; font-weight: bold;'>{nome_agencia}</span>", unsafe_allow_html=True)
+                
+                with col3: 
+                    st.markdown(urgency_text, unsafe_allow_html=True)
+                
+                with col4:            
+                    st.markdown(f"**Analista (Teste):**")
+                    st.write(analista_urgente_nome)
+                
+                # Veja: 'with col5' está alinhado com 'with col4'
+                with col5: 
+                    st.markdown(f"**{num_projetos} {'Projetos' if num_projetos > 1 else 'Projeto'}**", unsafe_allow_html=True)
+        
                 # --- Nível 2 (Serviços/Projetos) ---
                 with st.expander("Ver Projetos"):
                     try:
@@ -608,6 +615,7 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia ()
+
 
 
 
