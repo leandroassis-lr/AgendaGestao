@@ -87,15 +87,27 @@ def _normalize_key(key):
     if not isinstance(key, str): return ""
     return key.strip().lower()
 
+# No arquivo: utils_financeiro.py
+
 def importar_lpu(df_fixo: pd.DataFrame, df_servico: pd.DataFrame, df_equip: pd.DataFrame):
-    """Limpa as tabelas LPU e insere os novos dados dos DataFrames."""
+    """Limpa as tabelas LPU e insere os novos dados (com cabeçalhos normalizados)."""
     conn = get_valid_conn_fin()
     if not conn: return False, "Falha na conexão"
     
+    # --- INÍCIO DA CORREÇÃO: Normalizar cabeçalhos ---
+    # Coloca tudo em maiúsculo e remove espaços das bordas
+    df_fixo.columns = [str(col).strip().upper() for col in df_fixo.columns]
+    df_servico.columns = [str(col).strip().upper() for col in df_servico.columns]
+    df_equip.columns = [str(col).strip().upper() for col in df_equip.columns]
+    # --- FIM DA CORREÇÃO ---
+
     try:
         with conn.cursor() as cur:
+            
             # --- 1. Processar Valores Fixos ---
             cur.execute("TRUNCATE lpu_valores_fixos RESTART IDENTITY;")
+            
+            # Verificação com nomes normalizados
             if 'TIPO DO SERVIÇO' in df_fixo.columns and 'VALOR' in df_fixo.columns:
                 vals_fixo = [
                     (_normalize_key(row['TIPO DO SERVIÇO']), pd.to_numeric(row['VALOR'], errors='coerce'))
@@ -108,13 +120,15 @@ def importar_lpu(df_fixo: pd.DataFrame, df_servico: pd.DataFrame, df_equip: pd.D
             
             # --- 2. Processar Equipamentos (Preço) ---
             cur.execute("TRUNCATE lpu_equipamentos RESTART IDENTITY;")
-            if 'Equipamento' in df_equip.columns and 'Preco' in df_equip.columns:
+            
+            # Verificação com nomes normalizados
+            if 'EQUIPAMENTO' in df_equip.columns and 'PRECO' in df_equip.columns:
                 vals_equip = [
                     (
-                        _normalize_key(row['Equipamento']),
-                        str(row.get('CodigoEquipamento', '')),
-                        str(row.get('Sistema', '')),
-                        pd.to_numeric(row['Preco'], errors='coerce')
+                        _normalize_key(row['EQUIPAMENTO']),
+                        str(row.get('CODIGOEQUIPAMENTO', '')), # .get() é seguro
+                        str(row.get('SISTEMA', '')),
+                        pd.to_numeric(row['PRECO'], errors='coerce') # Acesso direto
                     )
                     for _, row in df_equip.iterrows()
                 ]
@@ -125,14 +139,16 @@ def importar_lpu(df_fixo: pd.DataFrame, df_servico: pd.DataFrame, df_equip: pd.D
 
             # --- 3. Processar Serviços de Equipamentos (D/R) ---
             cur.execute("TRUNCATE lpu_servicos_equip RESTART IDENTITY;")
-            if 'Equipamento' in df_servico.columns:
+            
+            # Verificação com nomes normalizados
+            if 'EQUIPAMENTO' in df_servico.columns:
                 vals_serv = [
                     (
-                        _normalize_key(row['Equipamento']),
-                        str(row.get('CodigoEquipamento', '')),
-                        str(row.get('Sistema', '')),
-                        pd.to_numeric(row.get('DESATIVAÇÃO'), errors='coerce'),
-                        pd.to_numeric(row.get('REINSTALAÇÂO'), errors='coerce')
+                        _normalize_key(row['EQUIPAMENTO']),
+                        str(row.get('CODIGOEQUIPAMENTO', '')),
+                        str(row.get('SISTEMA', '')),
+                        pd.to_numeric(row.get('DESATIVAÇÃO'), errors='coerce'), # O .get() é seguro
+                        pd.to_numeric(row.get('REINSTALAÇÂO'), errors='coerce') # O .get() é seguro
                     )
                     for _, row in df_servico.iterrows()
                 ]
@@ -148,7 +164,7 @@ def importar_lpu(df_fixo: pd.DataFrame, df_servico: pd.DataFrame, df_equip: pd.D
     except Exception as e:
         conn.rollback()
         return False, f"Erro ao importar LPU: {e}"
-
+        
 # --- 4. FUNÇÕES DE LEITURA (PARA A PÁGINA) ---
 
 @st.cache_data(ttl=3600) # Cache de 1 hora
@@ -191,4 +207,5 @@ def carregar_lpu_equipamento():
         return df.set_index(df['equipamento'].str.lower())['preco'].to_dict()
     except Exception as e:
         st.error(f"Erro ao carregar LPU Equipamento: {e}")
+
         return {}
