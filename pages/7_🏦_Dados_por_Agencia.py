@@ -218,7 +218,7 @@ def clean_val(val, default="N/A"):
 # --- Tela Principal da Página ---
 def tela_dados_agencia():
     
-    # CSS
+    # CSS (sem alteração)
     st.markdown("""
         <style>
             .card-status-badge { background-color: #B0BEC5; color: white; padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 0.85em; display: inline-block; width: 100%; text-align: center; }
@@ -312,15 +312,80 @@ def tela_dados_agencia():
     if st.session_state.show_export_popup:
         run_exporter_dialog(df_filtrado)
         
-    # --- 7. Painel de KPIs ---
-    total_chamados = len(df_filtrado)
-    status_fechamento_kpi = ['fechado', 'concluido', 'resolvido', 'cancelado', 'encerrado', 'equipamento entregue - concluído', 'finalizado']
-    chamados_abertos_count = len(df_filtrado[~df_filtrado['Status'].astype(str).str.lower().isin(status_fechamento_kpi)]) if not df_filtrado.empty else 0
+    # --- MUDANÇA: LÓGICA DE AGRUPAMENTO (MOVIDA PARA ANTES DOS KPIs) ---
+    # Precisamos disso para calcular os KPIs de Projeto
+    try:
+        df_filtrado['Agendamento_str'] = df_filtrado['Agendamento'].dt.strftime('%d/%m/%Y').fillna('Sem Data')
+        chave_agencia = 'Agencia_Combinada'
+        chave_projeto = ['Projeto', 'Gestor', 'Serviço', 'Agendamento_str']
+    except Exception as e:
+        st.error(f"Erro ao processar datas para agrupamento: {e}")
+        st.stop()
+        
+    # --- 7. Painel de KPIs (REFEITO) ---
     st.markdown(f"### 📊 Resumo da Visão Filtrada")
-    cols_kpi = st.columns(2) 
-    cols_kpi[0].metric("Total de Chamados", total_chamados)
-    cols_kpi[1].metric("Chamados Abertos", chamados_abertos_count)
+    
+    # Listas de status
+    status_fechamento_kpi = ['fechado', 'concluido', 'resolvido', 'cancelado', 'encerrado', 'equipamento entregue - concluído', 'finalizado']
+    status_fechamento_set = set(status_fechamento_kpi)
+
+    # 1. KPIs de Chamados
+    df_aberto = df_filtrado[~df_filtrado['Status'].astype(str).str.lower().isin(status_fechamento_kpi)]
+    df_finalizado = df_filtrado[df_filtrado['Status'].astype(str).str.lower().isin(status_fechamento_kpi)]
+    
+    chamados_abertos_count = len(df_aberto)
+    chamados_finalizados_count = len(df_finalizado)
+    
+    # 2. KPIs de Projetos
+    projetos_abertos_count = 0
+    projetos_finalizados_count = 0
+    total_projetos = 0
+    
+    if not df_filtrado.empty:
+        try:
+            df_grupos = df_filtrado.groupby(chave_projeto)
+            total_projetos = len(df_grupos)
+            
+            for _, df_grupo in df_grupos:
+                status_do_grupo = set(df_grupo['Status'].astype(str).str.lower().fillna('N/A').unique())
+                
+                # Se TODOS os status do grupo estão na lista de fechamento
+                if status_do_grupo.issubset(status_fechamento_set):
+                    projetos_finalizados_count += 1
+                else:
+                    projetos_abertos_count += 1
+                    
+        except Exception as e:
+            st.error(f"Erro ao agrupar projetos para KPIs: {e}")
+
+    # Layout dos KPIs
+    kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+    kpi1.metric("Chamados Abertos", chamados_abertos_count)
+    kpi2.metric("Projetos Abertos", projetos_abertos_count)
+    kpi3.metric("Chamados Finalizados", chamados_finalizados_count)
+    kpi4.metric("Projetos Finalizados", projetos_finalizados_count)
+
+    # 3. KPI de Quantidade por Status
+    st.markdown("#### 📊 Resumo por Status")
+    status_counts = df_filtrado['Status'].fillna('N/A').value_counts()
+    
+    # Exibir em colunas para economizar espaço
+    num_status = len(status_counts)
+    if num_status > 0:
+        num_cols = min(num_status, 5) # Máximo de 5 colunas
+        cols_status = st.columns(num_cols)
+        
+        idx = 0
+        for status_nome, contagem in status_counts.items():
+            col_atual = cols_status[idx % num_cols]
+            col_atual.metric(status_nome, contagem)
+            idx += 1
+    else:
+        st.info("Nenhum status para exibir.")
+    
     st.divider()
+    # --- FIM DA MUDANÇA (KPIs) ---
+
     
     # --- 8. NOVA VISÃO HIERÁRQUICA (Agência -> Projeto -> Chamados) ---
     st.markdown("#### 📋 Visão por Projetos e Chamados")
@@ -329,15 +394,7 @@ def tela_dados_agencia():
         st.info("Nenhum chamado encontrado para os filtros selecionados.")
         st.stop() 
 
-    try:
-        df_filtrado['Agendamento_str'] = df_filtrado['Agendamento'].dt.strftime('%d/%m/%Y').fillna('Sem Data')
-        chave_agencia = 'Agencia_Combinada'
-        chave_projeto = ['Projeto', 'Gestor', 'Serviço', 'Agendamento_str']
-    except Exception as e:
-        st.error(f"Erro ao processar datas para agrupamento: {e}")
-        st.stop()
-    
-    # --- LÓGICA DE ORDENAÇÃO (Pela data mais urgente) ---
+    # (Lógica de ordenação da Agência permanece a mesma)
     status_fechamento_sort = ['concluído', 'cancelado', 'equipamento entregue - concluído', 'finalizado', 'fechado', 'resolvido', 'encerrado']
     df_abertos_sort = df_filtrado[~df_filtrado['Status'].astype(str).str.lower().isin(status_fechamento_sort)].copy()
     df_abertos_sort['Agendamento'] = pd.to_datetime(df_abertos_sort['Agendamento'], errors='coerce')
@@ -508,47 +565,36 @@ def tela_dados_agencia():
                                                         st.success("Chamado salvo!"); df_chamados_atualizado = utils_chamados.carregar_chamados_db(); df_projeto_atualizado = df_chamados_atualizado[df_chamados_atualizado['ID'].isin(chamado_ids_internos_list)]; calcular_e_atualizar_status_projeto(df_projeto_atualizado, chamado_ids_internos_list); st.cache_data.clear(); st.rerun()
                                                     else: st.error("Falha ao salvar o chamado.")
                                 
-                                # --- INÍCIO DA MUDANÇA (LÓGICA DE DESCRIÇÃO CONDICIONAL) ---
+                                # (Descrição de Equipamentos com lógica condicional)
                                 st.markdown("---")
                                 st.markdown("##### Descrição (Total de Equipamentos do Projeto)")
 
-                                # Normalizar o nome do serviço (do Nível 2)
-                                # A variável 'nome_servico' vem do loop 'for' do Nível 2
                                 nome_servico_norm = str(nome_servico).strip().lower()
                                 servico_recolhimento = "recolhimento de eqto"
-
-                                # Regra 1 e 2: O serviço está na lista especial?
-                                # Usamos a lista 'SERVICOS_SEM_EQUIPAMENTO' definida no topo do arquivo
+                                
                                 if nome_servico_norm in SERVICOS_SEM_EQUIPAMENTO:
-                                    
                                     if nome_servico_norm == servico_recolhimento:
-                                        descricao_texto = f"Realizar o {nome_servico}" # "Realizar o Recolhimento de Eqto"
+                                        descricao_texto = f"Realizar o {nome_servico}"
                                     else:
-                                        descricao_texto = f"Realizar a {nome_servico}" # "Realizar a Vistoria"
+                                        descricao_texto = f"Realizar a {nome_servico}"
                                     
-                                    # Exibe a frase simples
                                     st.markdown(f"""
                                     <div style='background-color: #f0f2f5; border-radius: 5px; padding: 10px; font-size: 0.95rem; font-weight: 500;'>
                                         {descricao_texto}
                                     </div>
                                     """, unsafe_allow_html=True)
                                 
-                                # Regra 3: O serviço é normal (mostra lista de equipamentos)
                                 else:
-                                    # Agrupa os chamados DENTRO do projeto por Sistema
-                                    # (Esta variável 'sistemas_no_projeto' foi definida acima, antes do form individual)
-                                    
                                     descricao_list_agrupada = []
                                     for nome_sistema, df_sistema in sistemas_no_projeto:
                                         nome_sis_limpo = clean_val(nome_sistema, "Sistema não Definido")
                                         descricao_list_agrupada.append(f"**{nome_sis_limpo}**")
-                                        
                                         for _, chamado_row_desc in df_sistema.iterrows():
                                             qtd_val_numeric = pd.to_numeric(chamado_row_desc.get('Qtd.'), errors='coerce')
                                             qtd_int = int(qtd_val_numeric) if pd.notna(qtd_val_numeric) else 0
                                             equip_str = str(chamado_row_desc.get('Equipamento', 'N/A'))
                                             descricao_list_agrupada.append(f"{qtd_int:02d} - {equip_str}")
-                                        descricao_list_agrupada.append("") # Linha em branco
+                                        descricao_list_agrupada.append("") 
                                 
                                     descricao_texto = "<br>".join(descricao_list_agrupada)
                                     st.markdown(f"""
@@ -556,7 +602,6 @@ def tela_dados_agencia():
                                         {descricao_texto}
                                     </div>
                                     """, unsafe_allow_html=True)
-                                # --- FIM DA MUDANÇA ---
                         
                         st.markdown("</div>", unsafe_allow_html=True) # Fecha card Nível 2
             
