@@ -430,21 +430,16 @@ def tela_dados_agencia():
             st.markdown('<div class="project-card">', unsafe_allow_html=True)
             with st.container():
                 col1, col2, col3, col4, col5 = st.columns([1, 3, 2, 2, 1])
-                
                 with col1: 
                     st.markdown(tag_html, unsafe_allow_html=True)
-                
                 with col2: 
                     st.markdown(f"<span style='font-size: 1.15rem; font-weight: bold;'>{nome_agencia}</span>", unsafe_allow_html=True)
-                
                 with col3: 
                     st.markdown(urgency_text, unsafe_allow_html=True)
-                
-                with col4:            
-                    st.markdown(f"**Analista (Teste):**")
-                    st.write(analista_urgente_nome)
-                
-                # Veja: 'with col5' está alinhado com 'with col4'
+                with col4:
+                    analista_color = utils_chamados.get_color_for_name(analista_urgente_nome)
+                    analista_html = f"<span style='color: {analista_color}; font-weight: 500;'>{analista_urgente_nome}</span>"
+                    st.markdown(f" {analista_html}", unsafe_allow_html=True)
                 with col5: 
                     st.markdown(f"**{num_projetos} {'Projetos' if num_projetos > 1 else 'Projeto'}**", unsafe_allow_html=True)
         
@@ -615,6 +610,7 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia ()
+
 
 
 
