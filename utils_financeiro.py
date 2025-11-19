@@ -312,14 +312,19 @@ def importar_planilha_books(df_books: pd.DataFrame):
 def carregar_books_db():
     """Carrega a tabela de books para conciliação."""
     conn = get_valid_conn_fin()
-    if not conn: return pd.DataFrame(columns=['chamado', 'book_pronto'])
+    # Cria colunas padrão caso falhe, para evitar erros na página
+    cols_padrao = ['chamado', 'book_pronto', 'servico', 'sistema', 'data_envio']
+    
+    if not conn: return pd.DataFrame(columns=cols_padrao)
+    
     try:
-        df = pd.read_sql("SELECT chamado, book_pronto FROM books_faturamento", conn)
+        # --- CORREÇÃO: Trocamos colunas específicas por * (tudo) ---
+        df = pd.read_sql("SELECT * FROM books_faturamento", conn)
         return df
     except Exception as e:
         st.error(f"Erro ao carregar books: {e}")
-        return pd.DataFrame(columns=['chamado', 'book_pronto'])
-
+        return pd.DataFrame(columns=cols_padrao)
+        
 # --- 5. IMPORTAÇÃO DE LIBERAÇÃO DE FATURAMENTO (BANCO) ---
 # (Adicione ao final do utils_financeiro.py)
 
@@ -443,4 +448,5 @@ def carregar_liberacao_db():
     except Exception as e:
         st.error(f"Erro ao carregar liberação: {e}")
         return pd.DataFrame()
+
 
