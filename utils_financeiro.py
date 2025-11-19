@@ -319,3 +319,128 @@ def carregar_books_db():
     except Exception as e:
         st.error(f"Erro ao carregar books: {e}")
         return pd.DataFrame(columns=['chamado', 'book_pronto'])
+
+# --- 5. IMPORTAÇÃO DE LIBERAÇÃO DE FATURAMENTO (BANCO) ---
+# (Adicione ao final do utils_financeiro.py)
+
+def criar_tabela_liberacao():
+    """Cria a tabela para armazenar o espelho de faturamento do banco."""
+    conn = get_valid_conn_fin()
+    if not conn: return
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS faturamento_liberado (
+                    id SERIAL PRIMARY KEY,
+                    chamado TEXT UNIQUE NOT NULL,
+                    codigo_ponto TEXT,
+                    nome_ponto TEXT,
+                    uf_agencia TEXT,
+                    cidade_agencia TEXT,
+                    nome_sistema TEXT,
+                    servico TEXT,
+                    tipo_servico TEXT,
+                    cod_equipamento TEXT,
+                    nome_equipamento TEXT,
+                    qtd_liberada NUMERIC(10,2),
+                    valor_unitario NUMERIC(10,2),
+                    total NUMERIC(10,2),
+                    protocolo_atendimento TEXT,
+                    nome_projeto TEXT,
+                    nome_usuario TEXT
+                );
+            """)
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        st.error(f"Erro ao criar tabela faturamento_liberado: {e}")
+
+def importar_planilha_liberacao(df: pd.DataFrame):
+    """Importa a planilha de liberação do banco."""
+    conn = get_valid_conn_fin()
+    if not conn: return False, "Falha na conexão"
+    
+    # Normaliza cabeçalhos (Maiúsculas e sem espaços nas pontas)
+    df.columns = [str(col).strip().upper() for col in df.columns]
+    
+    # Mapeamento: Excel -> Banco de Dados
+    # O Excel do banco geralmente vem com nomes exatos, vamos mapear:
+    mapa_cols = {
+        'CHAMADO': 'chamado',
+        'CODIGO_DO_PONTO': 'codigo_ponto',
+        'NOME_PONTO': 'nome_ponto',
+        'UFAGENCIA': 'uf_agencia',
+        'CIDADEAGENCIA': 'cidade_agencia',
+        'NOME_SISTEMA': 'nome_sistema',
+        'SERVICO': 'servico',
+        'TIPO_SERVICO': 'tipo_servico',
+        'CODIGO_DO_EQUIPAMENTO': 'cod_equipamento',
+        'NOME_EQUIPAMENTO': 'nome_equipamento',
+        'QUANTIDADE_LIBERADA': 'qtd_liberada',
+        'VALORUNITARIO': 'valor_unitario',
+        'TOTAL': 'total',
+        'PROTOCOLOATENDIMENTO': 'protocolo_atendimento',
+        'NOME_PROJETO': 'nome_projeto',
+        'NOMEUSUARIO': 'nome_usuario'
+    }
+    
+    if 'CHAMADO' not in df.columns:
+        return False, "Erro: Coluna 'CHAMADO' não encontrada."
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("TRUNCATE faturamento_liberado RESTART IDENTITY;")
+            
+            vals = []
+            for _, row in df.iterrows():
+                # Função auxiliar para converter número com segurança
+                def get_num(col_name):
+                    val = row.get(col_name)
+                    return pd.to_numeric(val, errors='coerce') or 0.0
+
+                vals.append((
+                    str(row.get('CHAMADO')),
+                    str(row.get('CODIGO_DO_PONTO', '')),
+                    str(row.get('NOME_PONTO', '')),
+                    str(row.get('UFAGENCIA', '')),
+                    str(row.get('CIDADEAGENCIA', '')),
+                    str(row.get('NOME_SISTEMA', '')),
+                    str(row.get('SERVICO', '')),
+                    str(row.get('TIPO_SERVICO', '')),
+                    str(row.get('CODIGO_DO_EQUIPAMENTO', '')),
+                    str(row.get('NOME_EQUIPAMENTO', '')),
+                    get_num('QUANTIDADE_LIBERADA'),
+                    get_num('VALORUNITARIO'),
+                    get_num('TOTAL'),
+                    str(row.get('PROTOCOLOATENDIMENTO', '')),
+                    str(row.get('NOME_PROJETO', '')),
+                    str(row.get('NOMEUSUARIO', ''))
+                ))
+
+            query = """
+                INSERT INTO faturamento_liberado 
+                (chamado, codigo_ponto, nome_ponto, uf_agencia, cidade_agencia, nome_sistema, servico, tipo_servico, cod_equipamento, nome_equipamento, qtd_liberada, valor_unitario, total, protocolo_atendimento, nome_projeto, nome_usuario)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (chamado) DO NOTHING
+            """
+            cur.executemany(query, vals)
+        
+        conn.commit()
+        st.cache_data.clear()
+        return True, f"{len(vals)} registros de liberação importados."
+        
+    except Exception as e:
+        conn.rollback()
+        return False, f"Erro ao importar liberação: {e}"
+
+@st.cache_data(ttl=60)
+def carregar_liberacao_db():
+    """Carrega a tabela de liberação para conciliação."""
+    conn = get_valid_conn_fin()
+    if not conn: return pd.DataFrame()
+    try:
+        return pd.read_sql("SELECT * FROM faturamento_liberado", conn)
+    except Exception as e:
+        st.error(f"Erro ao carregar liberação: {e}")
+        return pd.DataFrame()
+
