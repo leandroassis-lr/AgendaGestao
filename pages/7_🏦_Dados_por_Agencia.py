@@ -6,7 +6,7 @@ from datetime import date, datetime
 import re 
 import html 
 import io
-import math # Necessário para cálculo de páginas
+import math 
 
 # Configuração da Página
 st.set_page_config(page_title="Dados por Agência - GESTÃO", page_icon="🏦", layout="wide")
@@ -15,7 +15,7 @@ try:
 except:
     pass 
 
-# --- INÍCIO DA NOVA LÓGICA (LISTA DE EXCEÇÃO) ---
+# --- LISTA DE EXCEÇÃO (SERVIÇOS) ---
 SERVICOS_SEM_EQUIPAMENTO = [
     "vistoria",
     "adequação de gerador (recall)",
@@ -32,7 +32,7 @@ SERVICOS_SEM_EQUIPAMENTO = [
     "vistoria conjunta"
 ]
 
-# --- ESTADO DA PAGINAÇÃO (EXCLUSIVO DESTA PÁGINA) ---
+# --- ESTADO DA PAGINAÇÃO ---
 if 'pag_agencia_atual' not in st.session_state:
     st.session_state.pag_agencia_atual = 0
 
@@ -310,7 +310,6 @@ def tela_dados_agencia():
         run_exporter_dialog(df_filtrado)
         
     # --- MUDANÇA: LÓGICA DE AGRUPAMENTO (MOVIDA PARA ANTES DOS KPIs) ---
-    # Precisamos disso para calcular os KPIs de Projeto
     try:
         df_filtrado['Agendamento_str'] = df_filtrado['Agendamento'].dt.strftime('%d/%m/%Y').fillna('Sem Data')
         chave_agencia = 'Agencia_Combinada'
@@ -392,16 +391,16 @@ def tela_dados_agencia():
     # --- PAGINAÇÃO START ---
     sorted_agency_list = sort_df['Agencia_Combinada'].tolist() # Lista completa
     
-    ITENS_POR_PAGINA = 20
+    ITENS_POR_PAGINA = 10
     total_itens = len(sorted_agency_list)
     total_paginas = math.ceil(total_itens / ITENS_POR_PAGINA)
-
-        if st.session_state.pag_agencia_atual >= total_paginas: st.session_state.pag_agencia_atual = 0
-            
+    
+    if st.session_state.pag_agencia_atual >= total_paginas: st.session_state.pag_agencia_atual = 0
+    
     inicio = st.session_state.pag_agencia_atual * ITENS_POR_PAGINA
     fim = inicio + ITENS_POR_PAGINA
     
-    # Corta a lista para mostrar só 20
+    # Corta a lista para mostrar só 10
     agencias_da_pagina = sorted_agency_list[inicio:fim]
     
     # Controles
@@ -416,12 +415,10 @@ def tela_dados_agencia():
             if st.button("Próximo ➡️", key=f"{key_prefix}_next", disabled=(st.session_state.pag_agencia_atual >= total_paginas - 1)):
                 st.session_state.pag_agencia_atual += 1; st.rerun()
     
-    nav_controls("top")
     st.markdown("<br>", unsafe_allow_html=True)
     # --- PAGINAÇÃO END ---
 
     # Filtra o DF principal para conter APENAS as agências dessa página
-    # Isso torna o loop muito mais rápido
     df_pagina = df_filtrado[df_filtrado['Agencia_Combinada'].isin(agencias_da_pagina)]
     
     agencias_agrupadas = df_pagina.groupby(chave_agencia)
@@ -447,7 +444,6 @@ def tela_dados_agencia():
                 elif earliest_date == hoje_ts: tag_html = "<span style='color: #FFA726; font-weight: bold;'>🟧 PARA HOJE</span>"; urgency_text = f"📅 {earliest_date.strftime('%d/%m/%Y')}"
                 else: urgency_text = f"📅 {earliest_date.strftime('%d/%m/%Y')}"
                 
-                # Correção da busca de Analista (Agendamento com 'a')
                 analistas_urgentes = df_agencia_aberta[
                     df_agencia_aberta['Agendamento'] == earliest_date
                 ]['Analista'].dropna().unique()
@@ -623,5 +619,3 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia ()
-
-
