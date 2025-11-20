@@ -6,14 +6,13 @@ import time
 
 st.set_page_config(page_title="Gestão Financeira", page_icon="💸", layout="wide")
 
-# --- CSS PERSONALIZADO (ESTILO PROFISSIONAL) ---
+# --- CSS PERSONALIZADO ---
 st.markdown("""
     <style>
         .fin-card-header { font-size: 1.1rem; font-weight: bold; color: #333; margin-bottom: 5px; }
         .fin-label { font-size: 0.85rem; color: #666; margin-bottom: 0; }
         .fin-value { font-size: 1rem; font-weight: 500; color: #222; }
         .status-badge-fin { padding: 5px 10px; border-radius: 15px; font-weight: bold; font-size: 0.8rem; color: white; text-align: center; width: 100%; display: block; }
-        .money-val { font-family: 'Courier New', monospace; font-weight: bold; color: #2E7D32; }
         .section-title-center { text-align: center; font-size: 1.8rem; font-weight: bold; margin-bottom: 20px; color: #333; }
         /* Ajuste para cards */
         div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column;"] > div[data-testid="stVerticalBlock"] { gap: 0.5rem; }
@@ -69,24 +68,19 @@ def calcular_valor_linha(row, lpu_f, lpu_s, lpu_e):
     return 0.0
 
 def definir_status_financeiro(row, lista_books, lista_liberados):
-    """A Lógica de Ouro: Define o status com base no cruzamento de dados."""
+    """Define o status com base no cruzamento de dados."""
     chamado_id = str(row['Nº Chamado'])
     status_tecnico = str(row['Status']).lower()
     
-    # 1. Está pago?
     if chamado_id in lista_liberados:
         return "FATURADO", "#43A047" # Verde Escuro
-    
-    # 2. Está no Book (Enviado)?
     if chamado_id in lista_books:
         return "PENDENTE FATURAMENTO", "#FB8C00" # Laranja
     
-    # 3. Está finalizado tecnicamente?
     fechado_keywords = ['finalizado', 'concluido', 'concluído', 'fechado', 'resolvido', 'encerrado']
     if any(k in status_tecnico for k in fechado_keywords):
-        return "AGUARDANDO BOOK", "#E53935" # Vermelho (Atenção: Dinheiro parado)
+        return "AGUARDANDO BOOK", "#E53935" # Vermelho
     
-    # 4. Caso contrário
     return "EM ANDAMENTO", "#1E88E5" # Azul
 
 # --- CARREGAMENTO ---
@@ -98,35 +92,44 @@ with st.spinner("Processando dados financeiros..."):
 if df_chamados_raw.empty:
     st.warning("Sem dados. Importe chamados primeiro."); st.stop()
 
-# --- PROCESSAMENTO DE DADOS ---
-# 1. Calcula Valores
+# --- PROCESSAMENTO ---
 df_chamados_raw['Valor_Calculado'] = df_chamados_raw.apply(lambda x: calcular_valor_linha(x, lpu_f, lpu_s, lpu_e), axis=1)
 
-# 2. Prepara Listas de Verificação (Sets para performance)
-# Books: Apenas os marcados como SIM
 set_books = set(df_books[df_books['book_pronto'].astype(str).str.upper().isin(['SIM', 'S'])]['chamado'].astype(str))
-# Liberados: Todos da planilha do banco
 set_liberados = set(df_lib['chamado'].astype(str)) if not df_lib.empty else set()
 
-# 3. Aplica Status Financeiro
 df_chamados_raw[['Status_Fin', 'Cor_Fin']] = df_chamados_raw.apply(
     lambda x: pd.Series(definir_status_financeiro(x, set_books, set_liberados)), axis=1
 )
 
-# --- DASHBOARD EXECUTIVO (NO TOPO) ---
-total_geral = df_chamados_raw['Valor_Calculado'].sum()
-total_faturado = df_chamados_raw[df_chamados_raw['Status_Fin'] == 'FATURADO']['Valor_Calculado'].sum()
-total_pendente = df_chamados_raw[df_chamados_raw['Status_Fin'] == 'PENDENTE FATURAMENTO']['Valor_Calculado'].sum()
-total_aguardando = df_chamados_raw[df_chamados_raw['Status_Fin'] == 'AGUARDANDO BOOK']['Valor_Calculado'].sum()
+# --- DASHBOARD EXECUTIVO (ATUALIZADO COM CONTAGEM) ---
+# 1. Filtra os dataframes por status
+df_faturado = df_chamados_raw[df_chamados_raw['Status_Fin'] == 'FATURADO']
+df_pendente = df_chamados_raw[df_chamados_raw['Status_Fin'] == 'PENDENTE FATURAMENTO']
+df_aguardando = df_chamados_raw[df_chamados_raw['Status_Fin'] == 'AGUARDANDO BOOK']
 
+# 2. Calcula Totais (R$)
+total_geral = df_chamados_raw['Valor_Calculado'].sum()
+val_faturado = df_faturado['Valor_Calculado'].sum()
+val_pendente = df_pendente['Valor_Calculado'].sum()
+val_aguardando = df_aguardando['Valor_Calculado'].sum()
+
+# 3. Calcula Quantidades (Qtd) - NOVA PARTE
+qtd_geral = len(df_chamados_raw)
+qtd_faturado = len(df_faturado)
+qtd_pendente = len(df_pendente)
+qtd_aguardando = len(df_aguardando)
+
+# 4. Exibe Metrics com Delta (Qtd)
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("Total Faturado (Pago)", f"R$ {total_faturado:,.2f}")
-c2.metric("Pendente Faturamento (Enviado)", f"R$ {total_pendente:,.2f}")
-c3.metric("Aguardando Book (A Fazer)", f"R$ {total_aguardando:,.2f}")
-c4.metric("Potencial Total", f"R$ {total_geral:,.2f}")
+c1.metric("Total Faturado (Pago)", f"R$ {val_faturado:,.2f}", f"{qtd_faturado} chamados")
+c2.metric("Pendente Faturamento (Enviado)", f"R$ {val_pendente:,.2f}", f"{qtd_pendente} chamados", delta_color="off") # Off = Cinza
+c3.metric("Aguardando Book (A Fazer)", f"R$ {val_aguardando:,.2f}", f"{qtd_aguardando} chamados", delta_color="inverse") # Inverse = Vermelho (Atenção)
+c4.metric("Potencial Total", f"R$ {total_geral:,.2f}", f"{qtd_geral} chamados", delta_color="off")
+
 st.divider()
 
-# --- IMPORTADORES (Escondidos) ---
+# --- IMPORTADORES ---
 with st.expander("⚙️ Configurações e Importações (LPU, Books, Liberação)"):
     tab1, tab2, tab3 = st.tabs(["Preços (LPU)", "Books (Enviados)", "Liberação (Banco)"])
     
@@ -169,35 +172,26 @@ with col_f2:
 with col_f3:
     busca = st.text_input("Busca Rápida", placeholder="Chamado, Protocolo, Valor...")
 
-# Aplica Filtros
 df_view = df_chamados_raw[df_chamados_raw['Status_Fin'].isin(filtro_status_fin)]
 if filtro_agencia != "Todas": df_view = df_view[df_view['Agencia_Combinada'] == filtro_agencia]
 if busca:
     t = busca.lower()
     df_view = df_view[df_view.astype(str).apply(lambda x: x.str.lower().str.contains(t)).any(axis=1)]
 
-# --- VISÃO DE CARDS (A PARTE VISUAL) ---
+# --- VISÃO DE CARDS ---
 st.markdown(f"#### 📋 Detalhamento ({len(df_view)} registros)")
 
-# Agrupar por Agência para organização visual
 agencias_view = df_view.groupby('Agencia_Combinada')
-
 for nome_agencia, df_ag in agencias_view:
-    
-    # Cabeçalho da Agência
     total_ag = df_ag['Valor_Calculado'].sum()
     st.markdown(f"**🏦 {nome_agencia}** <span style='color:green; font-size:0.9em;'>(Total: R$ {total_ag:,.2f})</span>", unsafe_allow_html=True)
     
     for _, row in df_ag.iterrows():
-        # Preparar dados para o card
         chamado = row['Nº Chamado']
         dt_abert = pd.to_datetime(row['Abertura']).strftime('%d/%m/%Y') if pd.notna(row['Abertura']) else "-"
         dt_conc = pd.to_datetime(row['Fechamento']).strftime('%d/%m/%Y') if pd.notna(row['Fechamento']) else "-"
-        status_fin = row['Status_Fin']
-        cor_fin = row['Cor_Fin']
-        valor = row['Valor_Calculado']
+        status_fin = row['Status_Fin']; cor_fin = row['Cor_Fin']; valor = row['Valor_Calculado']
         
-        # Desenhar o Card
         st.markdown(f"""
         <div style="border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin-bottom: 10px; background-color: white;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -211,7 +205,6 @@ for nome_agencia, df_ag in agencias_view:
         </div>
         """, unsafe_allow_html=True)
         
-        # Detalhes (Expander dentro do loop visualmente limpo)
         with st.expander(f"➕ Detalhes e Valores: R$ {valor:,.2f}"):
             c_det1, c_det2 = st.columns([3, 1])
             with c_det1:
@@ -224,4 +217,4 @@ for nome_agencia, df_ag in agencias_view:
                 st.markdown(f"<h3 style='color: green;'>R$ {valor:,.2f}</h3>", unsafe_allow_html=True)
                 st.markdown(f"**Protocolo:** {row.get('Nº Protocolo', '-')}")
 
-    st.markdown("<br>", unsafe_allow_html=True) # Espaço entre agências
+    st.markdown("<br>", unsafe_allow_html=True)
