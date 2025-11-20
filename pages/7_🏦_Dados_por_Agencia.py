@@ -379,6 +379,20 @@ def tela_dados_agencia():
         st.info("Nenhum status para exibir.")
     
     st.divider()
+
+    # Controles de Navegação
+def nav_controls(key_prefix):
+    c1, c2, c3, c4, c5 = st.columns([1, 1, 3, 1, 1])
+    with c2:
+        if st.button("⬅️ Anterior", key=f"{key_prefix}_prev", disabled=(st.session_state.pag_fin_atual == 0)):
+            st.session_state.pag_fin_atual -= 1
+            st.rerun()
+    with c3:
+        st.markdown(f"<div style='text-align: center; padding-top: 5px;'>Página <strong>{st.session_state.pag_fin_atual + 1}</strong> de <strong>{max(1, total_paginas)}</strong></div>", unsafe_allow_html=True)
+    with c4:
+        if st.button("Próximo ➡️", key=f"{key_prefix}_next", disabled=(st.session_state.pag_fin_atual >= total_paginas - 1)):
+            st.session_state.pag_fin_atual += 1
+            st.rerun()
        
     # --- 8. NOVA VISÃO HIERÁRQUICA (Agência -> Projeto -> Chamados) ---
     st.markdown("#### 📋 Projetos e Chamados")
@@ -610,6 +624,7 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia ()
+
 
 
 
