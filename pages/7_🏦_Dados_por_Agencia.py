@@ -392,14 +392,16 @@ def tela_dados_agencia():
     # --- PAGINAÇÃO START ---
     sorted_agency_list = sort_df['Agencia_Combinada'].tolist() # Lista completa
     
-    ITENS_POR_PAGINA = 30
+    ITENS_POR_PAGINA = 20
     total_itens = len(sorted_agency_list)
     total_paginas = math.ceil(total_itens / ITENS_POR_PAGINA)
-     
+
+        if st.session_state.pag_agencia_atual >= total_paginas: st.session_state.pag_agencia_atual = 0
+            
     inicio = st.session_state.pag_agencia_atual * ITENS_POR_PAGINA
     fim = inicio + ITENS_POR_PAGINA
     
-    # Corta a lista para mostrar só 10
+    # Corta a lista para mostrar só 20
     agencias_da_pagina = sorted_agency_list[inicio:fim]
     
     # Controles
@@ -621,4 +623,5 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia ()
+
 
