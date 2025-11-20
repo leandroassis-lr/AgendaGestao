@@ -3,6 +3,7 @@ import pandas as pd
 import utils_chamados
 import utils_financeiro
 import time
+import math
 
 st.set_page_config(page_title="Gestão Financeira", page_icon="💸", layout="wide")
 
@@ -28,6 +29,10 @@ if "logado" not in st.session_state or not st.session_state.logado:
 utils_financeiro.criar_tabelas_lpu()
 utils_financeiro.criar_tabela_books()
 utils_financeiro.criar_tabela_liberacao()
+
+# --- ESTADO DA PAGINAÇÃO ---
+if 'pag_fin_atual' not in st.session_state:
+    st.session_state.pag_fin_atual = 0
 
 # --- FUNÇÕES AUXILIARES ---
 def formatar_agencia_excel(id_agencia, nome_agencia):
@@ -64,38 +69,32 @@ def calcular_valor_linha(row, lpu_f, lpu_s, lpu_e):
     # 1. Tenta Valor Fixo (Prioridade)
     if serv in lpu_f: return lpu_f[serv]
     
-    # 2. Tenta Serviço de Equipamento (Desinstalação ou Reinstalação)
+    # 2. Tenta Serviço de Equipamento
     if equip in lpu_s:
-        # Regra para Desinstalação
         keywords_desinst = ['desativacao', 'desinstalação', 'desinstalacao']
         if any(x in serv for x in keywords_desinst): 
             return lpu_s[equip].get('desativacao', 0.0) * qtd
         
-        # Regra para Reinstalação (Inclui Instalação Nova e Remanejamento)
         keywords_reinst = ['reinstalacao', 'reinstalação', 'instalação nova', 'instalacao nova', 'remanejamento']
         if any(x in serv for x in keywords_reinst): 
             return lpu_s[equip].get('reinstalacao', 0.0) * qtd
             
-    # 3. Tenta Preço Unitário Equipamento (Último recurso)
+    # 3. Tenta Preço Unitário Equipamento
     if equip in lpu_e: return lpu_e.get(equip, 0.0) * qtd
     
     return 0.0
 
 def definir_status_financeiro(row, lista_books, lista_liberados):
-    """Define o status com base no cruzamento de dados."""
     chamado_id = str(row['Nº Chamado'])
     status_tecnico = str(row['Status']).lower()
     
-    if chamado_id in lista_liberados:
-        return "FATURADO", "#43A047" # Verde Escuro
-    if chamado_id in lista_books:
-        return "PENDENTE FATURAMENTO", "#FB8C00" # Laranja
+    if chamado_id in lista_liberados: return "FATURADO", "#43A047"
+    if chamado_id in lista_books: return "PENDENTE FATURAMENTO", "#FB8C00"
     
     fechado_keywords = ['finalizado', 'concluido', 'concluído', 'fechado', 'resolvido', 'encerrado']
-    if any(k in status_tecnico for k in fechado_keywords):
-        return "AGUARDANDO BOOK", "#E53935" # Vermelho
+    if any(k in status_tecnico for k in fechado_keywords): return "AGUARDANDO BOOK", "#E53935"
     
-    return "EM ANDAMENTO", "#1E88E5" # Azul
+    return "EM ANDAMENTO", "#1E88E5"
 
 # --- CARREGAMENTO ---
 st.markdown("<div class='section-title-center'>PAINEL FINANCEIRO E FATURAMENTO</div>", unsafe_allow_html=True)
@@ -176,22 +175,58 @@ with st.expander("⚙️ Configurações e Importações (LPU, Books, Liberaçã
 # --- FILTROS ---
 col_f1, col_f2, col_f3 = st.columns([2, 2, 4])
 with col_f1:
-    filtro_status_fin = st.multiselect("Filtrar Status Financeiro", options=df_chamados_raw['Status_Fin'].unique(), default=df_chamados_raw['Status_Fin'].unique())
+    filtro_status_fin = st.multiselect("Filtrar Status Financeiro", options=df_chamados_raw['Status_Fin'].unique(), default=df_chamados_raw['Status_Fin'].unique(), on_change=lambda: st.session_state.update(pag_fin_atual=0))
 with col_f2:
-    filtro_agencia = st.selectbox("Filtrar Agência", options=["Todas"] + sorted(df_chamados_raw['Agencia_Combinada'].unique().tolist()))
+    filtro_agencia = st.selectbox("Filtrar Agência", options=["Todas"] + sorted(df_chamados_raw['Agencia_Combinada'].unique().tolist()), on_change=lambda: st.session_state.update(pag_fin_atual=0))
 with col_f3:
     busca = st.text_input("Busca Rápida", placeholder="Chamado, Protocolo, Valor...")
+    if busca: st.session_state.pag_fin_atual = 0 # Resetar pag ao buscar
 
+# Aplica Filtros
 df_view = df_chamados_raw[df_chamados_raw['Status_Fin'].isin(filtro_status_fin)]
 if filtro_agencia != "Todas": df_view = df_view[df_view['Agencia_Combinada'] == filtro_agencia]
 if busca:
     t = busca.lower()
     df_view = df_view[df_view.astype(str).apply(lambda x: x.str.lower().str.contains(t)).any(axis=1)]
 
-# --- VISÃO DE CARDS ---
-st.markdown(f"#### 📋 Detalhamento ({len(df_view)} registros)")
+# --- PAGINAÇÃO (LÓGICA E CONTROLES) ---
+ITENS_POR_PAGINA = 10
+lista_agencias_unicas = sorted(df_view['Agencia_Combinada'].unique())
+total_itens = len(lista_agencias_unicas)
+total_paginas = math.ceil(total_itens / ITENS_POR_PAGINA)
 
-agencias_view = df_view.groupby('Agencia_Combinada')
+# Garante que a página atual é válida
+if st.session_state.pag_fin_atual >= total_paginas:
+    st.session_state.pag_fin_atual = 0
+
+inicio = st.session_state.pag_fin_atual * ITENS_POR_PAGINA
+fim = inicio + ITENS_POR_PAGINA
+agencias_da_pagina = lista_agencias_unicas[inicio:fim]
+
+# Controles de Navegação
+def nav_controls(key_prefix):
+    c1, c2, c3, c4, c5 = st.columns([1, 1, 3, 1, 1])
+    with c2:
+        if st.button("⬅️ Anterior", key=f"{key_prefix}_prev", disabled=(st.session_state.pag_fin_atual == 0)):
+            st.session_state.pag_fin_atual -= 1
+            st.rerun()
+    with c3:
+        st.markdown(f"<div style='text-align: center; padding-top: 5px;'>Página <strong>{st.session_state.pag_fin_atual + 1}</strong> de <strong>{max(1, total_paginas)}</strong></div>", unsafe_allow_html=True)
+    with c4:
+        if st.button("Próximo ➡️", key=f"{key_prefix}_next", disabled=(st.session_state.pag_fin_atual >= total_paginas - 1)):
+            st.session_state.pag_fin_atual += 1
+            st.rerun()
+
+# --- VISÃO DE CARDS ---
+st.markdown(f"#### 📋 Detalhamento ({len(df_view)} chamados em {total_itens} agências)")
+
+nav_controls("top") # Controles no topo
+st.divider()
+
+# Filtrar o DF principal para mostrar APENAS as agências da página atual
+df_pagina = df_view[df_view['Agencia_Combinada'].isin(agencias_da_pagina)]
+agencias_view = df_pagina.groupby('Agencia_Combinada')
+
 for nome_agencia, df_ag in agencias_view:
     total_ag = df_ag['Valor_Calculado'].sum()
     st.markdown(f"**🏦 {nome_agencia}** <span style='color:green; font-size:0.9em;'>(Total: R$ {total_ag:,.2f})</span>", unsafe_allow_html=True)
@@ -228,3 +263,7 @@ for nome_agencia, df_ag in agencias_view:
                 st.markdown(f"**Protocolo:** {row.get('Nº Protocolo', '-')}")
 
     st.markdown("<br>", unsafe_allow_html=True)
+
+if total_paginas > 1:
+    st.divider()
+    nav_controls("bottom") # Controles no fundo também
