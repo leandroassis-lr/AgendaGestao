@@ -6,6 +6,7 @@ from datetime import date, datetime
 import re 
 import html 
 import io
+import math # Necessário para cálculo de páginas
 
 # Configuração da Página
 st.set_page_config(page_title="Dados por Agência - GESTÃO", page_icon="🏦", layout="wide")
@@ -15,8 +16,6 @@ except:
     pass 
 
 # --- INÍCIO DA NOVA LÓGICA (LISTA DE EXCEÇÃO) ---
-# Lista de serviços que NÃO mostram equipamentos.
-# Normalizados para minúsculas para verificação segura.
 SERVICOS_SEM_EQUIPAMENTO = [
     "vistoria",
     "adequação de gerador (recall)",
@@ -32,6 +31,10 @@ SERVICOS_SEM_EQUIPAMENTO = [
     "visita técnica",
     "vistoria conjunta"
 ]
+
+# --- ESTADO DA PAGINAÇÃO (EXCLUSIVO DESTA PÁGINA) ---
+if 'pag_agencia_atual' not in st.session_state:
+    st.session_state.pag_agencia_atual = 0
 
 # --- Controle Principal de Login ---
 if "logado" not in st.session_state or not st.session_state.logado:
@@ -175,7 +178,6 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
     tecnico_presente = check_col_present(df_projeto, 'Técnico')
     novo_status = "Não Iniciado"; novo_sub_status = ""
 
-    # (Lógica de status...)
     if has_S and not has_E:
         if protocolo_presente: novo_status = "Concluído"; novo_sub_status = "Enviar Book"
         elif tecnico_presente: novo_status = "Em Andamento"; novo_sub_status = "Enviar Status Cliente"
@@ -213,7 +215,7 @@ def clean_val(val, default="N/A"):
 # --- Tela Principal da Página ---
 def tela_dados_agencia():
     
-    # CSS (sem alteração)
+    # CSS
     st.markdown("""
         <style>
             .card-status-badge { background-color: #B0BEC5; color: white; padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 0.85em; display: inline-block; width: 100%; text-align: center; }
@@ -274,13 +276,13 @@ def tela_dados_agencia():
         busca_total = st.text_input("🔎 Busca Rápida (Digite ID, Agência, Projeto...)", placeholder="Ex: AG 0123 ou Instalação...")
         st.write("") 
         f1, f2, f3, f4 = st.columns(4)
-        with f1: filtro_agencia = st.selectbox("Agência", options=agencia_list)
-        with f2: filtro_analista = st.selectbox("Analista", options=analista_list)
-        with f3: filtro_projeto = st.selectbox("Projeto", options=projeto_list_filtro)
-        with f4: filtro_gestor = st.selectbox("Gestor", options=gestor_list_filtro)
+        with f1: filtro_agencia = st.selectbox("Agência", options=agencia_list, on_change=lambda: st.session_state.update(pag_agencia_atual=0))
+        with f2: filtro_analista = st.selectbox("Analista", options=analista_list, on_change=lambda: st.session_state.update(pag_agencia_atual=0))
+        with f3: filtro_projeto = st.selectbox("Projeto", options=projeto_list_filtro, on_change=lambda: st.session_state.update(pag_agencia_atual=0))
+        with f4: filtro_gestor = st.selectbox("Gestor", options=gestor_list_filtro, on_change=lambda: st.session_state.update(pag_agencia_atual=0))
         f5, f6, f7, f8 = st.columns(4)
-        with f5: filtro_status = st.selectbox("Status", options=status_list)
-        with f6: filtro_sistema = st.selectbox("Sistema", options=sistema_list)
+        with f5: filtro_status = st.selectbox("Status", options=status_list, on_change=lambda: st.session_state.update(pag_agencia_atual=0))
+        with f6: filtro_sistema = st.selectbox("Sistema", options=sistema_list, on_change=lambda: st.session_state.update(pag_agencia_atual=0))
         with f7: filtro_data_inicio = st.date_input("De (Data)", value=None, format="DD/MM/YYYY")
         with f8: filtro_data_fim = st.date_input("Até (Data)", value=None, format="DD/MM/YYYY")
     st.divider()
@@ -334,22 +336,16 @@ def tela_dados_agencia():
     # 2. KPIs de Projetos
     projetos_abertos_count = 0
     projetos_finalizados_count = 0
-    total_projetos = 0
     
     if not df_filtrado.empty:
         try:
             df_grupos = df_filtrado.groupby(chave_projeto)
-            total_projetos = len(df_grupos)
-            
             for _, df_grupo in df_grupos:
                 status_do_grupo = set(df_grupo['Status'].astype(str).str.lower().fillna('N/A').unique())
-                
-                # Se TODOS os status do grupo estão na lista de fechamento
                 if status_do_grupo.issubset(status_fechamento_set):
                     projetos_finalizados_count += 1
                 else:
                     projetos_abertos_count += 1
-                    
         except Exception as e:
             st.error(f"Erro ao agrupar projetos para KPIs: {e}")
 
@@ -363,13 +359,10 @@ def tela_dados_agencia():
     # 3. KPI de Quantidade por Status
     st.markdown("#### 📊 Status")
     status_counts = df_filtrado['Status'].fillna('N/A').value_counts()
-    
-    # Exibir em colunas para economizar espaço
     num_status = len(status_counts)
     if num_status > 0:
-        num_cols = min(num_status, 5) # Máximo de 5 colunas
+        num_cols = min(num_status, 5)
         cols_status = st.columns(num_cols)
-        
         idx = 0
         for status_nome, contagem in status_counts.items():
             col_atual = cols_status[idx % num_cols]
@@ -377,31 +370,16 @@ def tela_dados_agencia():
             idx += 1
     else:
         st.info("Nenhum status para exibir.")
-    
     st.divider()
 
-    # Controles de Navegação
-def nav_controls(key_prefix):
-    c1, c2, c3, c4, c5 = st.columns([1, 1, 3, 1, 1])
-    with c2:
-        if st.button("⬅️ Anterior", key=f"{key_prefix}_prev", disabled=(st.session_state.pag_fin_atual == 0)):
-            st.session_state.pag_fin_atual -= 1
-            st.rerun()
-    with c3:
-        st.markdown(f"<div style='text-align: center; padding-top: 5px;'>Página <strong>{st.session_state.pag_fin_atual + 1}</strong> de <strong>{max(1, total_paginas)}</strong></div>", unsafe_allow_html=True)
-    with c4:
-        if st.button("Próximo ➡️", key=f"{key_prefix}_next", disabled=(st.session_state.pag_fin_atual >= total_paginas - 1)):
-            st.session_state.pag_fin_atual += 1
-            st.rerun()
-       
-    # --- 8. NOVA VISÃO HIERÁRQUICA (Agência -> Projeto -> Chamados) ---
+    # --- 8. NOVA VISÃO HIERÁRQUICA COM PAGINAÇÃO ---
     st.markdown("#### 📋 Projetos e Chamados")
     
     if df_filtrado.empty:
         st.info("Nenhum chamado encontrado para os filtros selecionados.")
         st.stop() 
 
-    # (Lógica de ordenação da Agência permanece a mesma)
+    # 1. Prepara a lista ordenada de Agências (Total)
     status_fechamento_sort = ['concluído', 'cancelado', 'equipamento entregue - concluído', 'finalizado', 'fechado', 'resolvido', 'encerrado']
     df_abertos_sort = df_filtrado[~df_filtrado['Status'].astype(str).str.lower().isin(status_fechamento_sort)].copy()
     df_abertos_sort['Agendamento'] = pd.to_datetime(df_abertos_sort['Agendamento'], errors='coerce')
@@ -410,238 +388,238 @@ def nav_controls(key_prefix):
     sort_df = pd.DataFrame(index=all_agencies_in_view); sort_df['MinDate'] = sort_df.index.map(min_dates_open)
     sort_df = sort_df.reset_index().rename(columns={'index': 'Agencia_Combinada'})
     sort_df = sort_df.sort_values(by='MinDate', ascending=True, na_position='last')
-    sorted_agency_list = sort_df['Agencia_Combinada'].tolist()
-    agencias_agrupadas = df_filtrado.groupby(chave_agencia)
+    
+    # --- PAGINAÇÃO START ---
+    sorted_agency_list = sort_df['Agencia_Combinada'].tolist() # Lista completa
+    
+    ITENS_POR_PAGINA = 10
+    total_itens = len(sorted_agency_list)
+    total_paginas = math.ceil(total_itens / ITENS_POR_PAGINA)
+    
+    if st.session_state.pag_agencia_atual >= total_paginas: st.session_state.pag_agencia_atual = 0
+    
+    inicio = st.session_state.pag_agencia_atual * ITENS_POR_PAGINA
+    fim = inicio + ITENS_POR_PAGINA
+    
+    # Corta a lista para mostrar só 10
+    agencias_da_pagina = sorted_agency_list[inicio:fim]
+    
+    # Controles
+    def nav_controls(key_prefix):
+        c1, c2, c3, c4, c5 = st.columns([1, 1, 3, 1, 1])
+        with c2:
+            if st.button("⬅️ Anterior", key=f"{key_prefix}_prev", disabled=(st.session_state.pag_agencia_atual == 0)):
+                st.session_state.pag_agencia_atual -= 1; st.rerun()
+        with c3:
+            st.markdown(f"<div style='text-align: center; padding-top: 5px;'>Página <strong>{st.session_state.pag_agencia_atual + 1}</strong> de <strong>{max(1, total_paginas)}</strong> (Exibindo {len(agencias_da_pagina)} de {total_itens})</div>", unsafe_allow_html=True)
+        with c4:
+            if st.button("Próximo ➡️", key=f"{key_prefix}_next", disabled=(st.session_state.pag_agencia_atual >= total_paginas - 1)):
+                st.session_state.pag_agencia_atual += 1; st.rerun()
+    
+    nav_controls("top")
+    st.markdown("<br>", unsafe_allow_html=True)
+    # --- PAGINAÇÃO END ---
+
+    # Filtra o DF principal para conter APENAS as agências dessa página
+    # Isso torna o loop muito mais rápido
+    df_pagina = df_filtrado[df_filtrado['Agencia_Combinada'].isin(agencias_da_pagina)]
+    
+    agencias_agrupadas = df_pagina.groupby(chave_agencia)
     agencia_dfs_dict = dict(list(agencias_agrupadas))
     
-    # --- NÍVEL 1: Loop pelas Agências ---
-    if not agencias_agrupadas.groups:
-        st.info("Nenhum projeto agrupado encontrado para os filtros selecionados.")
-    else:
-        for nome_agencia in sorted_agency_list:
-            df_agencia = agencia_dfs_dict.get(nome_agencia)
-            if df_agencia is None: continue
-            
-            # --- Card Nível 1 (Agência) ---
-            status_fechamento_proj = ['concluído', 'cancelado', 'equipamento entregue - concluído', 'finalizado']
-            df_agencia_aberta = df_agencia[~df_agencia['Status'].astype(str).str.lower().isin(status_fechamento_proj)]
-            hoje_ts = pd.Timestamp.now().normalize()
-            datas_abertas = pd.to_datetime(df_agencia_aberta['Agendamento'], errors='coerce')
-            tag_html = "🟦"; urgency_text = "Sem Agendamentos"; analista_urgente_nome = "N/D"
-            if not datas_abertas.empty:
-                earliest_date = datas_abertas.min()
-                if pd.isna(earliest_date): urgency_text = "Sem Data Válida"
-                else:
-                    if earliest_date < hoje_ts: tag_html = "<span style='color: var(--red-alert); font-weight: bold;'>🟥 ATRASADO</span>"; urgency_text = f"📅 {earliest_date.strftime('%d/%m/%Y')}"
-                    elif earliest_date == hoje_ts: tag_html = "<span style='color: #FFA726; font-weight: bold;'>🟧 PARA HOJE</span>"; urgency_text = f"📅 {earliest_date.strftime('%d/%m/%Y')}"
-                    else: urgency_text = f"📅 {earliest_date.strftime('%d/%m/%Y')}"
-                    analistas_urgentes = df_agencia_aberta[df_agencia_aberta['Agendamento'] == earliest_date]['Analista'].dropna().unique()
-                    if len(analistas_urgentes) == 0: analista_urgente_nome = "Sem Analista"
-                    elif len(analistas_urgentes) == 1: analista_urgente_nome = analistas_urgentes[0]
-                    else: analista_urgente_nome = "Múltiplos"
-            num_projetos = len(df_agencia.groupby(chave_projeto))
-            
-            st.markdown('<div class="project-card">', unsafe_allow_html=True)
-            with st.container():
-                col1, col2, col3, col4, col5 = st.columns([1, 3, 2, 2, 1])
-                with col1: 
-                    st.markdown(tag_html, unsafe_allow_html=True)
-                with col2: 
-                    st.markdown(f"<span style='font-size: 1.15rem; font-weight: bold;'>{nome_agencia}</span>", unsafe_allow_html=True)
-                with col3: 
-                    st.markdown(urgency_text, unsafe_allow_html=True)
-                with col4:
-                    analista_color = utils_chamados.get_color_for_name(analista_urgente_nome)
-                    analista_html = f"<span style='color: {analista_color}; font-weight: 500;'>{analista_urgente_nome}</span>"
-                    st.markdown(f" {analista_html}", unsafe_allow_html=True)
-                with col5: 
-                    st.markdown(f"**{num_projetos} {'Projetos' if num_projetos > 1 else 'Projeto'}**", unsafe_allow_html=True)
+    # --- NÍVEL 1: Loop pelas Agências DA PÁGINA ---
+    for nome_agencia in agencias_da_pagina:
+        df_agencia = agencia_dfs_dict.get(nome_agencia)
+        if df_agencia is None: continue
         
-                # --- Nível 2 (Serviços/Projetos) ---
-                with st.expander("Ver Projetos"):
-                    try:
-                        projetos_agrupados = df_agencia.groupby(chave_projeto) 
-                        if not projetos_agrupados.groups:
-                            st.info(f"Nenhum chamado encontrado para a agência {nome_agencia}.")
-                            continue 
-                    except KeyError:
-                        st.error("Falha ao agrupar por Projeto/Gestor/Serviço/Agendamento.")
-                        continue
+        # --- Card Nível 1 (Agência) ---
+        status_fechamento_proj = ['concluído', 'cancelado', 'equipamento entregue - concluído', 'finalizado']
+        df_agencia_aberta = df_agencia[~df_agencia['Status'].astype(str).str.lower().isin(status_fechamento_proj)]
+        hoje_ts = pd.Timestamp.now().normalize()
+        datas_abertas = pd.to_datetime(df_agencia_aberta['Agendamento'], errors='coerce')
+        tag_html = "🟦"; urgency_text = "Sem Agendamentos"; analista_urgente_nome = "N/D"
+        
+        if not datas_abertas.empty:
+            earliest_date = datas_abertas.min()
+            if pd.isna(earliest_date): urgency_text = "Sem Data Válida"
+            else:
+                if earliest_date < hoje_ts: tag_html = "<span style='color: var(--red-alert); font-weight: bold;'>🟥 ATRASADO</span>"; urgency_text = f"Urgente: {earliest_date.strftime('%d/%m/%Y')}"
+                elif earliest_date == hoje_ts: tag_html = "<span style='color: #FFA726; font-weight: bold;'>🟧 PARA HOJE</span>"; urgency_text = f"📅 {earliest_date.strftime('%d/%m/%Y')}"
+                else: urgency_text = f"📅 {earliest_date.strftime('%d/%m/%Y')}"
+                
+                # Correção da busca de Analista (Agendamento com 'a')
+                analistas_urgentes = df_agencia_aberta[
+                    df_agencia_aberta['Agendamento'] == earliest_date
+                ]['Analista'].dropna().unique()
+                
+                if len(analistas_urgentes) == 0: analista_urgente_nome = "Sem Analista"
+                elif len(analistas_urgentes) == 1: analista_urgente_nome = analistas_urgentes[0]
+                else: analista_urgente_nome = "Múltiplos"
 
-                    # (Loop Nível 2)
-                    for (nome_projeto, nome_gestor, nome_servico, data_agend), df_projeto in projetos_agrupados:
-                        
-                        first_row = df_projeto.iloc[0]
-                        chamado_ids_internos_list = df_projeto['ID'].tolist()
-                        
-                        st.markdown('<div class="project-card" style="margin-top: 10px;">', unsafe_allow_html=True)
-                        with st.container(border=True): 
-                            
-                            status_proj = clean_val(first_row.get('Status'), "Não Iniciado")
-                            sub_status_proj = clean_val(first_row.get('Sub-Status'), "")
-                            status_color = utils_chamados.get_status_color(status_proj)
-                            gestor_color = utils_chamados.get_color_for_name(nome_gestor)
-                            dt_ag = data_agend if data_agend != "Sem Data" else "Sem Agendamento"
-                            
-                            col1, col2, col3 = st.columns([3, 2, 2])
-                            with col1: st.markdown(f"##### {clean_val(nome_projeto, 'Sem Projeto').upper()}", unsafe_allow_html=True)
-                            with col2: st.markdown(f"**📅**\n{dt_ag}", unsafe_allow_html=True)
-                            with col3:
-                                status_html = html.escape(status_proj.upper())
-                                st.markdown(f"""<div class="card-status-badge" style="background-color: {status_color};">{status_html}</div>""", unsafe_allow_html=True)
-                            
-                            col4, col5, col6 = st.columns([3, 2, 2])
-                            with col4: st.markdown(f"###### {clean_val(nome_servico, 'N/D')}", unsafe_allow_html=True)
-                            with col5:
-                                gestor_html = f"<span style='color: {gestor_color}; font-weight: 500;'>{clean_val(nome_gestor, 'N/D')}</span>"
-                                st.markdown(f" {gestor_html}", unsafe_allow_html=True)
-                            with col6:
-                                if sub_status_proj:
-                                    st.markdown(f"#####")
-                                    st.markdown(f"""<div class="card-action-text">{sub_status_proj}</div>""", unsafe_allow_html=True)
-                                else:
-                                    st.markdown(f"#####", unsafe_allow_html=True)
-                            
-                            # --- NÍVEL 3 (Expander com formulários) ---
-                            expander_title = f"Ver/Editar {len(chamado_ids_internos_list)} Chamado(s) (ID: {first_row['ID']})"
-                            with st.expander(expander_title):
-                                
-                                # (Formulário de Lote Nível 2)
-                                form_key_lote = f"form_lote_edit_{first_row['ID']}"
-                                with st.form(key=form_key_lote):
-                                    st.markdown(f"****")
-                                    # (Campos do form... omitidos por brevidade)
-                                    c1, c2 = st.columns(2); novo_prazo = c1.text_input("Prazo", value=first_row.get('Prazo', ''), key=f"{form_key_lote}_prazo")
-                                    status_manual_atual = status_proj if status_proj in status_manual_options else "(Status Automático)"
-                                    status_idx = status_manual_options.index(status_manual_atual); novo_status_manual = c2.selectbox("Status", options=status_manual_options, index=status_idx, key=f"{form_key_lote}_status")
-                                    c3, c4, c5 = st.columns(3); abertura_val = _to_date_safe(first_row.get('Abertura')) or date.today(); nova_abertura = c3.date_input("Data Abertura", value=abertura_val, format="DD/MM/YYYY", key=f"{form_key_lote}_abertura")
-                                    agend_val = _to_date_safe(first_row.get('Agendamento')); novo_agendamento = c4.date_input("Data Agendamento", value=agend_val, format="DD/MM/YYYY", key=f"{form_key_lote}_agend")
-                                    final_val = _to_date_safe(first_row.get('Fechamento')); nova_finalizacao = c5.date_input("Data Finalização", value=final_val, format="DD/MM/YYYY", key=f"{form_key_lote}_final")
-                                    st.markdown("<h6>Detalhes do Projeto</h6>", unsafe_allow_html=True); c6, c7, c8 = st.columns(3)
-                                    proj_val = first_row.get('Projeto', ''); proj_idx = projeto_list_form.index(proj_val) if proj_val in projeto_list_form else 0; novo_projeto = c6.selectbox("Projeto", options=projeto_list_form, index=proj_idx, key=f"{form_key_lote}_proj")
-                                    analista_val = first_row.get('Analista', ''); novo_analista = c7.text_input("Analista", value=analista_val, key=f"{form_key_lote}_analista")
-                                    gestor_val = first_row.get('Gestor', ''); gestor_idx = gestor_list_form.index(gestor_val) if gestor_val in gestor_list_form else 0; novo_gestor = c8.selectbox("Gestor", options=gestor_list_form, index=gestor_idx, key=f"{form_key_lote}_gestor")
-                                    c9, c10, c11 = st.columns(3); novo_sistema = c9.text_input("Sistema", value=first_row.get('Sistema', ''), key=f"{form_key_lote}_sistema")
-                                    novo_servico = c10.text_input("Serviço", value=first_row.get('Serviço', ''), key=f"{form_key_lote}_servico"); novo_tecnico = c11.text_input("Técnico", value=first_row.get('Técnico', ''), key=f"{form_key_lote}_tec")
-                                    nova_descricao = st.text_area("Descrição", value=first_row.get('Descrição', ''), key=f"{form_key_lote}_desc"); nova_obs_pend = st.text_area("Observações e Pendencias", value=first_row.get('Observações e Pendencias', ''), key=f"{form_key_lote}_obs")
-                                    btn_salvar_lote = st.form_submit_button("💾 Salvar Alterações do Projeto", use_container_width=True)
-
-                                if btn_salvar_lote:
-                                    # (Lógica de salvamento em lote)
-                                    updates = {"Prazo": novo_prazo, "Data Abertura": nova_abertura,"Data Agendamento": novo_agendamento, "Data Finalização": nova_finalizacao,"Projeto": novo_projeto, "Analista": novo_analista, "Gestor": novo_gestor,"Sistema": novo_sistema, "Serviço": novo_servico, "Técnico": novo_tecnico,"Descrição": nova_descricao, "Observações e Pendencias": nova_obs_pend}
-                                    status_foi_mudado = False
-                                    if novo_status_manual == "Finalizado":
-                                        if nova_finalizacao is None: st.error("Erro: Para 'Finalizado', a Data de Finalização é obrigatória."); st.stop()
-                                        else: updates['Status'] = 'Finalizado'; updates['Sub-Status'] = None; status_foi_mudado = True
-                                    elif novo_status_manual != "(Status Automático)": updates['Status'] = novo_status_manual; updates['Sub-Status'] = None; status_foi_mudado = True
-                                    elif novo_status_manual == "(Status Automático)": status_foi_mudado = True
-                                    with st.spinner(f"Atualizando {len(chamado_ids_internos_list)} chamados..."):
-                                        sucesso_count = 0
-                                        for chamado_id in chamado_ids_internos_list:
-                                            if utils_chamados.atualizar_chamado_db(chamado_id, updates): sucesso_count += 1
-                                        st.success(f"{sucesso_count} de {len(chamado_ids_internos_list)} chamados foram atualizados!")
-                                        if status_foi_mudado:
-                                            df_chamados_atualizado = utils_chamados.carregar_chamados_db()
-                                            df_projeto_atualizado = df_chamados_atualizado[df_chamados_atualizado['ID'].isin(chamado_ids_internos_list)]
-                                            calcular_e_atualizar_status_projeto(df_projeto_atualizado, chamado_ids_internos_list)
-                                        st.cache_data.clear(); st.rerun()
-                                
-                                # Edição Individual (Agrupada por Sistema)
-                                st.markdown("---")
-                                st.markdown("##### 🔎 Detalhes por Chamado")
-                                
-                                sistemas_no_projeto = df_projeto.groupby('Sistema')
-                                for nome_sistema, df_sistema in sistemas_no_projeto:
-                                    st.markdown(f"###### {clean_val(nome_sistema, 'N/D')}")
-                                    
-                                    for _, chamado_row in df_sistema.iterrows():
-                                        with st.expander(f"▶️ {chamado_row['Nº Chamado']} "):
-                                            
-                                            form_key_ind = f"form_ind_edit_{chamado_row['ID']}"
-                                            with st.form(key=form_key_ind):
-                                                # (Formulário individual)
-                                                is_servico = '-S-' in chamado_row['Nº Chamado']; is_equipamento = '-E-' in chamado_row['Nº Chamado']; updates_individuais = {}
-                                                if is_servico:
-                                                    st.markdown("****"); c1, c2 = st.columns(2); link_val = chamado_row.get('Link Externo', ''); novo_link = c1.text_input("Link Externo", value=link_val, key=f"link_{chamado_row['ID']}"); updates_individuais['Link Externo'] = novo_link
-                                                    proto_val = chamado_row.get('Nº Protocolo', ''); novo_protocolo = c2.text_input("Nº Protocolo", value=proto_val, key=f"proto_{chamado_row['ID']}"); updates_individuais['Nº Protocolo'] = novo_protocolo
-                                                if is_equipamento:
-                                                    st.markdown("****"); c1, c2 = st.columns(2); pedido_val = chamado_row.get('Nº Pedido', ''); novo_pedido = c1.text_input("Nº Pedido", value=pedido_val, key=f"pedido_{chamado_row['ID']}"); updates_individuais['Nº Pedido'] = novo_pedido
-                                                    envio_val = _to_date_safe(chamado_row.get('Data Envio')); nova_data_envio = c2.date_input("Data Envio", value=envio_val, format="DD/MM/YYYY", key=f"envio_{chamado_row['ID']}"); updates_individuais['Data Envio'] = nova_data_envio
-                                                    obs_val = chamado_row.get('Obs. Equipamento', ''); nova_obs_equip = st.text_area("Obs. Equipamento", value=obs_val, height=100, key=f"obs_equip_{chamado_row['ID']}"); updates_individuais['Obs. Equipamento'] = nova_obs_equip
-                                                qtd_val_numeric_ind = pd.to_numeric(chamado_row.get('Qtd.'), errors='coerce'); qtd_int_ind = int(qtd_val_numeric_ind) if pd.notna(qtd_val_numeric_ind) else 0; equip_str_ind = str(chamado_row.get('Equipamento', 'N/A'))
-                                                st.text_area("Descrição (equipamento deste chamado)", value=f"{qtd_int_ind:02d} - {equip_str_ind}", disabled=True, height=50, key=f"desc_ind_{chamado_row['ID']}")
-                                                btn_salvar_individual = st.form_submit_button("💾 Atualizar", use_container_width=True)
-
-                                            if btn_salvar_individual:
-                                                # (Lógica de salvamento individual)
-                                                with st.spinner(f"Salvando chamado {chamado_row['Nº Chamado']}..."):
-                                                    if utils_chamados.atualizar_chamado_db(chamado_row['ID'], updates_individuais):
-                                                        st.success("Chamado salvo!"); df_chamados_atualizado = utils_chamados.carregar_chamados_db(); df_projeto_atualizado = df_chamados_atualizado[df_chamados_atualizado['ID'].isin(chamado_ids_internos_list)]; calcular_e_atualizar_status_projeto(df_projeto_atualizado, chamado_ids_internos_list); st.cache_data.clear(); st.rerun()
-                                                    else: st.error("Falha ao salvar o chamado.")
-                                
-                                # (Descrição de Equipamentos com lógica condicional)
-                                st.markdown("---")
-                                st.markdown("##### Descrição (Total de Equipamentos do Projeto)")
-
-                                nome_servico_norm = str(nome_servico).strip().lower()
-                                servico_recolhimento = "recolhimento de eqto"
-                                
-                                if nome_servico_norm in SERVICOS_SEM_EQUIPAMENTO:
-                                    if nome_servico_norm == servico_recolhimento:
-                                        descricao_texto = f"Realizar o {nome_servico}"
-                                    else:
-                                        descricao_texto = f"Realizar a {nome_servico}"
-                                    
-                                    st.markdown(f"""
-                                    <div style='background-color: #f0f2f5; border-radius: 5px; padding: 10px; font-size: 0.95rem; font-weight: 500;'>
-                                        {descricao_texto}
-                                    </div>
-                                    """, unsafe_allow_html=True)
-                                
-                                else:
-                                    descricao_list_agrupada = []
-                                    for nome_sistema, df_sistema in sistemas_no_projeto:
-                                        nome_sis_limpo = clean_val(nome_sistema, "Sistema não Definido")
-                                        descricao_list_agrupada.append(f"{nome_sis_limpo}")
-                                        for _, chamado_row_desc in df_sistema.iterrows():
-                                            qtd_val_numeric = pd.to_numeric(chamado_row_desc.get('Qtd.'), errors='coerce')
-                                            qtd_int = int(qtd_val_numeric) if pd.notna(qtd_val_numeric) else 0
-                                            equip_str = str(chamado_row_desc.get('Equipamento', 'N/A'))
-                                            descricao_list_agrupada.append(f"{qtd_int:02d} - {equip_str}")
-                                        descricao_list_agrupada.append("") 
-                                
-                                    descricao_texto = "<br>".join(descricao_list_agrupada)
-                                    st.markdown(f"""
-                                    <div style='background-color: #f0f2f5; border-radius: 5px; padding: 10px; font-size: 0.9rem; max-height: 200px; overflow-y: auto;'>
-                                        {descricao_texto}
-                                    </div>
-                                    """, unsafe_allow_html=True)
-                        
-                        st.markdown("</div>", unsafe_allow_html=True) # Fecha card Nível 2
+        num_projetos = len(df_agencia.groupby(chave_projeto))
+        
+        st.markdown('<div class="project-card">', unsafe_allow_html=True)
+        with st.container():
+            col1, col2, col3, col4, col5 = st.columns([1, 3, 2, 2, 1])
+            with col1: st.markdown(tag_html, unsafe_allow_html=True)
+            with col2: st.markdown(f"<span style='font-size: 1.15rem; font-weight: bold;'>{nome_agencia}</span>", unsafe_allow_html=True)
+            with col3: st.markdown(urgency_text, unsafe_allow_html=True)
             
-            st.markdown("</div>", unsafe_allow_html=True) # Fecha card Nível 1
-            st.markdown("<br>", unsafe_allow_html=True) 
+            with col4:
+                analista_color = utils_chamados.get_color_for_name(analista_urgente_nome)
+                analista_html = f"<span style='color: {analista_color}; font-weight: 500;'>{analista_urgente_nome}</span>"
+                st.markdown(f"**Analista:** {analista_html}", unsafe_allow_html=True)
+            
+            with col5: st.markdown(f"**{num_projetos} {'Projetos' if num_projetos > 1 else 'Projeto'}**", unsafe_allow_html=True)
+    
+            # --- Nível 2 (Serviços/Projetos) ---
+            with st.expander("Ver Projetos"):
+                try:
+                    projetos_agrupados = df_agencia.groupby(chave_projeto) 
+                except KeyError: continue
+
+                for (nome_projeto, nome_gestor, nome_servico, data_agend), df_projeto in projetos_agrupados:
+                    
+                    first_row = df_projeto.iloc[0]
+                    chamado_ids_internos_list = df_projeto['ID'].tolist()
+                    
+                    st.markdown('<div class="project-card" style="margin-top: 10px;">', unsafe_allow_html=True)
+                    with st.container(border=True): 
+                        
+                        status_proj = clean_val(first_row.get('Status'), "Não Iniciado")
+                        sub_status_proj = clean_val(first_row.get('Sub-Status'), "")
+                        status_color = utils_chamados.get_status_color(status_proj)
+                        gestor_color = utils_chamados.get_color_for_name(nome_gestor)
+                        dt_ag = data_agend if data_agend != "Sem Data" else "Sem Agendamento"
+                        
+                        col1, col2, col3 = st.columns([3, 2, 2])
+                        with col1: st.markdown(f"##### {clean_val(nome_projeto, 'Sem Projeto').upper()}", unsafe_allow_html=True)
+                        with col2: st.markdown(f"**📅 Agendamento:**\n{dt_ag}", unsafe_allow_html=True)
+                        with col3:
+                            status_html = html.escape(status_proj.upper())
+                            st.markdown(f"""<div class="card-status-badge" style="background-color: {status_color};">{status_html}</div>""", unsafe_allow_html=True)
+                        
+                        col4, col5, col6 = st.columns([3, 2, 2])
+                        with col4: st.markdown(f"**Serviço:**\n{clean_val(nome_servico, 'N/D')}", unsafe_allow_html=True)
+                        with col5:
+                            gestor_html = f"<span style='color: {gestor_color}; font-weight: 500;'>{clean_val(nome_gestor, 'N/D')}</span>"
+                            st.markdown(f"**Gestor:**\n{gestor_html}", unsafe_allow_html=True)
+                        with col6:
+                            if sub_status_proj:
+                                st.markdown(f"**Ação:**")
+                                st.markdown(f"""<div class="card-action-text">{sub_status_proj}</div>""", unsafe_allow_html=True)
+                            else:
+                                st.markdown(f"**Ação:**\n-", unsafe_allow_html=True)
+                        
+                        # --- NÍVEL 3 (Expander com formulários) ---
+                        expander_title = f"Ver/Editar {len(chamado_ids_internos_list)} Chamado(s) (ID: {first_row['ID']})"
+                        with st.expander(expander_title):
+                            
+                            # (Formulário de Lote Nível 2)
+                            form_key_lote = f"form_lote_edit_{first_row['ID']}"
+                            with st.form(key=form_key_lote):
+                                st.markdown(f"**Editar todos os {len(df_projeto)} chamados deste Serviço/Projeto:**")
+                                c1, c2 = st.columns(2); novo_prazo = c1.text_input("Prazo", value=first_row.get('Prazo', ''), key=f"{form_key_lote}_prazo")
+                                status_manual_atual = status_proj if status_proj in status_manual_options else "(Status Automático)"
+                                status_idx = status_manual_options.index(status_manual_atual); novo_status_manual = c2.selectbox("Status", options=status_manual_options, index=status_idx, key=f"{form_key_lote}_status")
+                                c3, c4, c5 = st.columns(3); abertura_val = _to_date_safe(first_row.get('Abertura')) or date.today(); nova_abertura = c3.date_input("Data Abertura", value=abertura_val, format="DD/MM/YYYY", key=f"{form_key_lote}_abertura")
+                                agend_val = _to_date_safe(first_row.get('Agendamento')); novo_agendamento = c4.date_input("Data Agendamento", value=agend_val, format="DD/MM/YYYY", key=f"{form_key_lote}_agend")
+                                final_val = _to_date_safe(first_row.get('Fechamento')); nova_finalizacao = c5.date_input("Data Finalização", value=final_val, format="DD/MM/YYYY", key=f"{form_key_lote}_final")
+                                st.markdown("<h6>Detalhes do Projeto</h6>", unsafe_allow_html=True); c6, c7, c8 = st.columns(3)
+                                proj_val = first_row.get('Projeto', ''); proj_idx = projeto_list_form.index(proj_val) if proj_val in projeto_list_form else 0; novo_projeto = c6.selectbox("Projeto", options=projeto_list_form, index=proj_idx, key=f"{form_key_lote}_proj")
+                                analista_val = first_row.get('Analista', ''); novo_analista = c7.text_input("Analista", value=analista_val, key=f"{form_key_lote}_analista")
+                                gestor_val = first_row.get('Gestor', ''); gestor_idx = gestor_list_form.index(gestor_val) if gestor_val in gestor_list_form else 0; novo_gestor = c8.selectbox("Gestor", options=gestor_list_form, index=gestor_idx, key=f"{form_key_lote}_gestor")
+                                c9, c10, c11 = st.columns(3); novo_sistema = c9.text_input("Sistema", value=first_row.get('Sistema', ''), key=f"{form_key_lote}_sistema")
+                                novo_servico = c10.text_input("Serviço", value=first_row.get('Serviço', ''), key=f"{form_key_lote}_servico"); novo_tecnico = c11.text_input("Técnico", value=first_row.get('Técnico', ''), key=f"{form_key_lote}_tec")
+                                nova_descricao = st.text_area("Descrição", value=first_row.get('Descrição', ''), key=f"{form_key_lote}_desc"); nova_obs_pend = st.text_area("Observações e Pendencias", value=first_row.get('Observações e Pendencias', ''), key=f"{form_key_lote}_obs")
+                                btn_salvar_lote = st.form_submit_button("💾 Salvar Alterações do Projeto", use_container_width=True)
+
+                            if btn_salvar_lote:
+                                updates = {"Prazo": novo_prazo, "Data Abertura": nova_abertura,"Data Agendamento": novo_agendamento, "Data Finalização": nova_finalizacao,"Projeto": novo_projeto, "Analista": novo_analista, "Gestor": novo_gestor,"Sistema": novo_sistema, "Serviço": novo_servico, "Técnico": novo_tecnico,"Descrição": nova_descricao, "Observações e Pendencias": nova_obs_pend}
+                                status_foi_mudado = False
+                                if novo_status_manual == "Finalizado":
+                                    if nova_finalizacao is None: st.error("Erro: Para 'Finalizado', a Data de Finalização é obrigatória."); st.stop()
+                                    else: updates['Status'] = 'Finalizado'; updates['Sub-Status'] = None; status_foi_mudado = True
+                                elif novo_status_manual != "(Status Automático)": updates['Status'] = novo_status_manual; updates['Sub-Status'] = None; status_foi_mudado = True
+                                elif novo_status_manual == "(Status Automático)": status_foi_mudado = True
+                                with st.spinner(f"Atualizando {len(chamado_ids_internos_list)} chamados..."):
+                                    sucesso_count = 0
+                                    for chamado_id in chamado_ids_internos_list:
+                                        if utils_chamados.atualizar_chamado_db(chamado_id, updates): sucesso_count += 1
+                                    st.success(f"{sucesso_count} de {len(chamado_ids_internos_list)} chamados foram atualizados!")
+                                    if status_foi_mudado:
+                                        df_chamados_atualizado = utils_chamados.carregar_chamados_db()
+                                        df_projeto_atualizado = df_chamados_atualizado[df_chamados_atualizado['ID'].isin(chamado_ids_internos_list)]
+                                        calcular_e_atualizar_status_projeto(df_projeto_atualizado, chamado_ids_internos_list)
+                                    st.cache_data.clear(); st.rerun()
+                            
+                            # Edição Individual (Agrupada por Sistema)
+                            st.markdown("---")
+                            st.markdown("##### 🔎 Detalhes por Chamado")
+                            
+                            sistemas_no_projeto = df_projeto.groupby('Sistema')
+                            for nome_sistema, df_sistema in sistemas_no_projeto:
+                                st.markdown(f"###### {clean_val(nome_sistema, 'N/D')}")
+                                
+                                for _, chamado_row in df_sistema.iterrows():
+                                    with st.expander(f"▶️ {chamado_row['Nº Chamado']} "):
+                                        
+                                        form_key_ind = f"form_ind_edit_{chamado_row['ID']}"
+                                        with st.form(key=form_key_ind):
+                                            is_servico = '-S-' in chamado_row['Nº Chamado']; is_equipamento = '-E-' in chamado_row['Nº Chamado']; updates_individuais = {}
+                                            if is_servico:
+                                                st.markdown("****"); c1, c2 = st.columns(2); link_val = chamado_row.get('Link Externo', ''); novo_link = c1.text_input("Link Externo", value=link_val, key=f"link_{chamado_row['ID']}"); updates_individuais['Link Externo'] = novo_link
+                                                proto_val = chamado_row.get('Nº Protocolo', ''); novo_protocolo = c2.text_input("Nº Protocolo", value=proto_val, key=f"proto_{chamado_row['ID']}"); updates_individuais['Nº Protocolo'] = novo_protocolo
+                                            if is_equipamento:
+                                                st.markdown("****"); c1, c2 = st.columns(2); pedido_val = chamado_row.get('Nº Pedido', ''); novo_pedido = c1.text_input("Nº Pedido", value=pedido_val, key=f"pedido_{chamado_row['ID']}"); updates_individuais['Nº Pedido'] = novo_pedido
+                                                envio_val = _to_date_safe(chamado_row.get('Data Envio')); nova_data_envio = c2.date_input("Data Envio", value=envio_val, format="DD/MM/YYYY", key=f"envio_{chamado_row['ID']}"); updates_individuais['Data Envio'] = nova_data_envio
+                                                obs_val = chamado_row.get('Obs. Equipamento', ''); nova_obs_equip = st.text_area("Obs. Equipamento", value=obs_val, height=100, key=f"obs_equip_{chamado_row['ID']}"); updates_individuais['Obs. Equipamento'] = nova_obs_equip
+                                            qtd_val_numeric_ind = pd.to_numeric(chamado_row.get('Qtd.'), errors='coerce'); qtd_int_ind = int(qtd_val_numeric_ind) if pd.notna(qtd_val_numeric_ind) else 0; equip_str_ind = str(chamado_row.get('Equipamento', 'N/A'))
+                                            st.text_area("Descrição (equipamento deste chamado)", value=f"{qtd_int_ind:02d} - {equip_str_ind}", disabled=True, height=50, key=f"desc_ind_{chamado_row['ID']}")
+                                            btn_salvar_individual = st.form_submit_button("💾 Atualizar", use_container_width=True)
+
+                                        if btn_salvar_individual:
+                                            with st.spinner(f"Salvando chamado {chamado_row['Nº Chamado']}..."):
+                                                if utils_chamados.atualizar_chamado_db(chamado_row['ID'], updates_individuais):
+                                                    st.success("Chamado salvo!"); df_chamados_atualizado = utils_chamados.carregar_chamados_db(); df_projeto_atualizado = df_chamados_atualizado[df_chamados_atualizado['ID'].isin(chamado_ids_internos_list)]; calcular_e_atualizar_status_projeto(df_projeto_atualizado, chamado_ids_internos_list); st.cache_data.clear(); st.rerun()
+                                                else: st.error("Falha ao salvar o chamado.")
+                            
+                            # (Descrição de Equipamentos com lógica condicional)
+                            st.markdown("---")
+                            st.markdown("##### Descrição (Total de Equipamentos do Projeto)")
+
+                            nome_servico_norm = str(nome_servico).strip().lower()
+                            servico_recolhimento = "recolhimento de eqto"
+                            
+                            if nome_servico_norm in SERVICOS_SEM_EQUIPAMENTO:
+                                if nome_servico_norm == servico_recolhimento: descricao_texto = f"Realizar o {nome_servico}"
+                                else: descricao_texto = f"Realizar a {nome_servico}"
+                                
+                                st.markdown(f"""<div style='background-color: #f0f2f5; border-radius: 5px; padding: 10px; font-size: 0.95rem; font-weight: 500;'>{descricao_texto}</div>""", unsafe_allow_html=True)
+                            else:
+                                descricao_list_agrupada = []
+                                for nome_sistema, df_sistema in sistemas_no_projeto:
+                                    nome_sis_limpo = clean_val(nome_sistema, "Sistema não Definido")
+                                    descricao_list_agrupada.append(f"**{nome_sis_limpo}**")
+                                    for _, chamado_row_desc in df_sistema.iterrows():
+                                        qtd_val_numeric = pd.to_numeric(chamado_row_desc.get('Qtd.'), errors='coerce')
+                                        qtd_int = int(qtd_val_numeric) if pd.notna(qtd_val_numeric) else 0
+                                        equip_str = str(chamado_row_desc.get('Equipamento', 'N/A'))
+                                        descricao_list_agrupada.append(f"{qtd_int:02d} - {equip_str}")
+                                    descricao_list_agrupada.append("") 
+                            
+                                descricao_texto = "<br>".join(descricao_list_agrupada)
+                                st.markdown(f"""<div style='background-color: #f0f2f5; border-radius: 5px; padding: 10px; font-size: 0.9rem; max-height: 200px; overflow-y: auto;'>{descricao_texto}</div>""", unsafe_allow_html=True)
+                    
+                    st.markdown("</div>", unsafe_allow_html=True) # Fecha card Nível 2
+        
+        st.markdown("</div>", unsafe_allow_html=True) # Fecha card Nível 1
+        st.markdown("<br>", unsafe_allow_html=True) 
+    
+    # Botões de navegação no fim da página também
+    if total_paginas > 1:
+        st.divider()
+        nav_controls("bottom")
 
 # --- Ponto de Entrada ---
 tela_dados_agencia ()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
