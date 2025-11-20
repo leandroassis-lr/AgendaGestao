@@ -1,283 +1,227 @@
 import streamlit as st
 import pandas as pd
-import utils_chamados  # Para carregar e ATUALIZAR os chamados
-import utils_financeiro # Nosso arquivo de ferramentas financeiras
-import re
+import utils_chamados
+import utils_financeiro
 import time
 
 st.set_page_config(page_title="Gestão Financeira", page_icon="💸", layout="wide")
 
-# --- FUNÇÃO HELPER (Necessária para criar a coluna Agencia_Combinada) ---
-def formatar_agencia_excel(id_agencia, nome_agencia):
-    """Cria o nome combinado da agência (AG XXXX - Nome)"""
-    try:
-        id_agencia_limpo = str(id_agencia).split('.')[0]
-        id_str = f"AG {int(id_agencia_limpo):04d}"
-    except (ValueError, TypeError): id_str = str(id_agencia).strip() 
-    nome_str = str(nome_agencia).strip()
-    if nome_str.startswith(id_agencia_limpo):
-          nome_str = nome_str[len(id_agencia_limpo):].strip(" -")
-    return f"{id_str} - {nome_str}"
+# --- CSS PERSONALIZADO (ESTILO PROFISSIONAL) ---
+st.markdown("""
+    <style>
+        .fin-card-header { font-size: 1.1rem; font-weight: bold; color: #333; margin-bottom: 5px; }
+        .fin-label { font-size: 0.85rem; color: #666; margin-bottom: 0; }
+        .fin-value { font-size: 1rem; font-weight: 500; color: #222; }
+        .status-badge-fin { padding: 5px 10px; border-radius: 15px; font-weight: bold; font-size: 0.8rem; color: white; text-align: center; width: 100%; display: block; }
+        .money-val { font-family: 'Courier New', monospace; font-weight: bold; color: #2E7D32; }
+        .section-title-center { text-align: center; font-size: 1.8rem; font-weight: bold; margin-bottom: 20px; color: #333; }
+        /* Ajuste para cards */
+        div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column;"] > div[data-testid="stVerticalBlock"] { gap: 0.5rem; }
+    </style>
+""", unsafe_allow_html=True)
 
-# --- Controle de Login ---
+# --- CONTROLE DE LOGIN ---
 if "logado" not in st.session_state or not st.session_state.logado:
     st.warning("Por favor, faça o login na página principal (app.py) antes de acessar esta página.")
     st.stop()
 
-# --- Criar Tabelas no Banco (Executa se não existirem) ---
+# --- INICIALIZAÇÃO ---
 utils_financeiro.criar_tabelas_lpu()
 utils_financeiro.criar_tabela_books()
 utils_financeiro.criar_tabela_liberacao()
 
-st.markdown("<h1 style='text-align: center;'>Gestão Financeira e Conciliação</h1>", unsafe_allow_html=True)
-st.divider()
-
-# ==============================================================================
-# 1. SEÇÃO DE IMPORTAÇÕES (3 ABAS)
-# ==============================================================================
-tab_lpu, tab_books, tab_lib = st.tabs([
-    "⚙️ 1. Importar LPU (Preços)", 
-    "📚 2. Importar Books (Enviado)", 
-    "💰 3. Importar Liberação (Banco)"
-])
-
-# --- ABA 1: LPU ---
-with tab_lpu:
-    st.info("Carregue a tabela de preços (LPU) para permitir o cálculo automático.")
-    uploaded_lpu = st.file_uploader("Planilha LPU (.xlsx)", type=["xlsx"], key="lpu_up")
-    
-    if uploaded_lpu:
-        if st.button("🚀 Importar LPU"):
-            with st.spinner("Processando LPU..."):
-                try:
-                    xls = pd.read_excel(uploaded_lpu, sheet_name=None)
-                    df_f = xls.get('Valores fixo', pd.DataFrame())
-                    df_s = xls.get('Serviço', pd.DataFrame())
-                    df_e = xls.get('Equipamento', pd.DataFrame())
-                    
-                    suc, msg = utils_financeiro.importar_lpu(df_f, df_s, df_e)
-                    if suc: st.success(msg); st.balloons()
-                    else: st.error(msg)
-                except Exception as e: st.error(f"Erro: {e}")
-
-# --- ABA 2: BOOKS (Com atualização de Chamados) ---
-with tab_books:
-    st.info("Importe o controle de Books enviados. Isso atualiza o 'Protocolo' e 'Status' na página Dados por Agência.")
-    uploaded_books = st.file_uploader("Planilha Books (.xlsx/.csv)", type=["xlsx", "csv"], key="bk_up")
-    
-    if uploaded_books:
-        if st.button("🚀 Importar Books e Atualizar Sistema"):
-            with st.spinner("Importando e Atualizando..."):
-                try:
-                    if uploaded_books.name.endswith('.csv'): df_b = pd.read_csv(uploaded_books, sep=';', dtype=str)
-                    else: df_b = pd.read_excel(uploaded_books, dtype=str)
-                    
-                    # 1. Importar para tabela de Rastreio
-                    suc, msg = utils_financeiro.importar_planilha_books(df_b)
-                    
-                    if not suc: st.error(msg)
-                    else:
-                        st.success(msg)
-                        
-                        # 2. Write-Back: Atualizar Tabela Principal de Chamados
-                        df_b.columns = [str(c).strip().upper() for c in df_b.columns]
-                        # Filtra apenas BOOK PRONTO = SIM
-                        df_p = df_b[df_b['BOOK PRONTO?'].str.upper().isin(['SIM', 'S'])]
-                        
-                        if not df_p.empty:
-                            df_bd = utils_chamados.carregar_chamados_db()
-                            # Mapa para achar o ID interno pelo Nº Chamado
-                            id_map = df_bd.set_index('Nº Chamado')['ID'].to_dict()
-                            
-                            cnt = 0
-                            for _, r in df_p.iterrows():
-                                i_d = id_map.get(r['CHAMADO'])
-                                if i_d:
-                                    # Atualiza Protocolo, Data Final e Status
-                                    updates = {
-                                        'Nº Protocolo': r.get('PROTOCOLO'),
-                                        'Status': 'Finalizado'
-                                    }
-                                    # Tenta converter data
-                                    dt_conc = pd.to_datetime(r.get('DATA CONCLUSAO'), errors='coerce')
-                                    if not pd.isna(dt_conc):
-                                        updates['Data Finalização'] = dt_conc
-
-                                    utils_chamados.atualizar_chamado_db(i_d, updates)
-                                    cnt += 1
-                            
-                            st.info(f"✅ {cnt} chamados foram atualizados automaticamente com Protocolo e Status.")
-                            # Limpa cache para refletir mudanças
-                            st.cache_data.clear()
-                            st.cache_resource.clear()
-                            time.sleep(1)
-                            st.rerun()
-                        else:
-                            st.warning("Nenhum book marcado como 'SIM' encontrado para atualização.")
-
-                except Exception as e: st.error(f"Erro: {e}")
-
-# --- ABA 3: LIBERAÇÃO (BANCO) ---
-with tab_lib:
-    st.info("Importe o espelho de 'Liberação para Faturamento' do Banco para fazer a conciliação.")
-    uploaded_lib = st.file_uploader("Planilha Liberação (.xlsx/.csv)", type=["xlsx", "csv"], key="lib_up")
-    
-    if uploaded_lib:
-        if st.button("🚀 Importar Liberação"):
-            with st.spinner("Importando Liberação..."):
-                try:
-                    if uploaded_lib.name.endswith('.csv'): df_l = pd.read_csv(uploaded_lib, sep=';', dtype=str)
-                    else: df_l = pd.read_excel(uploaded_lib, dtype=str)
-                    
-                    suc, msg = utils_financeiro.importar_planilha_liberacao(df_l)
-                    if suc: st.success(msg); st.balloons()
-                    else: st.error(msg)
-                except Exception as e: st.error(f"Erro: {e}")
-
-st.divider()
-
-# ==============================================================================
-# 2. CARREGAMENTO E CÁLCULO DE DADOS
-# ==============================================================================
+# --- FUNÇÕES AUXILIARES ---
+def formatar_agencia_excel(id_agencia, nome_agencia):
+    try:
+        id_agencia_limpo = str(id_agencia).split('.')[0]
+        id_str = f"AG {int(id_agencia_limpo):04d}"
+    except: id_str = str(id_agencia).strip()
+    nome_str = str(nome_agencia).strip()
+    if nome_str.startswith(id_agencia_limpo): nome_str = nome_str[len(id_agencia_limpo):].strip(" -")
+    return f"{id_str} - {nome_str}"
 
 @st.cache_data(ttl=60)
-def carregar_dados_completos():
-    """Carrega chamados e todos os dicionários de preço/rastreio."""
+def carregar_dados_fin():
     df_chamados = utils_chamados.carregar_chamados_db()
-    
-    # --- CORREÇÃO CRÍTICA: Recriar a coluna Agencia_Combinada ---
     if 'Cód. Agência' in df_chamados.columns and 'Nome Agência' in df_chamados.columns:
-        df_chamados['Agencia_Combinada'] = df_chamados.apply(
-            lambda row: formatar_agencia_excel(row['Cód. Agência'], row['Nome Agência']), axis=1
-        )
-    # -------------------------------------------------------------
-
-    lpu_fixo = utils_financeiro.carregar_lpu_fixo()
-    lpu_servico = utils_financeiro.carregar_lpu_servico()
-    lpu_equip = utils_financeiro.carregar_lpu_equipamento()
+        df_chamados['Agencia_Combinada'] = df_chamados.apply(lambda x: formatar_agencia_excel(x['Cód. Agência'], x['Nome Agência']), axis=1)
     
-    df_books = utils_financeiro.carregar_books_db()
-    df_liberacao = utils_financeiro.carregar_liberacao_db()
-    
-    return df_chamados, lpu_fixo, lpu_servico, lpu_equip, df_books, df_liberacao
+    return (
+        df_chamados,
+        utils_financeiro.carregar_lpu_fixo(),
+        utils_financeiro.carregar_lpu_servico(),
+        utils_financeiro.carregar_lpu_equipamento(),
+        utils_financeiro.carregar_books_db(),
+        utils_financeiro.carregar_liberacao_db()
+    )
 
-def calcular_preco(row, lpu_fixo, lpu_servico, lpu_equip):
-    """Calcula preço baseado na LPU (Fixo -> Serviço Equip -> Preço Equip)."""
-    servico_norm = str(row.get('Serviço', '')).strip().lower()
-    equip_norm = str(row.get('Equipamento', '')).strip().lower()
+def calcular_valor_linha(row, lpu_f, lpu_s, lpu_e):
+    serv = str(row.get('Serviço', '')).strip().lower()
+    equip = str(row.get('Equipamento', '')).strip().lower()
     qtd = pd.to_numeric(row.get('Qtd.'), errors='coerce')
-
-    # 1. Tenta Valor Fixo
-    if servico_norm in lpu_fixo:
-        return lpu_fixo[servico_norm] 
-
     if pd.isna(qtd) or qtd == 0: qtd = 1
-        
-    # 2. Tenta Serviço de Equipamento (D/R)
-    if equip_norm in lpu_servico:
-        precos_serv = lpu_servico[equip_norm]
-        if 'desativação' in servico_norm or 'desinstalação' in servico_norm:
-            return precos_serv.get('desativacao', 0.0) * qtd
-        if 'reinstalação' in servico_norm or 'reinstalacao' in servico_norm:
-            return precos_serv.get('reinstalacao', 0.0) * qtd
-
-    # 3. Tenta Preço Unitário Equipamento
-    if equip_norm in lpu_equip:
-        return lpu_equip.get(equip_norm, 0.0) * qtd
-        
+    
+    if serv in lpu_f: return lpu_f[serv]
+    if equip in lpu_s:
+        if any(x in serv for x in ['desativacao', 'desinstalação', 'desinstalacao']): return lpu_s[equip].get('desativacao', 0.0) * qtd
+        if any(x in serv for x in ['reinstalacao', 'reinstalação']): return lpu_s[equip].get('reinstalacao', 0.0) * qtd
+    if equip in lpu_e: return lpu_e.get(equip, 0.0) * qtd
     return 0.0
 
-# --- Execução Principal da Página ---
-try:
-    with st.spinner("Carregando dados financeiros..."):
-        df_chamados_raw, lpu_fixo, lpu_servico, lpu_equip, df_books, df_liberacao = carregar_dados_completos()
+def definir_status_financeiro(row, lista_books, lista_liberados):
+    """A Lógica de Ouro: Define o status com base no cruzamento de dados."""
+    chamado_id = str(row['Nº Chamado'])
+    status_tecnico = str(row['Status']).lower()
     
-    if df_chamados_raw.empty:
-        st.warning("Nenhum chamado encontrado.")
-        st.stop()
+    # 1. Está pago?
+    if chamado_id in lista_liberados:
+        return "FATURADO", "#43A047" # Verde Escuro
+    
+    # 2. Está no Book (Enviado)?
+    if chamado_id in lista_books:
+        return "PENDENTE FATURAMENTO", "#FB8C00" # Laranja
+    
+    # 3. Está finalizado tecnicamente?
+    fechado_keywords = ['finalizado', 'concluido', 'concluído', 'fechado', 'resolvido', 'encerrado']
+    if any(k in status_tecnico for k in fechado_keywords):
+        return "AGUARDANDO BOOK", "#E53935" # Vermelho (Atenção: Dinheiro parado)
+    
+    # 4. Caso contrário
+    return "EM ANDAMENTO", "#1E88E5" # Azul
+
+# --- CARREGAMENTO ---
+st.markdown("<div class='section-title-center'>PAINEL FINANCEIRO E FATURAMENTO</div>", unsafe_allow_html=True)
+
+with st.spinner("Processando dados financeiros..."):
+    df_chamados_raw, lpu_f, lpu_s, lpu_e, df_books, df_lib = carregar_dados_fin()
+
+if df_chamados_raw.empty:
+    st.warning("Sem dados. Importe chamados primeiro."); st.stop()
+
+# --- PROCESSAMENTO DE DADOS ---
+# 1. Calcula Valores
+df_chamados_raw['Valor_Calculado'] = df_chamados_raw.apply(lambda x: calcular_valor_linha(x, lpu_f, lpu_s, lpu_e), axis=1)
+
+# 2. Prepara Listas de Verificação (Sets para performance)
+# Books: Apenas os marcados como SIM
+set_books = set(df_books[df_books['book_pronto'].astype(str).str.upper().isin(['SIM', 'S'])]['chamado'].astype(str))
+# Liberados: Todos da planilha do banco
+set_liberados = set(df_lib['chamado'].astype(str)) if not df_lib.empty else set()
+
+# 3. Aplica Status Financeiro
+df_chamados_raw[['Status_Fin', 'Cor_Fin']] = df_chamados_raw.apply(
+    lambda x: pd.Series(definir_status_financeiro(x, set_books, set_liberados)), axis=1
+)
+
+# --- DASHBOARD EXECUTIVO (NO TOPO) ---
+total_geral = df_chamados_raw['Valor_Calculado'].sum()
+total_faturado = df_chamados_raw[df_chamados_raw['Status_Fin'] == 'FATURADO']['Valor_Calculado'].sum()
+total_pendente = df_chamados_raw[df_chamados_raw['Status_Fin'] == 'PENDENTE FATURAMENTO']['Valor_Calculado'].sum()
+total_aguardando = df_chamados_raw[df_chamados_raw['Status_Fin'] == 'AGUARDANDO BOOK']['Valor_Calculado'].sum()
+
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("Total Faturado (Pago)", f"R$ {total_faturado:,.2f}")
+c2.metric("Pendente Faturamento (Enviado)", f"R$ {total_pendente:,.2f}")
+c3.metric("Aguardando Book (A Fazer)", f"R$ {total_aguardando:,.2f}")
+c4.metric("Potencial Total", f"R$ {total_geral:,.2f}")
+st.divider()
+
+# --- IMPORTADORES (Escondidos) ---
+with st.expander("⚙️ Configurações e Importações (LPU, Books, Liberação)"):
+    tab1, tab2, tab3 = st.tabs(["Preços (LPU)", "Books (Enviados)", "Liberação (Banco)"])
+    
+    with tab1:
+        up_lpu = st.file_uploader("LPU (.xlsx)", type=["xlsx"], key="up_lpu")
+        if up_lpu and st.button("Importar LPU"):
+            try:
+                xls = pd.read_excel(up_lpu, sheet_name=None)
+                suc, msg = utils_financeiro.importar_lpu(xls.get('Valores fixo', pd.DataFrame()), xls.get('Serviço', pd.DataFrame()), xls.get('Equipamento', pd.DataFrame()))
+                if suc: st.success(msg); st.cache_data.clear(); time.sleep(1); st.rerun()
+                else: st.error(msg)
+            except Exception as e: st.error(f"Erro: {e}")
+
+    with tab2:
+        up_bk = st.file_uploader("Books (.xlsx/.csv)", type=["xlsx", "csv"], key="up_bk")
+        if up_bk and st.button("Importar Books"):
+            try:
+                df_b = pd.read_csv(up_bk, sep=';', dtype=str) if up_bk.name.endswith('.csv') else pd.read_excel(up_bk, dtype=str)
+                suc, msg = utils_financeiro.importar_planilha_books(df_b)
+                if suc: st.success(msg); st.cache_data.clear(); time.sleep(1); st.rerun()
+                else: st.error(msg)
+            except Exception as e: st.error(f"Erro: {e}")
+
+    with tab3:
+        up_lib = st.file_uploader("Liberação (.xlsx/.csv)", type=["xlsx", "csv"], key="up_lib")
+        if up_lib and st.button("Importar Liberação"):
+            try:
+                df_l = pd.read_csv(up_lib, sep=';', dtype=str) if up_lib.name.endswith('.csv') else pd.read_excel(up_lib, dtype=str)
+                suc, msg = utils_financeiro.importar_planilha_liberacao(df_l)
+                if suc: st.success(msg); st.cache_data.clear(); time.sleep(1); st.rerun()
+                else: st.error(msg)
+            except Exception as e: st.error(f"Erro: {e}")
+
+# --- FILTROS ---
+col_f1, col_f2, col_f3 = st.columns([2, 2, 4])
+with col_f1:
+    filtro_status_fin = st.multiselect("Filtrar Status Financeiro", options=df_chamados_raw['Status_Fin'].unique(), default=df_chamados_raw['Status_Fin'].unique())
+with col_f2:
+    filtro_agencia = st.selectbox("Filtrar Agência", options=["Todas"] + sorted(df_chamados_raw['Agencia_Combinada'].unique().tolist()))
+with col_f3:
+    busca = st.text_input("Busca Rápida", placeholder="Chamado, Protocolo, Valor...")
+
+# Aplica Filtros
+df_view = df_chamados_raw[df_chamados_raw['Status_Fin'].isin(filtro_status_fin)]
+if filtro_agencia != "Todas": df_view = df_view[df_view['Agencia_Combinada'] == filtro_agencia]
+if busca:
+    t = busca.lower()
+    df_view = df_view[df_view.astype(str).apply(lambda x: x.str.lower().str.contains(t)).any(axis=1)]
+
+# --- VISÃO DE CARDS (A PARTE VISUAL) ---
+st.markdown(f"#### 📋 Detalhamento ({len(df_view)} registros)")
+
+# Agrupar por Agência para organização visual
+agencias_view = df_view.groupby('Agencia_Combinada')
+
+for nome_agencia, df_ag in agencias_view:
+    
+    # Cabeçalho da Agência
+    total_ag = df_ag['Valor_Calculado'].sum()
+    st.markdown(f"**🏦 {nome_agencia}** <span style='color:green; font-size:0.9em;'>(Total: R$ {total_ag:,.2f})</span>", unsafe_allow_html=True)
+    
+    for _, row in df_ag.iterrows():
+        # Preparar dados para o card
+        chamado = row['Nº Chamado']
+        dt_abert = pd.to_datetime(row['Abertura']).strftime('%d/%m/%Y') if pd.notna(row['Abertura']) else "-"
+        dt_conc = pd.to_datetime(row['Fechamento']).strftime('%d/%m/%Y') if pd.notna(row['Fechamento']) else "-"
+        status_fin = row['Status_Fin']
+        cor_fin = row['Cor_Fin']
+        valor = row['Valor_Calculado']
         
-    # Aplica Cálculo de Preço
-    df_chamados_raw['Valor_Calculado'] = df_chamados_raw.apply(
-        calcular_preco, args=(lpu_fixo, lpu_servico, lpu_equip), axis=1
-    )
-
-    # ==============================================================================
-    # 3. RELATÓRIO DE CONCILIAÇÃO
-    # ==============================================================================
-    st.markdown("### 📉 Relatório de Conciliação Mensal")
-    st.caption("Comparativo: O que enviamos (Books) vs. O que o Banco pagou (Liberação)")
-
-    # 1. Prepara Book (Enviado) - Apenas 'SIM'
-    if not df_books.empty:
-        # Filtra books prontos
-        df_enviado = df_books[df_books['book_pronto'].str.upper().isin(['SIM', 'S'])].copy()
-    else:
-        df_enviado = pd.DataFrame(columns=['chamado'])
-
-    # 2. Prepara Liberado (Pago)
-    if df_liberacao.empty:
-        # Cria colunas vazias para não quebrar o merge
-        df_pago = pd.DataFrame(columns=['chamado', 'total', 'protocolo_atendimento'])
-    else:
-        df_pago = df_liberacao.copy()
-
-    # 3. Cruzamento (Left Join: Enviado -> Pago)
-    # Usamos 'chamado' como chave
-    df_conci = df_enviado.merge(
-        df_pago[['chamado', 'total', 'protocolo_atendimento']], 
-        on='chamado', 
-        how='left', 
-        indicator=True
-    )
-
-    # Separa grupos
-    pagos_ok = df_conci[df_conci['_merge'] == 'both']
-    pendentes = df_conci[df_conci['_merge'] == 'left_only']
-    
-    # KPIs Conciliação
-    total_enviado = len(df_enviado)
-    total_pago_qtd = len(pagos_ok)
-    total_pendente_qtd = len(pendentes)
-    valor_recebido_real = pagos_ok['total'].sum() if 'total' in pagos_ok.columns else 0.0
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Enviados (Books)", total_enviado)
-    c2.metric("Confirmados (Pagos)", total_pago_qtd, delta=f"{total_pago_qtd/total_enviado:.1%}" if total_enviado else "0%")
-    c3.metric("Pendentes (Atraso/Glosa)", total_pendente_qtd, delta_color="inverse")
-    c4.metric("Valor Total Liberado (R$)", f"{valor_recebido_real:,.2f}")
-
-    # Tabela de Pendências
-    if not pendentes.empty:
-        with st.expander(f"⚠️ Ver Lista de {total_pendente_qtd} Chamados Pendentes de Pagamento", expanded=True):
-            st.warning("Estes chamados foram enviados (Book Pronto), mas não constam na planilha de Liberação do Banco.")
-            # Seleciona colunas que existem
-            cols_show = ['chamado', 'servico', 'sistema', 'data_envio']
-            cols_finais = [c for c in cols_show if c in pendentes.columns]
-            st.dataframe(pendentes[cols_finais], use_container_width=True)
-    else:
-        if total_enviado > 0:
-            st.success("Parabéns! Todos os books enviados foram liberados para pagamento.")
-
-    st.divider()
-    
-    # ==============================================================================
-    # 4. TABELA GERAL DETALHADA
-    # ==============================================================================
-    st.markdown("#### 🔎 Detalhe Geral dos Chamados (Sistema)")
-    
-    colunas_visuais = [
-        'Nº Chamado', 'Agencia_Combinada', 'Serviço', 'Equipamento', 'Qtd.', 
-        'Valor_Calculado', 'Status', 'Nº Protocolo', 'Fechamento'
-    ]
-    colunas_reais = [c for c in colunas_visuais if c in df_chamados_raw.columns]
-    
-    df_display = df_chamados_raw[colunas_reais].copy()
-    
-    # Formatação de Moeda Visual
-    if 'Valor_Calculado' in df_display.columns:
-        df_display['Valor_Calculado'] = df_display['Valor_Calculado'].map('R$ {:,.2f}'.format)
+        # Desenhar o Card
+        st.markdown(f"""
+        <div style="border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin-bottom: 10px; background-color: white;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="flex: 1;"><strong>🆔 {chamado}</strong></div>
+                <div style="flex: 1; text-align: center; font-size: 0.9em; color: #555;">📅 Abertura: {dt_abert}</div>
+                <div style="flex: 1; text-align: center; font-size: 0.9em; color: #555;">🏁 Conclusão: {dt_conc}</div>
+                <div style="flex: 1; text-align: right;">
+                     <span style="background-color: {cor_fin}; color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; font-weight: bold;">{status_fin}</span>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
         
-    st.dataframe(df_display, use_container_width=True)
+        # Detalhes (Expander dentro do loop visualmente limpo)
+        with st.expander(f"➕ Detalhes e Valores: R$ {valor:,.2f}"):
+            c_det1, c_det2 = st.columns([3, 1])
+            with c_det1:
+                st.markdown(f"**Projeto:** {row.get('Projeto', 'N/D')}")
+                st.markdown(f"**Sistema:** {row.get('Sistema', 'N/D')} | **Serviço:** {row.get('Serviço', 'N/D')}")
+                st.markdown(f"**Equipamento:** {row.get('Equipamento', 'N/D')} (Qtd: {row.get('Qtd.', 0)})")
+                st.markdown(f"**Descrição:** {row.get('Descrição', '-')}")
+            with c_det2:
+                st.markdown("**Valor Calculado:**")
+                st.markdown(f"<h3 style='color: green;'>R$ {valor:,.2f}</h3>", unsafe_allow_html=True)
+                st.markdown(f"**Protocolo:** {row.get('Nº Protocolo', '-')}")
 
-except Exception as e:
-    st.error(f"Ocorreu um erro crítico ao gerar a página: {e}")
+    st.markdown("<br>", unsafe_allow_html=True) # Espaço entre agências
