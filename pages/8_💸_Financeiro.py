@@ -55,16 +55,30 @@ def carregar_dados_fin():
     )
 
 def calcular_valor_linha(row, lpu_f, lpu_s, lpu_e):
+    """Calcula o valor do serviço com base na LPU."""
     serv = str(row.get('Serviço', '')).strip().lower()
     equip = str(row.get('Equipamento', '')).strip().lower()
     qtd = pd.to_numeric(row.get('Qtd.'), errors='coerce')
     if pd.isna(qtd) or qtd == 0: qtd = 1
     
+    # 1. Tenta Valor Fixo (Prioridade)
     if serv in lpu_f: return lpu_f[serv]
+    
+    # 2. Tenta Serviço de Equipamento (Desinstalação ou Reinstalação)
     if equip in lpu_s:
-        if any(x in serv for x in ['desativacao', 'desinstalação', 'desinstalacao']): return lpu_s[equip].get('desativacao', 0.0) * qtd
-        if any(x in serv for x in ['reinstalacao', 'reinstalação']): return lpu_s[equip].get('reinstalacao', 0.0) * qtd
+        # Regra para Desinstalação
+        keywords_desinst = ['desativacao', 'desinstalação', 'desinstalacao']
+        if any(x in serv for x in keywords_desinst): 
+            return lpu_s[equip].get('desativacao', 0.0) * qtd
+        
+        # Regra para Reinstalação (Inclui Instalação Nova e Remanejamento)
+        keywords_reinst = ['reinstalacao', 'reinstalação', 'instalação nova', 'instalacao nova', 'remanejamento']
+        if any(x in serv for x in keywords_reinst): 
+            return lpu_s[equip].get('reinstalacao', 0.0) * qtd
+            
+    # 3. Tenta Preço Unitário Equipamento (Último recurso)
     if equip in lpu_e: return lpu_e.get(equip, 0.0) * qtd
+    
     return 0.0
 
 def definir_status_financeiro(row, lista_books, lista_liberados):
@@ -102,29 +116,25 @@ df_chamados_raw[['Status_Fin', 'Cor_Fin']] = df_chamados_raw.apply(
     lambda x: pd.Series(definir_status_financeiro(x, set_books, set_liberados)), axis=1
 )
 
-# --- DASHBOARD EXECUTIVO (ATUALIZADO COM CONTAGEM) ---
-# 1. Filtra os dataframes por status
+# --- DASHBOARD EXECUTIVO ---
 df_faturado = df_chamados_raw[df_chamados_raw['Status_Fin'] == 'FATURADO']
 df_pendente = df_chamados_raw[df_chamados_raw['Status_Fin'] == 'PENDENTE FATURAMENTO']
 df_aguardando = df_chamados_raw[df_chamados_raw['Status_Fin'] == 'AGUARDANDO BOOK']
 
-# 2. Calcula Totais (R$)
 total_geral = df_chamados_raw['Valor_Calculado'].sum()
 val_faturado = df_faturado['Valor_Calculado'].sum()
 val_pendente = df_pendente['Valor_Calculado'].sum()
 val_aguardando = df_aguardando['Valor_Calculado'].sum()
 
-# 3. Calcula Quantidades (Qtd) - NOVA PARTE
 qtd_geral = len(df_chamados_raw)
 qtd_faturado = len(df_faturado)
 qtd_pendente = len(df_pendente)
 qtd_aguardando = len(df_aguardando)
 
-# 4. Exibe Metrics com Delta (Qtd)
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Total Faturado (Pago)", f"R$ {val_faturado:,.2f}", f"{qtd_faturado} chamados")
-c2.metric("Pendente Faturamento (Enviado)", f"R$ {val_pendente:,.2f}", f"{qtd_pendente} chamados", delta_color="off") # Off = Cinza
-c3.metric("Aguardando Book (A Fazer)", f"R$ {val_aguardando:,.2f}", f"{qtd_aguardando} chamados", delta_color="inverse") # Inverse = Vermelho (Atenção)
+c2.metric("Pendente Faturamento (Enviado)", f"R$ {val_pendente:,.2f}", f"{qtd_pendente} chamados", delta_color="off")
+c3.metric("Aguardando Book (A Fazer)", f"R$ {val_aguardando:,.2f}", f"{qtd_aguardando} chamados", delta_color="inverse")
 c4.metric("Potencial Total", f"R$ {total_geral:,.2f}", f"{qtd_geral} chamados", delta_color="off")
 
 st.divider()
