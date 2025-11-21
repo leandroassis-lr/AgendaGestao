@@ -7,7 +7,7 @@ import re
 import html 
 import io
 import math 
-import time # Importado GLOBALMENTE aqui
+import time # Importado GLOBALMENTE
 
 # Configuração da Página
 st.set_page_config(page_title="Dados por Agência - GESTÃO", page_icon="🏦", layout="wide")
@@ -206,6 +206,8 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
     status_atual = str(df_projeto.iloc[0].get('Status', 'Não Iniciado')).strip()
     status_manual_list = ["Pendência de Infra", "Pendência de Equipamento", "Pausado", "Cancelado", "Finalizado"]
     
+    # Se já está num status manual, não deve ser alterado automaticamente,
+    # A menos que seja para limpar sub-status.
     if status_atual in status_manual_list:
         sub_status_atual_val = df_projeto.iloc[0].get('Sub-Status')
         sub_status_atual = "" if pd.isna(sub_status_atual_val) else str(sub_status_atual_val).strip()
@@ -213,6 +215,7 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
             updates = {"Sub-Status": None}
             for chamado_id in ids_para_atualizar: utils_chamados.atualizar_chamado_db(chamado_id, updates)
             return True 
+        # Se já é manual e não tem sub-status, RETORNA FALSE para não continuar o cálculo
         return False 
     
     has_S = df_projeto['Nº Chamado'].str.contains('-S-').any()
@@ -289,7 +292,7 @@ def tela_dados_agencia():
         with st.spinner("Carregando dados..."):
             df_chamados_raw = utils_chamados.carregar_chamados_db()
     except Exception as e:
-        # --- CORREÇÃO: Sem 'import time' local ---
+        # Sem import time local
         st.warning(f"⚠️ A conexão com o banco oscilou. Tentando reconectar... ({e})")
         st.cache_data.clear(); st.cache_resource.clear()
         time.sleep(1); st.rerun()
@@ -561,26 +564,43 @@ def tela_dados_agencia():
 
                             if btn_salvar_lote:
                                 updates = {"Prazo": novo_prazo, "Data Abertura": nova_abertura,"Data Agendamento": novo_agendamento, "Data Finalização": nova_finalizacao,"Projeto": novo_projeto, "Analista": novo_analista, "Gestor": novo_gestor,"Sistema": novo_sistema, "Serviço": novo_servico, "Técnico": novo_tecnico,"Descrição": nova_descricao, "Observações e Pendencias": nova_obs_pend}
+                                
+                                # --- CORREÇÃO DA LÓGICA DE STATUS MANUAL ---
                                 status_foi_mudado = False
-                                if novo_status_manual == "Finalizado":
-                                    if nova_finalizacao is None: st.error("Erro: Para 'Finalizado', a Data de Finalização é obrigatória."); st.stop()
-                                    else: updates['Status'] = 'Finalizado'; updates['Sub-Status'] = None; status_foi_mudado = True
-                                elif novo_status_manual != "(Status Automático)": updates['Status'] = novo_status_manual; updates['Sub-Status'] = None; status_foi_mudado = True
-                                elif novo_status_manual == "(Status Automático)": status_foi_mudado = True
+                                precisa_recalcular = False # Nova flag para controlar o "cérebro"
+
+                                # Se escolheu status manual (ex: Cancelado, Finalizado)
+                                if novo_status_manual != "(Status Automático)":
+                                    updates['Status'] = novo_status_manual
+                                    updates['Sub-Status'] = None
+                                    status_foi_mudado = True
+                                    precisa_recalcular = False # NÃO chama a calculadora, respeita o manual
+                                    
+                                    # Validação extra para finalizado
+                                    if novo_status_manual == "Finalizado" and nova_finalizacao is None:
+                                        st.error("Erro: Para 'Finalizado', a Data de Finalização é obrigatória.")
+                                        st.stop()
+
+                                # Se escolheu automático
+                                elif novo_status_manual == "(Status Automático)":
+                                    status_foi_mudado = True
+                                    precisa_recalcular = True # Chama a calculadora
+
                                 with st.spinner(f"Atualizando {len(chamado_ids_internos_list)} chamados..."):
                                     sucesso_count = 0
                                     for chamado_id in chamado_ids_internos_list:
                                         if utils_chamados.atualizar_chamado_db(chamado_id, updates): sucesso_count += 1
-                                    st.success(f"{sucesso_count} de {len(chamado_ids_internos_list)} chamados foram atualizados!")
+                                    st.success(f"{sucesso_count} chamados atualizados!")
                                     
                                     st.cache_data.clear()
                                     time.sleep(0.5)
                                     
-                                    if status_foi_mudado:
+                                    if precisa_recalcular:
                                         df_chamados_atualizado = utils_chamados.carregar_chamados_db()
                                         df_projeto_atualizado = df_chamados_atualizado[df_chamados_atualizado['ID'].isin(chamado_ids_internos_list)]
                                         if calcular_e_atualizar_status_projeto(df_projeto_atualizado, chamado_ids_internos_list):
-                                            st.cache_data.clear()
+                                            st.cache_data.clear() # Limpa se houve recálculo
+                                    
                                     st.rerun()
                             
                             # Edição Individual (Agrupada por Sistema)
@@ -596,7 +616,6 @@ def tela_dados_agencia():
                                         
                                         form_key_ind = f"form_ind_edit_{chamado_row['ID']}"
                                         with st.form(key=form_key_ind):
-                                            # --- CORREÇÃO: LÓGICA PARA EXIBIR CAMPOS ---
                                             is_servico = '-S-' in chamado_row['Nº Chamado']
                                             is_equipamento = '-E-' in chamado_row['Nº Chamado']
                                             nome_servico_norm_atual = str(nome_servico).strip().lower()
