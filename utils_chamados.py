@@ -283,22 +283,33 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
             db_updates = {}
 
             # 2. Mapeamento EXATO (Chave do Python -> Coluna do Banco)
-            # Se a chave não estiver aqui, o código assume que o nome da coluna é igual à chave (com _ no lugar de espaço)
             mapa_exato = {
+                # Datas
+                'data finalização': 'data_fechamento', # <--- CORREÇÃO AQUI
+                'data finalizacao': 'data_fechamento',
+                'finalização': 'data_fechamento',
+                'fechamento': 'data_fechamento',
+                'data abertura': 'data_abertura',
+                'abertura': 'data_abertura',
+                'data agendamento': 'data_agendamento',
+                'agendamento': 'data_agendamento',
+                'data envio': 'data_envio',
                 'status': 'status_chamado',
                 'sub-status': 'sub_status',
-                'agendamento': 'data_agendamento',
-                'fechamento': 'data_fechamento',
-                'finalização': 'data_fechamento',
-                'abertura': 'data_abertura',
+                'sistema': 'sistema',
                 'serviço': 'servico',
+                'analista': 'analista',
                 'técnico': 'tecnico',
                 'agência': 'agencia_id',
                 'projeto': 'projeto_nome',
+                'gestor': 'gestor',
+                'prazo': 'prazo',
+                'prioridade': 'prioridade',
+                
+                # Links e Observações
                 'link externo': 'link_externo',
                 'nº protocolo': 'protocolo',
                 'nº pedido': 'numero_pedido',
-                'data envio': 'data_envio',
                 'obs. equipamento': 'observacao_equipamento',
                 'observações e pendencias': 'observacao_pendencias',
                 'descrição': 'descricao_projeto'
@@ -433,6 +444,7 @@ def get_status_color(status):
         return COLORS[color_index]
     except Exception: 
         return "#555" # Cor Padrão em caso de erro
+
 
 
 
