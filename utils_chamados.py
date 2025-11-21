@@ -255,85 +255,98 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         conn.rollback()
         st.error(f"Erro ao salvar no banco: {e}")
         return False, 0
-        
+
 # --- 5. FUNÇÃO PARA ATUALIZAR CHAMADO ---
+
 def atualizar_chamado_db(chamado_id_interno, updates: dict):
-    conn = get_valid_conn()
+    conn = utils.get_valid_conn() # Certifique-se de usar utils.get_valid_conn se estiver importado
     if not conn: return False
     
     usuario_logado = st.session_state.get('usuario', 'Sistema') 
     
     try:
         with conn.cursor() as cur:
+            # 1. Busca dados atuais para comparar (Log)
             cur.execute("""
                 SELECT 
                     data_agendamento, data_fechamento, log_chamado,
-                    sistema, servico,
-                    analista, tecnico, prioridade, status_chamado, projeto_nome, gestor,
-                    agencia_id, data_abertura,
-                    link_externo, protocolo, numero_pedido, data_envio, observacao_equipamento,
-                    prazo, descricao_projeto, observacao_pendencias,
-                    sub_status
+                    status_chamado, sub_status, data_envio
                 FROM chamados WHERE id = %s
             """, (chamado_id_interno,))
             current_data = cur.fetchone()
             
             if not current_data: return False
 
-            (c_agend, c_fech, c_log, c_sis, c_serv, c_analista, c_tec, c_prio, c_status, c_proj, c_gest, c_ag_id, c_abert,
-             c_link, c_proto, c_ped, c_env, c_obs_eq, c_prazo, c_desc, c_obs_pend, c_sub_s) = current_data
-             
+            (c_agend, c_fech, c_log, c_status, c_sub_s, c_env) = current_data
             c_log = c_log or "" 
 
             db_updates = {}
-            # Mapeamento simplificado
-            mapa = {
-                'agendamento': 'data_agendamento', 'fechamento': 'data_fechamento', 'finalização': 'data_fechamento',
-                'sistema': 'sistema', 'serviço': 'servico', 'analista': 'analista', 'técnico': 'tecnico',
-                'status': 'status_chamado', 'projeto': 'projeto_nome', 'gestor': 'gestor', 'agência': 'agencia_id',
-                'abertura': 'data_abertura', 'link_externo': 'link_externo', 'protocolo': 'protocolo',
-                'nº_pedido': 'numero_pedido', 'data_envio': 'data_envio', 'obs._equipamento': 'observacao_equipamento',
-                'prazo': 'prazo', 'descrição': 'descricao_projeto', 'observações_e_pendencias': 'observacao_pendencias',
-                'sub-status': 'sub_status', 'prioridade': 'prioridade'
+
+            # 2. Mapeamento EXATO (Chave do Python -> Coluna do Banco)
+            # Se a chave não estiver aqui, o código assume que o nome da coluna é igual à chave (com _ no lugar de espaço)
+            mapa_exato = {
+                'status': 'status_chamado',
+                'sub-status': 'sub_status',
+                'agendamento': 'data_agendamento',
+                'fechamento': 'data_fechamento',
+                'finalização': 'data_fechamento',
+                'abertura': 'data_abertura',
+                'serviço': 'servico',
+                'técnico': 'tecnico',
+                'agência': 'agencia_id',
+                'projeto': 'projeto_nome',
+                'link externo': 'link_externo',
+                'nº protocolo': 'protocolo',
+                'nº pedido': 'numero_pedido',
+                'data envio': 'data_envio',
+                'obs. equipamento': 'observacao_equipamento',
+                'observações e pendencias': 'observacao_pendencias',
+                'descrição': 'descricao_projeto'
             }
             
             for k_orig, v in updates.items():
-                k_clean = str(k_orig).lower().replace(" ", "_")
-                db_k = next((db_col for form_k, db_col in mapa.items() if form_k in k_clean), k_clean)
+                k_lower = str(k_orig).strip().lower()
                 
-                if isinstance(v, (datetime, date)): db_updates[db_k] = v.strftime('%Y-%m-%d')
-                elif pd.isna(v): db_updates[db_k] = None
-                else: db_updates[db_k] = str(v)
+                # LÓGICA SEGURA: Verifica se existe no mapa exato, senão usa o nome formatado
+                if k_lower in mapa_exato:
+                    db_k = mapa_exato[k_lower]
+                else:
+                    # Fallback: troca espaço por underline (ex: "novo campo" -> "novo_campo")
+                    db_k = k_lower.replace(" ", "_").replace(".", "").replace("ç", "c").replace("ã", "a")
+                
+                # Tratamento de Valores
+                if isinstance(v, (datetime, date)): 
+                    db_updates[db_k] = v.strftime('%Y-%m-%d')
+                elif v is None or pd.isna(v) or str(v).strip() == "":
+                    db_updates[db_k] = None # Grava NULL no banco se estiver vazio
+                else: 
+                    db_updates[db_k] = str(v)
 
-            # Geração de Log (Resumido)
+            # 3. Geração de Log
             log_entries = []
             hoje = date.today().strftime('%d/%m/%Y')
             
-            # Helper Log
-            def do_log(nome, novo, velho, is_d=False):
-                if novo is None: novo = ""
-                if velho is None: velho = ""
-                if is_d:
-                    try: n_d = datetime.strptime(novo, '%Y-%m-%d').date() if novo else None
-                    except: n_d = velho
-                    if n_d != velho:
-                        v_s = velho.strftime('%d/%m') if isinstance(velho, date) else "-"
-                        n_s = n_d.strftime('%d/%m') if isinstance(n_d, date) else "-"
-                        log_entries.append(f"{hoje} {usuario_logado}: {nome} {v_s}->{n_s}")
-                elif str(novo).strip() != str(velho).strip():
-                     log_entries.append(f"{hoje} {usuario_logado}: {nome} alterado.")
+            # Verifica mudança de Status (Comparando o novo valor formatado com o antigo)
+            novo_status = db_updates.get('status_chamado')
+            if novo_status is not None and str(novo_status) != str(c_status):
+                log_entries.append(f"{hoje} {usuario_logado}: Status alterado para '{novo_status}'")
 
-            # Executa Log para campos críticos
-            do_log("Status", db_updates.get('status_chamado'), c_status)
-            do_log("Sub", db_updates.get('sub_status'), c_sub_s)
-            do_log("Agend", db_updates.get('data_agendamento'), c_agend, True)
-            do_log("Envio", db_updates.get('data_envio'), c_env, True)
-            
+            # Verifica mudança de Sub-Status
+            novo_sub = db_updates.get('sub_status')
+            # Nota: Compara string x string para evitar erro de NoneType
+            if novo_sub is not None and str(novo_sub or "") != str(c_sub_s or ""):
+                log_entries.append(f"{hoje} {usuario_logado}: Ação alterada para '{novo_sub}'")
+
             if log_entries:
+                # Adiciona log novo ao topo ou fim (aqui adicionando ao fim)
                 new_log = (c_log + "\n" + "\n".join(log_entries)).strip()
                 db_updates['log_chamado'] = new_log
 
             if not db_updates: return True
+
+            # 4. Construção e Execução da Query
+            # Debug: Descomente abaixo para ver a query no terminal se der erro
+            # print(f"Updates SQL: {db_updates}")
 
             set_c = sql.SQL(', ').join(sql.SQL("{} = {}").format(sql.Identifier(k), sql.Placeholder()) for k in db_updates.keys())
             query = sql.SQL("UPDATE chamados SET {} WHERE id = {}").format(set_c, sql.Placeholder())
@@ -341,12 +354,15 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
             
             cur.execute(query, vals)
             conn.commit()
+            
         return True
+        
     except Exception as e:
-        conn.rollback()
-        st.error(f"Erro ao atualizar: {e}")
+        if conn: conn.rollback()
+        st.error(f"Erro ao atualizar banco: {e}")
+        print(f"Erro detalhado: {e}") # Ajuda a ver no log do servidor
         return False
-
+        
 # --- 6. Funções de Cor ---
 def get_color_for_name(nome):
     """
@@ -417,4 +433,5 @@ def get_status_color(status):
         return COLORS[color_index]
     except Exception: 
         return "#555" # Cor Padrão em caso de erro
+
 
