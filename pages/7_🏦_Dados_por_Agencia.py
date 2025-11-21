@@ -116,7 +116,7 @@ def run_exporter_dialog(df):
     st.download_button("📥 Baixar Excel", buffer.getvalue(), "dados.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     if st.button("Fechar"): st.session_state.show_export_popup = False; st.rerun()
 
-# --- O CÉREBRO DA OPERAÇÃO (LÓGICA HIERÁRQUICA) ---
+# --- LÓGICA DE STATUS ---
 def calcular_status_logico(row, set_books_sim, set_books_todos, set_liberados):
     chamado_id = str(row['Nº Chamado'])
     status_atual = str(row.get('Status', '')).strip()
@@ -124,7 +124,7 @@ def calcular_status_logico(row, set_books_sim, set_books_todos, set_liberados):
     # 1. SUPREMO: Pago
     if chamado_id in set_liberados: return "Finalizado", "Faturado"
 
-    # 2. MANUAL: Respeita Cancelado/Pausado se já estiver no banco
+    # 2. MANUAL: Respeita Cancelado/Pausado
     status_travados = ["Cancelado", "Pausado", "Pendência de Infra", "Pendência de Equipamento"]
     if any(s.lower() == status_atual.lower() for s in status_travados):
         sub_atual = str(row.get('Sub-Status', ''))
@@ -217,6 +217,7 @@ def tela_dados_agencia():
     with c_btn_exp:
         if st.button("⬇️ Exportar", use_container_width=True): st.session_state.show_export_popup = True
 
+    # Filtros
     with st.expander("🔎 Filtros e Busca Avançada", expanded=True):
         busca_total = st.text_input("🔎 Busca Rápida", placeholder="Chamado, Agência...")
         st.write("")
@@ -254,6 +255,7 @@ def tela_dados_agencia():
     # 6. KPIs
     st.markdown("### 📊 Resumo")
     fechados_list = ['fechado', 'concluido', 'resolvido', 'cancelado', 'encerrado', 'finalizado', 'concluído']
+    
     abertos = len(df_filtrado[~df_filtrado['Status'].astype(str).str.lower().isin(fechados_list)])
     fechados = len(df_filtrado) - abertos
     
@@ -303,11 +305,16 @@ def tela_dados_agencia():
         df_ag = grupos_dict.get(ag)
         if df_ag is None: continue
 
+        # --- INICIALIZAÇÃO DE VARIÁVEIS (CORREÇÃO DO NAMEERROR) ---
+        tag = "🟦"
+        txt = "Sem Pendência"
+        analista_urgente_nome = "N/D"
+        
         # Card Nível 1
         df_ag_aberta = df_ag[~df_ag['Status'].astype(str).str.lower().isin(fechados_list)]
         hoje = pd.Timestamp.now().normalize()
         datas = df_ag_aberta['Agendamento']
-        tag = "🟦"; txt = "Sem Pendência"; analista = "N/D"
+        
         if not datas.empty:
             min_d = datas.min()
             if pd.isna(min_d): txt = "Data Inválida"
@@ -315,8 +322,9 @@ def tela_dados_agencia():
                 txt = f"📅 {min_d.strftime('%d/%m')}"
                 if min_d < hoje: tag = "🟥 ATRASADO"; txt = f"Urgente: {min_d.strftime('%d/%m')}"
                 elif min_d == hoje: tag = "🟧 HOJE"
+                
                 anas = df_ag_aberta[df_ag_aberta['Agendamento'] == min_d]['Analista'].dropna().unique()
-                analista = anas[0] if len(anas) == 1 else ("Múltiplos" if len(anas) > 1 else "Sem Analista")
+                analista_urgente_nome = anas[0] if len(anas) == 1 else ("Múltiplos" if len(anas) > 1 else "Sem Analista")
 
         num_projetos = len(df_ag.groupby(chave_projeto))
         
@@ -327,8 +335,8 @@ def tela_dados_agencia():
             with col2: st.markdown(f"**{ag}**")
             with c3: st.markdown(txt)
             with c4:
-                cor_ana = utils_chamados.get_color_for_name(analista)
-                st.markdown(f"**Analista:** <span style='color:{cor_ana}'>{analista}</span>", unsafe_allow_html=True)
+                cor_ana = utils_chamados.get_color_for_name(analista_urgente_nome)
+                st.markdown(f"**Analista:** <span style='color:{cor_ana}'>{analista_urgente_nome}</span>", unsafe_allow_html=True)
             with c5: st.markdown(f"**{num_projetos} Proj**")
 
             with st.expander("Ver Projetos"):
@@ -388,11 +396,13 @@ def tela_dados_agencia():
                                         st.cache_data.clear()
                                     st.rerun()
                             
-                            # DETALHES
+                            # DETALHES INDIVIDUAIS
                             st.markdown("---")
                             st.markdown("##### 🔎 Detalhes por Chamado")
-                            sistemas = df_p.groupby('Sistema')
-                            for sis, df_s in sistemas:
+                            
+                            # Agrupa e Itera sobre os sistemas
+                            sistemas_loop = df_p.groupby('Sistema')
+                            for sis, df_s in sistemas_loop:
                                 st.caption(f"Sistema: {clean_val(sis)}")
                                 for _, r in df_s.iterrows():
                                     with st.expander(f"{r['Nº Chamado']} - {r['Equipamento']}"):
@@ -415,27 +425,29 @@ def tela_dados_agencia():
                                                 aplicar_inteligencia_em_lote(df_all[df_all['ID'] == r['ID']])
                                                 st.cache_data.clear(); st.rerun()
 
-                                # DESCRIÇÃO EQUIPAMENTO
-                                st.markdown("---")
-                                nome_servico_norm = str(serv).strip().lower()
-                                servico_recolhimento = "recolhimento de eqto"
-                                if nome_servico_norm in SERVICOS_SEM_EQUIPAMENTO:
-                                    if nome_servico_norm == servico_recolhimento: descricao_texto = f"Realizar o {serv}"
-                                    else: descricao_texto = f"Realizar a {serv}"
-                                    st.markdown(f"""<div style='background-color: #f0f2f5; border-radius: 5px; padding: 10px; font-size: 0.95rem; font-weight: 500;'>{descricao_texto}</div>""", unsafe_allow_html=True)
-                                else:
-                                    descricao_list_agrupada = []
-                                    for nome_sistema, df_sistema in sistemas:
-                                        nome_sis_limpo = clean_val(nome_sistema, "Sistema não Definido")
-                                        descricao_list_agrupada.append(f"**{nome_sis_limpo}**")
-                                        for _, chamado_row_desc in df_sistema.iterrows():
-                                            qtd_val_numeric = pd.to_numeric(chamado_row_desc.get('Qtd.'), errors='coerce')
-                                            qtd_int = int(qtd_val_numeric) if pd.notna(qtd_val_numeric) else 0
-                                            equip_str = str(chamado_row_desc.get('Equipamento', 'N/A'))
-                                            descricao_list_agrupada.append(f"{qtd_int:02d} - {equip_str}")
-                                        descricao_list_agrupada.append("") 
-                                    descricao_texto = "<br>".join(descricao_list_agrupada)
-                                    st.markdown(f"""<div style='background-color: #f0f2f5; border-radius: 5px; padding: 10px; font-size: 0.9rem; max-height: 200px; overflow-y: auto;'>{descricao_texto}</div>""", unsafe_allow_html=True)
+                            # DESCRIÇÃO EQUIPAMENTO (FORA DO LOOP DE DETALHES)
+                            st.markdown("---")
+                            nome_servico_norm = str(serv).strip().lower()
+                            servico_recolhimento = "recolhimento de eqto"
+                            if nome_servico_norm in SERVICOS_SEM_EQUIPAMENTO:
+                                if nome_servico_norm == servico_recolhimento: descricao_texto = f"Realizar o {serv}"
+                                else: descricao_texto = f"Realizar a {serv}"
+                                st.markdown(f"""<div style='background-color: #f0f2f5; border-radius: 5px; padding: 10px; font-size: 0.95rem; font-weight: 500;'>{descricao_texto}</div>""", unsafe_allow_html=True)
+                            else:
+                                descricao_list_agrupada = []
+                                # Recria o groupby para uso na descrição (segurança)
+                                sistemas_desc = df_p.groupby('Sistema')
+                                for nome_sistema, df_sistema in sistemas_desc:
+                                    nome_sis_limpo = clean_val(nome_sistema, "Sistema não Definido")
+                                    descricao_list_agrupada.append(f"**{nome_sis_limpo}**")
+                                    for _, chamado_row_desc in df_sistema.iterrows():
+                                        qtd_val_numeric = pd.to_numeric(chamado_row_desc.get('Qtd.'), errors='coerce')
+                                        qtd_int = int(qtd_val_numeric) if pd.notna(qtd_val_numeric) else 0
+                                        equip_str = str(chamado_row_desc.get('Equipamento', 'N/A'))
+                                        descricao_list_agrupada.append(f"{qtd_int:02d} - {equip_str}")
+                                    descricao_list_agrupada.append("") 
+                                descricao_texto = "<br>".join(descricao_list_agrupada)
+                                st.markdown(f"""<div style='background-color: #f0f2f5; border-radius: 5px; padding: 10px; font-size: 0.9rem; max-height: 200px; overflow-y: auto;'>{descricao_texto}</div>""", unsafe_allow_html=True)
 
                     st.markdown("</div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
