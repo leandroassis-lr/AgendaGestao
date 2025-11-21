@@ -352,39 +352,21 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
         st.error(f"Erro ao atualizar: {e}")
         return False
 
-# --- 7. FUNÇÃO DE LIMPEZA (ZONA DE PERIGO) ---
-def limpar_tabela_chamados():
-    """ Apaga PERMANENTEMENTE todos os dados da tabela chamados. """
-    conn = get_valid_conn()
-    if not conn: 
-        st.error("Erro: Não foi possível conectar ao banco.")
-        return False
-    try:
-        with conn.cursor() as cur:
-            # TRUNCATE é mais rápido que DELETE e reseta os IDs
-            cur.execute("TRUNCATE TABLE chamados RESTART IDENTITY;")
-        conn.commit()
-        return True
-    except Exception as e:
-        conn.rollback()
-        st.error(f"Erro ao limpar tabela: {e}")
-        return False
-
 # --- 6. Funções de Cor ---
-def get_status_color(status):
-    status = str(status).lower().strip()
-    if status == 'concluído' or status == 'finalizado' or status == 'fechado':
-        return "#4CAF50" # Verde
-    elif status == 'em andamento':
-        return "#2196F3" # Azul
-    elif status == 'cancelado':
-        return "#D32F2F" # Vermelho Escuro (PARA APARECER O CANCELADO)
-    elif 'pendência' in status:
-        return "#FF9800" # Laranja
-    elif status == 'não iniciado':
-        return "#90A4AE" # Cinza Azulado
-    else:
-        return "#B0BEC5" # Cinza Padrão
+    def get_status_color(status):
+        status = str(status).lower().strip()
+        if status == 'concluído' or status == 'finalizado' or status == 'fechado':
+            return "#4CAF50" # Verde
+        elif status == 'em andamento':
+            return "#2196F3" # Azul
+        elif status == 'cancelado':
+            return "#D32F2F" # Vermelho Escuro (PARA APARECER O CANCELADO)
+        elif 'pendência' in status:
+            return "#FF9800" # Laranja
+        elif status == 'não iniciado':
+            return "#90A4AE" # Cinza Azulado
+        else:
+            return "#B0BEC5" # Cinza Padrão
         
     # 1. Normaliza o nome
     name_clean = str(name_str).strip().upper()
@@ -400,6 +382,3 @@ def get_status_color(status):
         return COLORS[color_index]
     except Exception: 
         return "#555" # Cor Padrão em caso de erro
-
-
-
