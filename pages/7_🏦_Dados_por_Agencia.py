@@ -305,11 +305,12 @@ def tela_dados_agencia():
         df_ag = grupos_dict.get(ag)
         if df_ag is None: continue
 
-        # --- CORREÇÃO CRÍTICA: INICIALIZAR VARIÁVEIS SEMPRE ---
+        # Inicializa variáveis para evitar erros
         tag = "🟦"
         txt = "Sem Pendência"
         analista_urgente_nome = "N/D"
         
+        # Card Nível 1
         df_ag_aberta = df_ag[~df_ag['Status'].astype(str).str.lower().isin(fechados_list)]
         hoje = pd.Timestamp.now().normalize()
         datas = df_ag_aberta['Agendamento']
@@ -329,17 +330,13 @@ def tela_dados_agencia():
         st.markdown('<div class="project-card">', unsafe_allow_html=True)
         with st.container():
             col1, col2, col3, col4, col5 = st.columns([1.5, 3, 2, 2, 1])
-            with col1:
-                st.markdown(f"<span style='font-weight:bold; color:{'red' if '🟥' in tag else 'orange' if '🟧' in tag else 'blue'}'>{tag}</span>", unsafe_allow_html=True)
-            with col2:
-                st.markdown(f"**{ag}**")
-            with col3:
-                st.markdown(txt)
-            with col4:
+            with col1: st.markdown(f"<span style='font-weight:bold; color:{'red' if '🟥' in tag else 'orange' if '🟧' in tag else 'blue'}'>{tag}</span>", unsafe_allow_html=True)
+            with col2: st.markdown(f"**{ag}**")
+            with c3: st.markdown(txt)
+            with c4:
                 cor_ana = utils_chamados.get_color_for_name(analista_urgente_nome)
                 st.markdown(f"**Analista:** <span style='color:{cor_ana}'>{analista_urgente_nome}</span>", unsafe_allow_html=True)
-            with col5:
-                st.markdown(f"**{num_projetos} Proj**")
+            with c5: st.markdown(f"**{num_projetos} Proj**")
 
             with st.expander("Ver Projetos"):
                 try: projs = df_ag.groupby(chave_projeto)
@@ -435,8 +432,7 @@ def tela_dados_agencia():
                                 st.markdown(f"""<div style='background-color: #f0f2f5; border-radius: 5px; padding: 10px; font-size: 0.95rem; font-weight: 500;'>{descricao_texto}</div>""", unsafe_allow_html=True)
                             else:
                                 descricao_list_agrupada = []
-                                sistemas_desc = df_p.groupby('Sistema')
-                                for nome_sistema, df_sistema in sistemas_desc:
+                                for nome_sistema, df_sistema in sistemas_loop: # REUTILIZA O GROUPBY ANTERIOR
                                     nome_sis_limpo = clean_val(nome_sistema, "Sistema não Definido")
                                     descricao_list_agrupada.append(f"**{nome_sis_limpo}**")
                                     for _, chamado_row_desc in df_sistema.iterrows():
@@ -458,4 +454,3 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia()
-
