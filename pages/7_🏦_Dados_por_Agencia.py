@@ -7,6 +7,7 @@ import re
 import html 
 import io
 import math 
+import time # Importante para o delay tático
 
 # Configuração da Página
 st.set_page_config(page_title="Dados por Agência - GESTÃO", page_icon="🏦", layout="wide")
@@ -110,6 +111,7 @@ def run_importer_dialog():
                         sucesso, num_importados = utils_chamados.bulk_insert_chamados_db(df_raw)
                         if sucesso:
                             st.success(f"🎉 {num_importados} chamados importados/atualizados com sucesso!")
+                            st.cache_data.clear() # Limpa cache imediatamente
                             st.balloons(); st.session_state.importer_done = True 
                         else:
                             st.error("A importação de chamados falhou. Verifique se os cabeçalhos 'CHAMADO' e 'N° AGENCIA' existem.")
@@ -160,7 +162,7 @@ def run_link_importer_dialog():
                                 count += 1
                         
                         st.success(f"✅ {count} links atualizados com sucesso!")
-                        st.cache_data.clear()
+                        st.cache_data.clear() # Limpa cache
                         st.session_state.importer_done = True
                         
         except Exception as e:
@@ -203,6 +205,9 @@ def run_exporter_dialog(df_data_to_export):
 def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
     status_atual = str(df_projeto.iloc[0].get('Status', 'Não Iniciado')).strip()
     status_manual_list = ["Pendência de Infra", "Pendência de Equipamento", "Pausado", "Cancelado", "Finalizado"]
+    
+    # Se já está num status manual (incluindo Cancelado), NÃO recalcula automaticamente,
+    # a menos que haja um sub-status que precise ser limpo.
     if status_atual in status_manual_list:
         sub_status_atual_val = df_projeto.iloc[0].get('Sub-Status')
         sub_status_atual = "" if pd.isna(sub_status_atual_val) else str(sub_status_atual_val).strip()
@@ -463,6 +468,7 @@ def tela_dados_agencia():
         df_agencia = agencia_dfs_dict.get(nome_agencia)
         if df_agencia is None: continue
         
+        # --- Card Nível 1 (Agência) ---
         status_fechamento_proj = ['concluído', 'cancelado', 'equipamento entregue - concluído', 'finalizado']
         df_agencia_aberta = df_agencia[~df_agencia['Status'].astype(str).str.lower().isin(status_fechamento_proj)]
         hoje_ts = pd.Timestamp.now().normalize()
@@ -556,23 +562,41 @@ def tela_dados_agencia():
                                 btn_salvar_lote = st.form_submit_button("💾 Salvar Alterações do Projeto", use_container_width=True)
 
                             if btn_salvar_lote:
+                                # --- CORREÇÃO CRÍTICA (Limpeza de Cache ANTES de Recalcular) ---
                                 updates = {"Prazo": novo_prazo, "Data Abertura": nova_abertura,"Data Agendamento": novo_agendamento, "Data Finalização": nova_finalizacao,"Projeto": novo_projeto, "Analista": novo_analista, "Gestor": novo_gestor,"Sistema": novo_sistema, "Serviço": novo_servico, "Técnico": novo_tecnico,"Descrição": nova_descricao, "Observações e Pendencias": nova_obs_pend}
                                 status_foi_mudado = False
+                                
+                                # Lógica de Status Manual
                                 if novo_status_manual == "Finalizado":
                                     if nova_finalizacao is None: st.error("Erro: Para 'Finalizado', a Data de Finalização é obrigatória."); st.stop()
                                     else: updates['Status'] = 'Finalizado'; updates['Sub-Status'] = None; status_foi_mudado = True
-                                elif novo_status_manual != "(Status Automático)": updates['Status'] = novo_status_manual; updates['Sub-Status'] = None; status_foi_mudado = True
-                                elif novo_status_manual == "(Status Automático)": status_foi_mudado = True
+                                elif novo_status_manual != "(Status Automático)": 
+                                    updates['Status'] = novo_status_manual; updates['Sub-Status'] = None; status_foi_mudado = True
+                                elif novo_status_manual == "(Status Automático)": 
+                                    status_foi_mudado = True
+                                
                                 with st.spinner(f"Atualizando {len(chamado_ids_internos_list)} chamados..."):
                                     sucesso_count = 0
                                     for chamado_id in chamado_ids_internos_list:
                                         if utils_chamados.atualizar_chamado_db(chamado_id, updates): sucesso_count += 1
-                                    st.success(f"{sucesso_count} de {len(chamado_ids_internos_list)} chamados foram atualizados!")
+                                    
+                                    st.success(f"{sucesso_count} chamados atualizados!")
+                                    
+                                    # LIMPEZA DE CACHE AQUI (O SEGREDO)
+                                    st.cache_data.clear()
+                                    time.sleep(0.5) # Pequeno delay para garantir o commit do DB
+                                    
                                     if status_foi_mudado:
+                                        # Agora recarregamos os dados (já com o cache limpo) para calcular o status
                                         df_chamados_atualizado = utils_chamados.carregar_chamados_db()
                                         df_projeto_atualizado = df_chamados_atualizado[df_chamados_atualizado['ID'].isin(chamado_ids_internos_list)]
-                                        calcular_e_atualizar_status_projeto(df_projeto_atualizado, chamado_ids_internos_list)
-                                    st.cache_data.clear(); st.rerun()
+                                        
+                                        # Se o usuário escolheu "Cancelado" (ou outro manual), a função 'calcular...'
+                                        # vai ver isso no DF atualizado e NÃO vai sobrescrever.
+                                        if calcular_e_atualizar_status_projeto(df_projeto_atualizado, chamado_ids_internos_list):
+                                            st.cache_data.clear() # Limpa de novo se houve recálculo automático
+                                    
+                                    st.rerun()
                             
                             # Edição Individual (Agrupada por Sistema)
                             st.markdown("---")
@@ -587,32 +611,25 @@ def tela_dados_agencia():
                                         
                                         form_key_ind = f"form_ind_edit_{chamado_row['ID']}"
                                         with st.form(key=form_key_ind):
-                                            
-                                            # --- AJUSTE: CAMPO LINK E BOTÃO INTEGRADOS ---
-                                            # Lógica: Mostra os campos SE for serviço OU se estiver na lista de exceção
                                             is_servico = '-S-' in chamado_row['Nº Chamado']
                                             is_equipamento = '-E-' in chamado_row['Nº Chamado']
                                             nome_servico_norm_atual = str(nome_servico).strip().lower()
                                             eh_excecao = nome_servico_norm_atual in SERVICOS_SEM_EQUIPAMENTO
                                             
                                             updates_individuais = {}
-                                            
+                                            link_atual = chamado_row.get('Link Externo')
+                                            if pd.notna(link_atual) and str(link_atual).strip():
+                                                st.markdown(f"🔗 [**Acessar Link Salvo**]({link_atual})")
+
                                             if is_servico or eh_excecao:
                                                 st.markdown("****")
-                                                
-                                                # Layout: Link input | Botão de Acesso
                                                 c_lnk, c_btn_lnk = st.columns([4, 1])
-                                                link_atual = chamado_row.get('Link Externo', '')
-                                                
                                                 with c_lnk:
                                                     novo_link = st.text_input("Link Externo", value=link_atual if pd.notna(link_atual) else '', key=f"link_{chamado_row['ID']}")
                                                     updates_individuais['Link Externo'] = novo_link
-                                                
                                                 with c_btn_lnk:
-                                                    # Espaço vazio para alinhar com o input
                                                     st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-                                                    if pd.notna(link_atual) and str(link_atual).strip():
-                                                        st.link_button("🌐 Acessar", link_atual)
+                                                    if pd.notna(link_atual) and str(link_atual).strip(): st.link_button("🌐 Acessar", link_atual)
                                                 
                                                 c1, c2 = st.columns(2)
                                                 proto_val = chamado_row.get('Nº Protocolo', ''); novo_protocolo = c1.text_input("Nº Protocolo", value=proto_val, key=f"proto_{chamado_row['ID']}"); updates_individuais['Nº Protocolo'] = novo_protocolo
@@ -624,13 +641,22 @@ def tela_dados_agencia():
                                             
                                             qtd_val_numeric_ind = pd.to_numeric(chamado_row.get('Qtd.'), errors='coerce'); qtd_int_ind = int(qtd_val_numeric_ind) if pd.notna(qtd_val_numeric_ind) else 0; equip_str_ind = str(chamado_row.get('Equipamento', 'N/A'))
                                             st.text_area("Descrição (equipamento deste chamado)", value=f"{qtd_int_ind:02d} - {equip_str_ind}", disabled=True, height=50, key=f"desc_ind_{chamado_row['ID']}")
-                                            
                                             btn_salvar_individual = st.form_submit_button("💾 Atualizar", use_container_width=True)
 
                                         if btn_salvar_individual:
                                             with st.spinner(f"Salvando chamado {chamado_row['Nº Chamado']}..."):
                                                 if utils_chamados.atualizar_chamado_db(chamado_row['ID'], updates_individuais):
-                                                    st.success("Chamado salvo!"); df_chamados_atualizado = utils_chamados.carregar_chamados_db(); df_projeto_atualizado = df_chamados_atualizado[df_chamados_atualizado['ID'].isin(chamado_ids_internos_list)]; calcular_e_atualizar_status_projeto(df_projeto_atualizado, chamado_ids_internos_list); st.cache_data.clear(); st.rerun()
+                                                    st.success("Chamado salvo!")
+                                                    # Limpeza de Cache Individual
+                                                    st.cache_data.clear()
+                                                    time.sleep(0.5)
+                                                    
+                                                    # Recalcula (já com dados novos)
+                                                    df_chamados_atualizado = utils_chamados.carregar_chamados_db()
+                                                    df_projeto_atualizado = df_chamados_atualizado[df_chamados_atualizado['ID'].isin(chamado_ids_internos_list)]
+                                                    calcular_e_atualizar_status_projeto(df_projeto_atualizado, chamado_ids_internos_list)
+                                                    
+                                                    st.cache_data.clear(); st.rerun()
                                                 else: st.error("Falha ao salvar o chamado.")
                             
                             # (Descrição de Equipamentos com lógica condicional)
