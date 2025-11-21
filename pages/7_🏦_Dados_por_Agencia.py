@@ -334,20 +334,49 @@ def clean_val(val, default="N/A"):
 
 # --- Tela Principal da Página ---
 def tela_dados_agencia():
-    
-    # CSS
+
+    # --- CSS ATUALIZADO E MAIS FORTE ---
     st.markdown("""
-        <style>
-            .card-status-badge { background-color: #B0BEC5; color: white; padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 0.85em; display: inline-block; width: 100%; text-align: center; }
-            .card-action-text { text-align: center; font-size: 0.9em; font-weight: 600; margin-top: 8px; color: var(--primary-dark); background-color: #F0F2F5; padding: 4px; border-radius: 5px; } 
-            .project-card [data-testid="stExpander"] { border: 1px solid var(--gray-border); border-radius: var(--std-radius); margin-top: 15px; }
-            .project-card [data-testid="stExpander"] > summary { font-weight: 600; font-size: 0.95rem; }
-            [data-testid="stExpander"] [data-testid="stForm"] { border: none; box-shadow: none; padding: 0; }
-            .section-title-center { text-align: center; font-size: 1.8rem; font-weight: bold; margin-bottom: 20px; color: #333; }
-        </style>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("<div class='section-title-center'>GESTÃO DE DADOS POR AGÊNCIA</div>", unsafe_allow_html=True)
+      <style>
+          .card-status-badge { 
+              background-color: #B0BEC5; 
+              color: white !important; /* Força texto branco */
+              padding: 8px 12px; 
+              border-radius: 8px; /* Bordas levemente arredondadas */
+              font-weight: bold; 
+              font-size: 0.9em; 
+              display: flex; /* Garante alinhamento */
+              justify-content: center;
+              align-items: center;
+              width: 100%; 
+              text-align: center;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Sombra leve para destacar */
+              text-transform: uppercase;
+              min-height: 35px; /* Garante altura mínima mesmo sem texto */
+          }
+
+          .card-action-text { 
+              text-align: center; 
+              font-size: 0.9em; 
+              font-weight: 600; 
+              margin-top: 8px; 
+              color: #1565C0; /* Azul escuro para leitura fácil */
+              background-color: #E3F2FD; 
+              padding: 6px; 
+              border-radius: 5px; 
+              border: 1px solid #BBDEFB;
+          } 
+
+          .project-card [data-testid="stExpander"] { 
+              border: 1px solid #ddd; 
+              border-radius: 8px; 
+              margin-top: 15px; 
+              background-color: white;
+          }
+          
+          .section-title-center { text-align: center; font-size: 1.8rem; font-weight: bold; margin-bottom: 20px; color: #333; }
+      </style>
+  """, unsafe_allow_html=True)
     
     # --- 2. Carregar Dados ---
     utils_chamados.criar_tabela_chamados()
@@ -787,6 +816,7 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia ()
+
 
 
 
