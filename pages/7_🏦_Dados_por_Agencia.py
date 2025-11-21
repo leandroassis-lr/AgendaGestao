@@ -616,7 +616,7 @@ def tela_dados_agencia():
                             st.markdown(f"##### {clean_val(nome_projeto, 'Sem Projeto').upper()}", unsafe_allow_html=True)
                         
                         with col2: 
-                            st.markdown(f"####📅 \n{dt_ag}", unsafe_allow_html=True)
+                            st.markdown(f"📅 \n{dt_ag}", unsafe_allow_html=True)
                         
                         with col3:
                             
@@ -626,11 +626,11 @@ def tela_dados_agencia():
                         col4, col5, col6 = st.columns([3, 2, 2])
                         
                         with col4: 
-                            st.markdown(f"****\n{clean_val(nome_servico, 'N/D')}", unsafe_allow_html=True)
+                            st.markdown(f"######\n{clean_val(nome_servico, 'N/D')}", unsafe_allow_html=True)
                         
                         with col5:
                             gestor_html = f"<span style='color: {gestor_color}; font-weight: 500;'>{clean_val(nome_gestor, 'N/D')}</span>"
-                            st.markdown(f"****\n{gestor_html}", unsafe_allow_html=True)
+                            st.markdown(f"######\n{gestor_html}", unsafe_allow_html=True)
                         
                         with col6:
                             # Normaliza o texto para garantir que pegue "Faturado", "faturado" ou "FATURADO"
@@ -836,6 +836,7 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia ()
+
 
 
 
