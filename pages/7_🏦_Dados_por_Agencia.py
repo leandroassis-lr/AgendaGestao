@@ -329,13 +329,17 @@ def tela_dados_agencia():
         st.markdown('<div class="project-card">', unsafe_allow_html=True)
         with st.container():
             col1, col2, col3, col4, col5 = st.columns([1.5, 3, 2, 2, 1])
-            with col1: st.markdown(f"<span style='font-weight:bold; color:{'red' if '🟥' in tag else 'orange' if '🟧' in tag else 'blue'}'>{tag}</span>", unsafe_allow_html=True)
-            with col2: st.markdown(f"**{ag}**")
-            with c3: st.markdown(txt)
-            with c4:
+            with col1:
+                st.markdown(f"<span style='font-weight:bold; color:{'red' if '🟥' in tag else 'orange' if '🟧' in tag else 'blue'}'>{tag}</span>", unsafe_allow_html=True)
+            with col2:
+                st.markdown(f"**{ag}**")
+            with col3:
+                st.markdown(txt)
+            with col4:
                 cor_ana = utils_chamados.get_color_for_name(analista_urgente_nome)
                 st.markdown(f"**Analista:** <span style='color:{cor_ana}'>{analista_urgente_nome}</span>", unsafe_allow_html=True)
-            with c5: st.markdown(f"**{num_projetos} Proj**")
+            with col5:
+                st.markdown(f"**{num_projetos} Proj**")
 
             with st.expander("Ver Projetos"):
                 try: projs = df_ag.groupby(chave_projeto)
@@ -454,3 +458,4 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia()
+
