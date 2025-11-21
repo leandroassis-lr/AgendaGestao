@@ -61,7 +61,7 @@ def formatar_agencia_excel(id_agencia, nome_agencia):
           nome_str = nome_str[len(id_agencia_limpo):].strip(" -")
     return f"{id_str} - {nome_str}"
 
-# --- 1. DIALOG (POP-UP) DE IMPORTAÇÃO ---
+# --- 1. DIALOG (POP-UP) DE IMPORTAÇÃO GERAL ---
 @st.dialog("Importar Novos Chamados (Template Padrão)", width="large")
 def run_importer_dialog():
     st.info(f"""
@@ -119,6 +119,63 @@ def run_importer_dialog():
     if st.session_state.get("importer_done", False):
         st.session_state.importer_done = False; st.rerun()
     if st.button("Cancelar"): st.rerun()
+
+# --- 2. NOVO DIALOG: IMPORTAÇÃO DE LINKS ---
+@st.dialog("🔗 Importar Links em Massa", width="medium")
+def run_link_importer_dialog():
+    st.info("""
+        Atualize apenas os **Links Externos** dos chamados existentes.
+        A planilha deve ter apenas duas colunas: **CHAMADO** e **LINK**.
+    """)
+    
+    uploaded_links = st.file_uploader("Planilha de Links (.xlsx/.csv)", type=["xlsx", "csv"], key="link_up_key")
+    
+    if uploaded_links:
+        try:
+            if uploaded_links.name.endswith('.csv'): 
+                df_links = pd.read_csv(uploaded_links, sep=';', header=0, dtype=str)
+            else: 
+                df_links = pd.read_excel(uploaded_links, header=0, dtype=str)
+            
+            # Normaliza cabeçalhos
+            df_links.columns = [str(c).strip().upper() for c in df_links.columns]
+            
+            if 'CHAMADO' not in df_links.columns or 'LINK' not in df_links.columns:
+                st.error("Erro: A planilha precisa ter as colunas 'CHAMADO' e 'LINK'.")
+            else:
+                st.dataframe(df_links.head(), use_container_width=True)
+                if st.button("🚀 Atualizar Links"):
+                    with st.spinner("Atualizando links..."):
+                        # 1. Carregar IDs do banco para mapear
+                        df_bd = utils_chamados.carregar_chamados_db()
+                        if df_bd.empty: st.error("Banco de dados vazio."); st.stop()
+                        
+                        id_map = df_bd.set_index('Nº Chamado')['ID'].to_dict()
+                        count = 0
+                        
+                        # 2. Loop de atualização
+                        for _, row in df_links.iterrows():
+                            chamado = row['CHAMADO']
+                            link = row['LINK']
+                            
+                            # Se o chamado existe no banco e o link não é vazio
+                            if chamado in id_map and pd.notna(link) and str(link).strip():
+                                # Atualiza apenas o campo link_externo
+                                internal_id = id_map[chamado]
+                                utils_chamados.atualizar_chamado_db(internal_id, {'Link Externo': link})
+                                count += 1
+                        
+                        st.success(f"✅ {count} links atualizados com sucesso!")
+                        st.cache_data.clear()
+                        st.session_state.importer_done = True
+                        
+        except Exception as e:
+            st.error(f"Erro ao ler arquivo: {e}")
+
+    if st.session_state.get("importer_done", False):
+        st.session_state.importer_done = False; st.rerun()
+    if st.button("Fechar"): st.rerun()
+
 
 # --- DIALOG (POP-UP) DE EXPORTAÇÃO ---
 @st.dialog("⬇️ Exportar Dados Filtrados", width="small")
@@ -266,9 +323,15 @@ def tela_dados_agencia():
     # --- 5. Filtros e Botões de Ação ---
     if "show_export_popup" not in st.session_state: st.session_state.show_export_popup = False
     
-    c_spacer, c_btn_imp, c_btn_exp = st.columns([6, 1.5, 1.5])
+    c_spacer, c_btn_imp, c_btn_exp = st.columns([6, 2, 1.5])
     with c_btn_imp:
-        if st.button("📥 Importar", use_container_width=True): run_importer_dialog()
+        c_b1, c_b2 = st.columns(2)
+        with c_b1:
+            if st.button("📥 Importar Geral", use_container_width=True): run_importer_dialog()
+        with c_b2:
+            # NOVO BOTÃO DE IMPORTAÇÃO DE LINK
+            if st.button("🔗 Importar Links", use_container_width=True): run_link_importer_dialog()
+            
     with c_btn_exp:
         if st.button("⬇️ Exportar", use_container_width=True): st.session_state.show_export_popup = True
 
@@ -415,7 +478,6 @@ def tela_dados_agencia():
             if st.button("Próximo ➡️", key=f"{key_prefix}_next", disabled=(st.session_state.pag_agencia_atual >= total_paginas - 1)):
                 st.session_state.pag_agencia_atual += 1; st.rerun()
     
-    st.markdown("<br>", unsafe_allow_html=True)
     # --- PAGINAÇÃO END ---
 
     # Filtra o DF principal para conter APENAS as agências dessa página
@@ -562,14 +624,37 @@ def tela_dados_agencia():
                                         
                                         form_key_ind = f"form_ind_edit_{chamado_row['ID']}"
                                         with st.form(key=form_key_ind):
-                                            is_servico = '-S-' in chamado_row['Nº Chamado']; is_equipamento = '-E-' in chamado_row['Nº Chamado']; updates_individuais = {}
-                                            if is_servico:
-                                                st.markdown("****"); c1, c2 = st.columns(2); link_val = chamado_row.get('Link Externo', ''); novo_link = c1.text_input("Link Externo", value=link_val, key=f"link_{chamado_row['ID']}"); updates_individuais['Link Externo'] = novo_link
-                                                proto_val = chamado_row.get('Nº Protocolo', ''); novo_protocolo = c2.text_input("Nº Protocolo", value=proto_val, key=f"proto_{chamado_row['ID']}"); updates_individuais['Nº Protocolo'] = novo_protocolo
+                                            # --- CORREÇÃO: LÓGICA PARA EXIBIR CAMPOS ---
+                                            is_servico = '-S-' in chamado_row['Nº Chamado']
+                                            is_equipamento = '-E-' in chamado_row['Nº Chamado']
+                                            nome_servico_norm_atual = str(nome_servico).strip().lower()
+                                            eh_excecao = nome_servico_norm_atual in SERVICOS_SEM_EQUIPAMENTO
+                                            
+                                            # Variável para guardar updates
+                                            updates_individuais = {}
+                                            
+                                            # Exibe link se existir
+                                            link_atual = chamado_row.get('Link Externo')
+                                            if pd.notna(link_atual) and str(link_atual).strip():
+                                                st.markdown(f"🔗 [**Acessar Link Salvo**]({link_atual})")
+
+                                            # Mostra campos SE for serviço OU se estiver na lista de exceção
+                                            if is_servico or eh_excecao:
+                                                st.markdown("****")
+                                                c1, c2 = st.columns(2)
+                                                link_val = link_atual if pd.notna(link_atual) else ''
+                                                novo_link = c1.text_input("Link Externo", value=link_val, key=f"link_{chamado_row['ID']}")
+                                                updates_individuais['Link Externo'] = novo_link
+                                                
+                                                proto_val = chamado_row.get('Nº Protocolo', '')
+                                                novo_protocolo = c2.text_input("Nº Protocolo", value=proto_val, key=f"proto_{chamado_row['ID']}")
+                                                updates_individuais['Nº Protocolo'] = novo_protocolo
+                                            
                                             if is_equipamento:
                                                 st.markdown("****"); c1, c2 = st.columns(2); pedido_val = chamado_row.get('Nº Pedido', ''); novo_pedido = c1.text_input("Nº Pedido", value=pedido_val, key=f"pedido_{chamado_row['ID']}"); updates_individuais['Nº Pedido'] = novo_pedido
                                                 envio_val = _to_date_safe(chamado_row.get('Data Envio')); nova_data_envio = c2.date_input("Data Envio", value=envio_val, format="DD/MM/YYYY", key=f"envio_{chamado_row['ID']}"); updates_individuais['Data Envio'] = nova_data_envio
                                                 obs_val = chamado_row.get('Obs. Equipamento', ''); nova_obs_equip = st.text_area("Obs. Equipamento", value=obs_val, height=100, key=f"obs_equip_{chamado_row['ID']}"); updates_individuais['Obs. Equipamento'] = nova_obs_equip
+                                            
                                             qtd_val_numeric_ind = pd.to_numeric(chamado_row.get('Qtd.'), errors='coerce'); qtd_int_ind = int(qtd_val_numeric_ind) if pd.notna(qtd_val_numeric_ind) else 0; equip_str_ind = str(chamado_row.get('Equipamento', 'N/A'))
                                             st.text_area("Descrição (equipamento deste chamado)", value=f"{qtd_int_ind:02d} - {equip_str_ind}", disabled=True, height=50, key=f"desc_ind_{chamado_row['ID']}")
                                             btn_salvar_individual = st.form_submit_button("💾 Atualizar", use_container_width=True)
