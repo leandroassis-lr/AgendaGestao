@@ -259,7 +259,7 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
 # --- 5. FUNÇÃO PARA ATUALIZAR CHAMADO ---
 
 def atualizar_chamado_db(chamado_id_interno, updates: dict):
-    conn = utils.get_valid_conn() # Certifique-se de usar utils.get_valid_conn se estiver importado
+    conn = get_valid_conn()
     if not conn: return False
     
     usuario_logado = st.session_state.get('usuario', 'Sistema') 
@@ -433,5 +433,6 @@ def get_status_color(status):
         return COLORS[color_index]
     except Exception: 
         return "#555" # Cor Padrão em caso de erro
+
 
 
