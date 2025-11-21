@@ -5,9 +5,7 @@ from psycopg2 import sql
 import numpy as np
 import re
 
-# --- 1. GERENCIAMENTO DE CONEXÃO (Copiado do utils_chamados) ---
-# Usamos a mesma conexão, mas a função é copiada aqui
-# para que este arquivo seja independente.
+# --- 1. GERENCIAMENTO DE CONEXÃO ---
 
 @st.cache_resource
 def _get_cached_connection_fin():
@@ -87,19 +85,15 @@ def _normalize_key(key):
     if not isinstance(key, str): return ""
     return key.strip().lower()
 
-# No arquivo: utils_financeiro.py
-
 def importar_lpu(df_fixo: pd.DataFrame, df_servico: pd.DataFrame, df_equip: pd.DataFrame):
     """Limpa as tabelas LPU e insere os novos dados (com cabeçalhos normalizados)."""
     conn = get_valid_conn_fin()
     if not conn: return False, "Falha na conexão"
     
-    # --- INÍCIO DA CORREÇÃO: Normalizar cabeçalhos ---
-    # Coloca tudo em maiúsculo e remove espaços das bordas
+    # Normalizar cabeçalhos
     df_fixo.columns = [str(col).strip().upper() for col in df_fixo.columns]
     df_servico.columns = [str(col).strip().upper() for col in df_servico.columns]
     df_equip.columns = [str(col).strip().upper() for col in df_equip.columns]
-    # --- FIM DA CORREÇÃO ---
 
     try:
         with conn.cursor() as cur:
@@ -107,13 +101,12 @@ def importar_lpu(df_fixo: pd.DataFrame, df_servico: pd.DataFrame, df_equip: pd.D
             # --- 1. Processar Valores Fixos ---
             cur.execute("TRUNCATE lpu_valores_fixos RESTART IDENTITY;")
             
-            # Verificação com nomes normalizados
             if 'TIPO DO SERVIÇO' in df_fixo.columns and 'VALOR' in df_fixo.columns:
                 vals_fixo = [
                     (_normalize_key(row['TIPO DO SERVIÇO']), pd.to_numeric(row['VALOR'], errors='coerce'))
                     for _, row in df_fixo.iterrows()
                 ]
-                vals_fixo = [(s, v) for s, v in vals_fixo if s and pd.notna(v)]
+                vals_fixo = [(s, float(v)) for s, v in vals_fixo if s and pd.notna(v)]
                 
                 query_fixo = "INSERT INTO lpu_valores_fixos (servico, valor) VALUES (%s, %s) ON CONFLICT (servico) DO UPDATE SET valor = EXCLUDED.valor"
                 cur.executemany(query_fixo, vals_fixo)
@@ -121,18 +114,17 @@ def importar_lpu(df_fixo: pd.DataFrame, df_servico: pd.DataFrame, df_equip: pd.D
             # --- 2. Processar Equipamentos (Preço) ---
             cur.execute("TRUNCATE lpu_equipamentos RESTART IDENTITY;")
             
-            # Verificação com nomes normalizados
             if 'EQUIPAMENTO' in df_equip.columns and 'PRECO' in df_equip.columns:
                 vals_equip = [
                     (
                         _normalize_key(row['EQUIPAMENTO']),
-                        str(row.get('CODIGOEQUIPAMENTO', '')), # .get() é seguro
+                        str(row.get('CODIGOEQUIPAMENTO', '')), 
                         str(row.get('SISTEMA', '')),
-                        pd.to_numeric(row['PRECO'], errors='coerce') # Acesso direto
+                        pd.to_numeric(row['PRECO'], errors='coerce') 
                     )
                     for _, row in df_equip.iterrows()
                 ]
-                vals_equip = [(e, c, s, p) for e, c, s, p in vals_equip if e and pd.notna(p)]
+                vals_equip = [(e, c, s, float(p)) for e, c, s, p in vals_equip if e and pd.notna(p)]
                 
                 query_equip = "INSERT INTO lpu_equipamentos (equipamento, codigo_equipamento, sistema, preco) VALUES (%s, %s, %s, %s) ON CONFLICT (equipamento) DO UPDATE SET codigo_equipamento = EXCLUDED.codigo_equipamento, sistema = EXCLUDED.sistema, preco = EXCLUDED.preco"
                 cur.executemany(query_equip, vals_equip)
@@ -140,25 +132,30 @@ def importar_lpu(df_fixo: pd.DataFrame, df_servico: pd.DataFrame, df_equip: pd.D
             # --- 3. Processar Serviços de Equipamentos (D/R) ---
             cur.execute("TRUNCATE lpu_servicos_equip RESTART IDENTITY;")
             
-            # Verificação com nomes normalizados
             if 'EQUIPAMENTO' in df_servico.columns:
                 vals_serv = [
                     (
                         _normalize_key(row['EQUIPAMENTO']),
                         str(row.get('CODIGOEQUIPAMENTO', '')),
                         str(row.get('SISTEMA', '')),
-                        pd.to_numeric(row.get('DESATIVAÇÃO'), errors='coerce'), # O .get() é seguro
-                        pd.to_numeric(row.get('REINSTALAÇÂO'), errors='coerce') # O .get() é seguro
+                        pd.to_numeric(row.get('DESATIVAÇÃO'), errors='coerce'),
+                        pd.to_numeric(row.get('REINSTALAÇÂO'), errors='coerce')
                     )
                     for _, row in df_servico.iterrows()
                 ]
-                vals_serv = [(e, c, s, d, r) for e, c, s, d, r in vals_serv if e and (pd.notna(d) or pd.notna(r))]
+                # Converte para float nativo e trata NaNs
+                vals_serv_clean = []
+                for e, c, s, d, r in vals_serv:
+                    if e and (pd.notna(d) or pd.notna(r)):
+                        d_val = float(d) if pd.notna(d) else 0.0
+                        r_val = float(r) if pd.notna(r) else 0.0
+                        vals_serv_clean.append((e, c, s, d_val, r_val))
 
                 query_serv = "INSERT INTO lpu_servicos_equip (equipamento, codigo_equipamento, sistema, desativacao, reinstalacao) VALUES (%s, %s, %s, %s, %s) ON CONFLICT (equipamento) DO UPDATE SET codigo_equipamento = EXCLUDED.codigo_equipamento, sistema = EXCLUDED.sistema, desativacao = EXCLUDED.desativacao, reinstalacao = EXCLUDED.reinstalacao"
-                cur.executemany(query_serv, vals_serv)
+                cur.executemany(query_serv, vals_serv_clean)
 
         conn.commit()
-        st.cache_data.clear() # Limpa o cache para carregar novos preços
+        st.cache_data.clear() 
         return True, "LPU importada com sucesso."
     
     except Exception as e:
@@ -167,14 +164,13 @@ def importar_lpu(df_fixo: pd.DataFrame, df_servico: pd.DataFrame, df_equip: pd.D
         
 # --- 4. FUNÇÕES DE LEITURA (PARA A PÁGINA) ---
 
-@st.cache_data(ttl=3600) # Cache de 1 hora
+@st.cache_data(ttl=3600) 
 def carregar_lpu_fixo():
     """Carrega LPU Fixo como um dicionário para consulta rápida."""
     conn = get_valid_conn_fin()
     if not conn: return {}
     try:
         df = pd.read_sql("SELECT servico, valor FROM lpu_valores_fixos", conn)
-        # Converte para minúsculo para matching
         return df.set_index(df['servico'].str.lower())['valor'].to_dict()
     except Exception as e:
         st.error(f"Erro ao carregar LPU Fixo: {e}")
@@ -188,7 +184,6 @@ def carregar_lpu_servico():
     try:
         df = pd.read_sql("SELECT equipamento, desativacao, reinstalacao FROM lpu_servicos_equip", conn)
         df.set_index(df['equipamento'].str.lower(), inplace=True)
-        # Preenche NaT/NaN com 0.0 para evitar erros no dict
         df['desativacao'] = df['desativacao'].fillna(0.0)
         df['reinstalacao'] = df['reinstalacao'].fillna(0.0)
         return df[['desativacao', 'reinstalacao']].to_dict('index')
@@ -207,7 +202,6 @@ def carregar_lpu_equipamento():
         return df.set_index(df['equipamento'].str.lower())['preco'].to_dict()
     except Exception as e:
         st.error(f"Erro ao carregar LPU Equipamento: {e}")
-        
         return {}
 
 # Tabela de Book -----
@@ -236,20 +230,12 @@ def criar_tabela_books():
         conn.rollback()
         st.error(f"Erro ao criar tabela books_faturamento: {e}")
 
-# No arquivo: utils_financeiro.py
-
 def importar_planilha_books(df_books: pd.DataFrame):
-    """
-    Limpa e insere/atualiza a tabela de books.
-    Esta função APENAS rastreia. A lógica de "write-back" fica na página.
-    """
     conn = get_valid_conn_fin()
     if not conn: return False, "Falha na conexão"
     
-    # Normaliza cabeçalhos
     df_books.columns = [str(col).strip().upper() for col in df_books.columns]
     
-    # Validação mínima
     if 'CHAMADO' not in df_books.columns:
         return False, "Erro: Coluna 'CHAMADO' não encontrada."
     if 'PROTOCOLO' not in df_books.columns:
@@ -257,33 +243,26 @@ def importar_planilha_books(df_books: pd.DataFrame):
         
     try:
         with conn.cursor() as cur:
-            # Limpa a tabela para ter sempre a visão mais recente
             cur.execute("TRUNCATE books_faturamento RESTART IDENTITY;")
             
-            # Prepara os dados para inserção
             vals_books = []
             for _, row in df_books.iterrows():
                 
-                # --- INÍCIO DA CORREÇÃO ---
-                # 1. Processa as datas
                 data_conc = pd.to_datetime(row.get('DATA CONCLUSAO'), errors='coerce')
                 data_env = pd.to_datetime(row.get('DATA ENVIO'), errors='coerce')
                 
-                # 2. Converte NaT (Pandas) para None (Python/SQL)
-                if pd.isna(data_conc):
-                    data_conc = None
-                if pd.isna(data_env):
-                    data_env = None
-                # --- FIM DA CORREÇÃO ---
+                # Conversão segura para Data do BD
+                d_conc = data_conc.date() if pd.notna(data_conc) else None
+                d_env = data_env.date() if pd.notna(data_env) else None
                     
                 vals_books.append((
                     str(row['CHAMADO']),
-                    str(row.get('SERVIÇO')),
-                    str(row.get('SISTEMA')),
-                    str(row.get('PROTOCOLO')),
-                    data_conc,  # <-- Corrigido
-                    str(row.get('BOOK PRONTO?')),
-                    data_env    # <-- Corrigido
+                    str(row.get('SERVIÇO', '')),
+                    str(row.get('SISTEMA', '')),
+                    str(row.get('PROTOCOLO', '')),
+                    d_conc,
+                    str(row.get('BOOK PRONTO?', '')),
+                    d_env
                 ))
             
             query = """
@@ -301,24 +280,20 @@ def importar_planilha_books(df_books: pd.DataFrame):
             cur.executemany(query, vals_books)
             
         conn.commit()
-        st.cache_data.clear() # Limpa o cache
+        st.cache_data.clear()
         return True, f"{len(vals_books)} registros de book importados/atualizados."
         
     except Exception as e:
         conn.rollback()
         return False, f"Erro ao importar books: {e}"
         
-@st.cache_data(ttl=60) # Cache curto
+@st.cache_data(ttl=60) 
 def carregar_books_db():
-    """Carrega a tabela de books para conciliação."""
     conn = get_valid_conn_fin()
-    # Cria colunas padrão caso falhe, para evitar erros na página
     cols_padrao = ['chamado', 'book_pronto', 'servico', 'sistema', 'data_envio']
-    
     if not conn: return pd.DataFrame(columns=cols_padrao)
     
     try:
-        # --- CORREÇÃO: Trocamos colunas específicas por * (tudo) ---
         df = pd.read_sql("SELECT * FROM books_faturamento", conn)
         return df
     except Exception as e:
@@ -326,7 +301,6 @@ def carregar_books_db():
         return pd.DataFrame(columns=cols_padrao)
         
 # --- 5. IMPORTAÇÃO DE LIBERAÇÃO DE FATURAMENTO (BANCO) ---
-# (Adicione ao final do utils_financeiro.py)
 
 def criar_tabela_liberacao():
     """Cria a tabela para armazenar o espelho de faturamento do banco."""
@@ -361,33 +335,12 @@ def criar_tabela_liberacao():
         st.error(f"Erro ao criar tabela faturamento_liberado: {e}")
 
 def importar_planilha_liberacao(df: pd.DataFrame):
-    """Importa a planilha de liberação do banco."""
+    """Importa a planilha de liberação do banco com conversão segura de tipos."""
     conn = get_valid_conn_fin()
     if not conn: return False, "Falha na conexão"
     
-    # Normaliza cabeçalhos (Maiúsculas e sem espaços nas pontas)
+    # Normaliza cabeçalhos
     df.columns = [str(col).strip().upper() for col in df.columns]
-    
-    # Mapeamento: Excel -> Banco de Dados
-    # O Excel do banco geralmente vem com nomes exatos, vamos mapear:
-    mapa_cols = {
-        'CHAMADO': 'chamado',
-        'CODIGO_DO_PONTO': 'codigo_ponto',
-        'NOME_PONTO': 'nome_ponto',
-        'UFAGENCIA': 'uf_agencia',
-        'CIDADEAGENCIA': 'cidade_agencia',
-        'NOME_SISTEMA': 'nome_sistema',
-        'SERVICO': 'servico',
-        'TIPO_SERVICO': 'tipo_servico',
-        'CODIGO_DO_EQUIPAMENTO': 'cod_equipamento',
-        'NOME_EQUIPAMENTO': 'nome_equipamento',
-        'QUANTIDADE_LIBERADA': 'qtd_liberada',
-        'VALORUNITARIO': 'valor_unitario',
-        'TOTAL': 'total',
-        'PROTOCOLOATENDIMENTO': 'protocolo_atendimento',
-        'NOME_PROJETO': 'nome_projeto',
-        'NOMEUSUARIO': 'nome_usuario'
-    }
     
     if 'CHAMADO' not in df.columns:
         return False, "Erro: Coluna 'CHAMADO' não encontrada."
@@ -398,13 +351,20 @@ def importar_planilha_liberacao(df: pd.DataFrame):
             
             vals = []
             for _, row in df.iterrows():
-                # Função auxiliar para converter número com segurança
-                def get_num(col_name):
+                
+                # --- FUNÇÃO DE CONVERSÃO (A MÁGICA AQUI) ---
+                def safe_num(col_name):
                     val = row.get(col_name)
-                    return pd.to_numeric(val, errors='coerce') or 0.0
-
+                    try:
+                        # Converte para float do python, tratando NaN
+                        v_float = float(pd.to_numeric(val, errors='coerce'))
+                        return v_float if not np.isnan(v_float) else 0.0
+                    except:
+                        return 0.0
+                
+                # Preparar dados com conversão explícita para str e float nativos
                 vals.append((
-                    str(row.get('CHAMADO')),
+                    str(row.get('CHAMADO', '')),
                     str(row.get('CODIGO_DO_PONTO', '')),
                     str(row.get('NOME_PONTO', '')),
                     str(row.get('UFAGENCIA', '')),
@@ -414,9 +374,9 @@ def importar_planilha_liberacao(df: pd.DataFrame):
                     str(row.get('TIPO_SERVICO', '')),
                     str(row.get('CODIGO_DO_EQUIPAMENTO', '')),
                     str(row.get('NOME_EQUIPAMENTO', '')),
-                    get_num('QUANTIDADE_LIBERADA'),
-                    get_num('VALORUNITARIO'),
-                    get_num('TOTAL'),
+                    safe_num('QUANTIDADE_LIBERADA'), # Agora retorna float Python
+                    safe_num('VALORUNITARIO'),
+                    safe_num('TOTAL'),
                     str(row.get('PROTOCOLOATENDIMENTO', '')),
                     str(row.get('NOME_PROJETO', '')),
                     str(row.get('NOMEUSUARIO', ''))
@@ -448,5 +408,3 @@ def carregar_liberacao_db():
     except Exception as e:
         st.error(f"Erro ao carregar liberação: {e}")
         return pd.DataFrame()
-
-
