@@ -217,6 +217,7 @@ def tela_dados_agencia():
     with c_btn_exp:
         if st.button("⬇️ Exportar", use_container_width=True): st.session_state.show_export_popup = True
 
+    # Filtros
     with st.expander("🔎 Filtros e Busca Avançada", expanded=True):
         busca_total = st.text_input("🔎 Busca Rápida", placeholder="Chamado, Agência...")
         st.write("")
@@ -239,8 +240,19 @@ def tela_dados_agencia():
 
     if st.session_state.show_export_popup: run_exporter_dialog(df_filtrado)
 
-    # 5. Preparação para Exibição (Agrupamento)
+    # CORREÇÃO: Conversão Segura de Data (Evita o erro .dt accessor)
+    if 'Agendamento' not in df_filtrado.columns:
+        df_filtrado['Agendamento'] = pd.NaT
+    
+    # Força conversão e lida com erros
+    df_filtrado['Agendamento'] = pd.to_datetime(df_filtrado['Agendamento'], errors='coerce')
+
+    # 5. Agrupamento
     try:
+        # Verificação extra de tipo (Redundância de segurança)
+        if not pd.api.types.is_datetime64_any_dtype(df_filtrado['Agendamento']):
+             df_filtrado['Agendamento'] = pd.to_datetime(df_filtrado['Agendamento'], errors='coerce')
+
         df_filtrado['Agendamento_str'] = df_filtrado['Agendamento'].dt.strftime('%d/%m/%Y').fillna('Sem Data')
         chave_agencia = 'Agencia_Combinada'
         chave_projeto = ['Projeto', 'Gestor', 'Serviço', 'Agendamento_str']
@@ -250,7 +262,6 @@ def tela_dados_agencia():
     # 6. KPIs
     st.markdown("### 📊 Resumo")
     fechados_list = ['fechado', 'concluido', 'resolvido', 'cancelado', 'encerrado', 'finalizado', 'concluído']
-    status_fechamento_set = set(fechados_list)
     
     abertos = len(df_filtrado[~df_filtrado['Status'].astype(str).str.lower().isin(fechados_list)])
     fechados = len(df_filtrado) - abertos
@@ -267,7 +278,7 @@ def tela_dados_agencia():
 
     # Ordenação e Paginação
     df_abertos_sort = df_filtrado[~df_filtrado['Status'].astype(str).str.lower().isin(fechados_list)].copy()
-    df_abertos_sort['Agendamento'] = pd.to_datetime(df_abertos_sort['Agendamento'], errors='coerce')
+    # Já convertemos lá em cima, não precisa converter de novo aqui
     min_dates = df_abertos_sort.groupby('Agencia_Combinada')['Agendamento'].min()
     
     agencias_unicas = df_filtrado['Agencia_Combinada'].unique()
@@ -294,7 +305,9 @@ def tela_dados_agencia():
         # Card Nível 1
         df_ag_aberta = df_ag[~df_ag['Status'].astype(str).str.lower().isin(fechados_list)]
         hoje = pd.Timestamp.now().normalize()
-        datas = pd.to_datetime(df_ag_aberta['Agendamento'], errors='coerce')
+        
+        # Já convertemos, acesso direto seguro
+        datas = df_ag_aberta['Agendamento']
         
         tag = "🟦"; txt = "Sem Pendência"; analista = "N/D"
         if not datas.empty:
