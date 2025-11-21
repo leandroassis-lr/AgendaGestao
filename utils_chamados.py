@@ -91,7 +91,6 @@ def criar_tabela_chamados():
             
             for coluna, tipo_coluna in colunas_necessarias.items():
                 if coluna not in colunas_existentes:
-                    # st.warning(f"Atualizando BD: Adicionando '{coluna}'...") # Comentado para limpar a tela
                     cur.execute(f"ALTER TABLE chamados ADD COLUMN {coluna} {tipo_coluna};")
             conn.commit()
             
@@ -103,9 +102,6 @@ def criar_tabela_chamados():
 @st.cache_data(ttl=60)
 def carregar_chamados_db(agencia_id_filtro=None):
     """ Carrega chamados com tratamento de queda de conexão. """
-    # Não usamos get_valid_conn aqui diretamente pois st.cache_data não gosta de objetos de conexão
-    # Precisamos recriar a lógica para garantir que o dado venha fresco
-    
     conn = get_valid_conn()
     if not conn: return pd.DataFrame()
 
@@ -151,7 +147,6 @@ def carregar_chamados_db(agencia_id_filtro=None):
 
         return df
     except Exception as e:
-        # Se der erro de conexão aqui, forçamos limpeza do cache de conexão para a próxima tentativa
         st.cache_resource.clear()
         st.error(f"Erro ao ler banco (tente recarregar a página): {e}")
         return pd.DataFrame()
@@ -163,7 +158,6 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
     conn = get_valid_conn()
     if not conn: return False, 0
     
-    # Mapeia do "Nome no Excel" (em maiúsculo) para o "Nome no BD"
     NEW_COLUMN_MAP = {
         'CHAMADO': 'chamado_id',
         'N° AGENCIA': 'agencia_id',
@@ -172,23 +166,17 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         'TIPO DO SERVIÇO': 'servico',
         'NOME DO PROJETO': 'projeto_nome',
         'AGENDAMENTO': 'data_agendamento',
-        
-        # Mapeamento do Equipamento (baseado na sua lista)
-        'SISTEMA': 'sistema',           # Ex: "Sistema de Alarme"
-        'CODIGO': 'cod_equipamento',                # Ex: "437"
-        'DESCRIÇÃO EQUIPAMENTO': 'nome_equipamento', # Ex: "SENSOR..."
-        
+        'SISTEMA': 'sistema',           
+        'CODIGO': 'cod_equipamento',                 
+        'DESCRIÇÃO EQUIPAMENTO': 'nome_equipamento', 
         'QTD': 'quantidade',
         'GESTOR ITAU': 'gestor',
         'RESPONSÁVEL': 'analista'            
     }
 
-    # Renomear colunas do DataFrame baseado no mapa (de forma robusta)
     df_renamed = df.copy()
-    # Normaliza os cabeçalhos (Tira espaços, põe em maiúsculo)
     df_renamed.columns = [str(col).strip().upper() for col in df_renamed.columns]
     
-    # Filtra o mapa para conter apenas colunas que realmente existem no DF
     headers_no_excel = df_renamed.columns
     map_para_renomear = {
         excel_header: db_col 
@@ -198,7 +186,6 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
     
     df_to_insert = df_renamed.rename(columns=map_para_renomear)
 
-    # Verificar colunas obrigatórias
     if 'chamado_id' not in df_to_insert.columns:
         st.error("Erro: A planilha deve conter um cabeçalho 'CHAMADO'.")
         return False, 0
@@ -256,9 +243,10 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         st.error(f"Erro ao salvar no banco: {e}")
         return False, 0
 
-# --- 5. FUNÇÃO PARA ATUALIZAR CHAMADO ---
+# --- 5. FUNÇÃO PARA ATUALIZAR CHAMADO (CORRIGIDA) ---
 
 def atualizar_chamado_db(chamado_id_interno, updates: dict):
+    # CORREÇÃO 1: Removemos 'utils.' - chamamos direto a função deste arquivo
     conn = get_valid_conn()
     if not conn: return False
     
@@ -282,18 +270,25 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
 
             db_updates = {}
 
-            # 2. Mapeamento EXATO (Chave do Python -> Coluna do Banco)
+            # 2. Mapeamento EXATO (Chave do Form -> Coluna do Banco)
+            # Este mapa resolve o erro "column does not exist"
             mapa_exato = {
                 # Datas
-                'data finalização': 'data_fechamento', # <--- CORREÇÃO AQUI
+                'data finalização': 'data_fechamento',
                 'data finalizacao': 'data_fechamento',
                 'finalização': 'data_fechamento',
                 'fechamento': 'data_fechamento',
+                'data fechamento': 'data_fechamento',
+                
                 'data abertura': 'data_abertura',
                 'abertura': 'data_abertura',
+                
                 'data agendamento': 'data_agendamento',
                 'agendamento': 'data_agendamento',
+                
                 'data envio': 'data_envio',
+                
+                # Campos Texto
                 'status': 'status_chamado',
                 'sub-status': 'sub_status',
                 'sistema': 'sistema',
@@ -318,46 +313,35 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
             for k_orig, v in updates.items():
                 k_lower = str(k_orig).strip().lower()
                 
-                # LÓGICA SEGURA: Verifica se existe no mapa exato, senão usa o nome formatado
+                # CORREÇÃO 2: Só adiciona se existir no mapa. Chega de adivinhar nomes!
                 if k_lower in mapa_exato:
                     db_k = mapa_exato[k_lower]
-                else:
-                    # Fallback: troca espaço por underline (ex: "novo campo" -> "novo_campo")
-                    db_k = k_lower.replace(" ", "_").replace(".", "").replace("ç", "c").replace("ã", "a")
-                
-                # Tratamento de Valores
-                if isinstance(v, (datetime, date)): 
-                    db_updates[db_k] = v.strftime('%Y-%m-%d')
-                elif v is None or pd.isna(v) or str(v).strip() == "":
-                    db_updates[db_k] = None # Grava NULL no banco se estiver vazio
-                else: 
-                    db_updates[db_k] = str(v)
+                    
+                    # Tratamento de Valores
+                    if isinstance(v, (datetime, date)): 
+                        db_updates[db_k] = v.strftime('%Y-%m-%d')
+                    elif v is None or pd.isna(v) or str(v).strip() == "":
+                        db_updates[db_k] = None # Grava NULL
+                    else: 
+                        db_updates[db_k] = str(v)
 
-            # 3. Geração de Log
+            # 3. Geração de Log Simplificada
             log_entries = []
             hoje = date.today().strftime('%d/%m/%Y')
             
-            # Verifica mudança de Status (Comparando o novo valor formatado com o antigo)
             novo_status = db_updates.get('status_chamado')
             if novo_status is not None and str(novo_status) != str(c_status):
-                log_entries.append(f"{hoje} {usuario_logado}: Status alterado para '{novo_status}'")
+                log_entries.append(f"{hoje} {usuario_logado}: Status '{c_status}' -> '{novo_status}'")
 
-            # Verifica mudança de Sub-Status
             novo_sub = db_updates.get('sub_status')
-            # Nota: Compara string x string para evitar erro de NoneType
             if novo_sub is not None and str(novo_sub or "") != str(c_sub_s or ""):
-                log_entries.append(f"{hoje} {usuario_logado}: Ação alterada para '{novo_sub}'")
+                log_entries.append(f"{hoje} {usuario_logado}: Ação '{c_sub_s}' -> '{novo_sub}'")
 
             if log_entries:
-                # Adiciona log novo ao topo ou fim (aqui adicionando ao fim)
                 new_log = (c_log + "\n" + "\n".join(log_entries)).strip()
                 db_updates['log_chamado'] = new_log
 
             if not db_updates: return True
-
-            # 4. Construção e Execução da Query
-            # Debug: Descomente abaixo para ver a query no terminal se der erro
-            # print(f"Updates SQL: {db_updates}")
 
             set_c = sql.SQL(', ').join(sql.SQL("{} = {}").format(sql.Identifier(k), sql.Placeholder()) for k in db_updates.keys())
             query = sql.SQL("UPDATE chamados SET {} WHERE id = {}").format(set_c, sql.Placeholder())
@@ -371,33 +355,20 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
     except Exception as e:
         if conn: conn.rollback()
         st.error(f"Erro ao atualizar banco: {e}")
-        print(f"Erro detalhado: {e}") # Ajuda a ver no log do servidor
         return False
         
 # --- 6. Funções de Cor ---
 def get_color_for_name(nome):
     """
     Gera uma cor consistente baseada no nome da pessoa.
-    Se o nome for o mesmo, a cor será sempre a mesma.
     """
     if pd.isna(nome) or str(nome).strip() == "" or str(nome).lower() in ["nan", "none", "n/d", "sem analista"]:
-        return "#9E9E9E" # Cinza neutro para vazios
+        return "#9E9E9E"
 
-    # Paleta de cores (Material Design - Cores mais sóbrias)
     cores = [
-        "#1976D2", # Azul
-        "#388E3C", # Verde
-        "#D32F2F", # Vermelho
-        "#7B1FA2", # Roxo
-        "#F57C00", # Laranja
-        "#0097A7", # Ciano
-        "#C2185B", # Rosa escuro
-        "#512DA8", # Roxo profundo
-        "#0288D1", # Azul claro
-        "#689F38"  # Verde oliva
+        "#1976D2", "#388E3C", "#D32F2F", "#7B1FA2", "#F57C00", 
+        "#0097A7", "#C2185B", "#512DA8", "#0288D1", "#689F38"
     ]
-    
-    # Usa um hash do nome para escolher sempre a mesma cor da lista
     idx = hash(str(nome)) % len(cores)
     return cores[idx]
 
@@ -407,44 +378,15 @@ def get_status_color(status):
     """
     st_lower = str(status).lower().strip()
     
-    # 1. Status de Sucesso/Fim
     if st_lower in ['concluído', 'finalizado', 'fechado', 'resolvido', 'equipamento entregue', 'equipamento entregue - concluído']:
-        return "#2E7D32" # Verde Escuro (Success)
-        
-    # 2. Status de Erro/Cancelamento
+        return "#2E7D32" # Verde Escuro
     elif 'cancelado' in st_lower:
-        return "#C62828" # Vermelho Forte (Error)
-        
-    # 3. Status de Atenção/Pendência
+        return "#C62828" # Vermelho Forte
     elif 'pendência' in st_lower or 'pausado' in st_lower:
-        return "#EF6C00" # Laranja (Warning)
-        
-    # 4. Em Andamento
+        return "#EF6C00" # Laranja
     elif 'em andamento' in st_lower or 'iniciado' in st_lower:
-        return "#1565C0" # Azul (Primary)
-        
-    # 5. Padrão (Não Iniciado)
+        return "#1565C0" # Azul
     elif st_lower == 'não iniciado':
         return "#78909C" # Cinza Azulado
-        
-    # 6. Default
-    return "#9E9E9E" # Cinza
     
-    # 1. Normaliza o nome
-    name_clean = str(name_str).strip().upper()
-
-    # 2. Retorna Cinza para casos genéricos
-    if not name_clean or name_clean in ["N/A", "SEM ANALISTA", "MÚLTIPLOS"]: 
-        return "#555" # Cor Padrão (Cinza)
-    
-    try:
-        # 3. Cria um "hash" simples e determinístico somando os valores das letras
-        simple_hash = sum(ord(char) for char in name_clean)
-        color_index = simple_hash % len(COLORS)
-        return COLORS[color_index]
-    except Exception: 
-        return "#555" # Cor Padrão em caso de erro
-
-
-
-
+    return "#9E9E9E" # Cinza Default
