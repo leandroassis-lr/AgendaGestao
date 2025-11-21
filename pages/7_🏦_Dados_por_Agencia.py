@@ -11,6 +11,8 @@ import time # Importado GLOBALMENTE
 
 # Configuração da Página
 st.set_page_config(page_title="Dados por Agência - GESTÃO", page_icon="🏦", layout="wide")
+
+# Tenta carregar CSS externo, mas garante o interno logo abaixo
 try:
     utils.load_css() 
 except:
@@ -277,15 +279,66 @@ def clean_val(val, default="N/A"):
 # --- Tela Principal da Página ---
 def tela_dados_agencia():
     
-    # CSS
+    # --- CSS CORRIGIDO E REFORÇADO ---
     st.markdown("""
         <style>
-            .card-status-badge { background-color: #B0BEC5; color: white; padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 0.85em; display: inline-block; width: 100%; text-align: center; }
-            .card-action-text { text-align: center; font-size: 0.9em; font-weight: 600; margin-top: 8px; color: var(--primary-dark); background-color: #F0F2F5; padding: 4px; border-radius: 5px; } 
-            .project-card [data-testid="stExpander"] { border: 1px solid var(--gray-border); border-radius: var(--std-radius); margin-top: 15px; }
-            .project-card [data-testid="stExpander"] > summary { font-weight: 600; font-size: 0.95rem; }
-            [data-testid="stExpander"] [data-testid="stForm"] { border: none; box-shadow: none; padding: 0; }
-            .section-title-center { text-align: center; font-size: 1.8rem; font-weight: bold; margin-bottom: 20px; color: #333; }
+            /* Badge de Status */
+            .card-status-badge { 
+                background-color: #B0BEC5; 
+                color: white; 
+                padding: 6px 12px; 
+                border-radius: 20px; 
+                font-weight: bold; 
+                font-size: 0.85rem; 
+                display: inline-block; 
+                width: 100%; 
+                text-align: center;
+                box-shadow: 1px 1px 3px rgba(0,0,0,0.1);
+            }
+            
+            /* Texto de Ação */
+            .card-action-text { 
+                text-align: center; 
+                font-size: 0.9em; 
+                font-weight: 600; 
+                margin-top: 8px; 
+                color: #1565C0; 
+                background-color: #E3F2FD; 
+                padding: 6px; 
+                border-radius: 8px; 
+                border: 1px solid #BBDEFB;
+            } 
+            
+            /* Estilo do Card do Projeto (Container) */
+            .project-card {
+                background-color: white;
+                border: 1px solid #e0e0e0;
+                border-radius: 10px;
+                padding: 15px;
+                margin-bottom: 15px;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            }
+
+            /* Forçar estilo no Expander para ficar uniforme */
+            div[data-testid="stExpander"] {
+                border: 1px solid #ddd !important;
+                border-radius: 8px !important;
+                background-color: #fff !important;
+                margin-top: 10px !important;
+            }
+            
+            div[data-testid="stExpander"] > details > summary {
+                font-weight: 600 !important;
+                color: #333 !important;
+            }
+
+            .section-title-center { 
+                text-align: center; 
+                font-size: 1.8rem; 
+                font-weight: bold; 
+                margin-bottom: 20px; 
+                color: #333; 
+            }
         </style>
     """, unsafe_allow_html=True)
     
@@ -484,7 +537,7 @@ def tela_dados_agencia():
             earliest_date = datas_abertas.min()
             if pd.isna(earliest_date): urgency_text = "Sem Data Válida"
             else:
-                if earliest_date < hoje_ts: tag_html = "<span style='color: var(--red-alert); font-weight: bold;'>🟥 ATRASADO</span>"; urgency_text = f"Urgente: {earliest_date.strftime('%d/%m/%Y')}"
+                if earliest_date < hoje_ts: tag_html = "<span style='color: #D32F2F; font-weight: bold;'>🟥 ATRASADO</span>"; urgency_text = f"Urgente: {earliest_date.strftime('%d/%m/%Y')}"
                 elif earliest_date == hoje_ts: tag_html = "<span style='color: #FFA726; font-weight: bold;'>🟧 PARA HOJE</span>"; urgency_text = f"📅 {earliest_date.strftime('%d/%m/%Y')}"
                 else: urgency_text = f"📅 {earliest_date.strftime('%d/%m/%Y')}"
                 
@@ -495,6 +548,7 @@ def tela_dados_agencia():
 
         num_projetos = len(df_agencia.groupby(chave_projeto))
         
+        # APLICAÇÃO DA CLASSE DO CARD
         st.markdown('<div class="project-card">', unsafe_allow_html=True)
         with st.container():
             col1, col2, col3, col4, col5 = st.columns([1, 3, 2, 2, 1])
@@ -517,8 +571,8 @@ def tela_dados_agencia():
                     first_row = df_projeto.iloc[0]
                     chamado_ids_internos_list = df_projeto['ID'].tolist()
                     
-                    st.markdown('<div class="project-card" style="margin-top: 10px;">', unsafe_allow_html=True)
-                    with st.container(border=True): 
+                    st.markdown('<div class="project-card" style="margin-top: 10px; background-color: #f9f9f9; border: 1px solid #eee;">', unsafe_allow_html=True)
+                    with st.container(): 
                         status_proj = clean_val(first_row.get('Status'), "Não Iniciado")
                         sub_status_proj = clean_val(first_row.get('Sub-Status'), "")
                         status_color = utils_chamados.get_status_color(status_proj)
@@ -551,8 +605,20 @@ def tela_dados_agencia():
                             with st.form(key=form_key_lote):
                                 st.markdown(f"**Editar todos os {len(df_projeto)} chamados deste Serviço/Projeto:**")
                                 c1, c2 = st.columns(2); novo_prazo = c1.text_input("Prazo", value=first_row.get('Prazo', ''), key=f"{form_key_lote}_prazo")
-                                status_manual_atual = status_proj if status_proj in status_manual_options else "(Status Automático)"
-                                status_idx = status_manual_options.index(status_manual_atual); novo_status_manual = c2.selectbox("Status", options=status_manual_options, index=status_idx, key=f"{form_key_lote}_status")
+                                
+                                # --- CORREÇÃO DA LÓGICA DO DROPDOWN DE STATUS ---
+                                # Normaliza o status atual para Title Case para coincidir com a lista
+                                status_atual_norm = status_proj.title() if status_proj else ""
+                                status_manual_options_norm = [s.title() if s != "(Status Automático)" else s for s in status_manual_options]
+                                
+                                # Tenta encontrar o status no array. Se falhar, usa Automático.
+                                try:
+                                    status_idx = status_manual_options_norm.index(status_atual_norm)
+                                except ValueError:
+                                    status_idx = 0 # Padrão para (Status Automático)
+                                
+                                novo_status_manual = c2.selectbox("Status", options=status_manual_options, index=status_idx, key=f"{form_key_lote}_status")
+                                
                                 c3, c4, c5 = st.columns(3); abertura_val = _to_date_safe(first_row.get('Abertura')) or date.today(); nova_abertura = c3.date_input("Data Abertura", value=abertura_val, format="DD/MM/YYYY", key=f"{form_key_lote}_abertura")
                                 agend_val = _to_date_safe(first_row.get('Agendamento')); novo_agendamento = c4.date_input("Data Agendamento", value=agend_val, format="DD/MM/YYYY", key=f"{form_key_lote}_agend")
                                 final_val = _to_date_safe(first_row.get('Fechamento')); nova_finalizacao = c5.date_input("Data Finalização", value=final_val, format="DD/MM/YYYY", key=f"{form_key_lote}_final")
@@ -568,13 +634,11 @@ def tela_dados_agencia():
                             if btn_salvar_lote:
                                 updates = {"Prazo": novo_prazo, "Data Abertura": nova_abertura,"Data Agendamento": novo_agendamento, "Data Finalização": nova_finalizacao,"Projeto": novo_projeto, "Analista": novo_analista, "Gestor": novo_gestor,"Sistema": novo_sistema, "Serviço": novo_servico, "Técnico": novo_tecnico,"Descrição": nova_descricao, "Observações e Pendencias": nova_obs_pend}
                                 
-                                status_foi_mudado = False
                                 precisa_recalcular = False 
 
                                 if novo_status_manual != "(Status Automático)":
                                     updates['Status'] = novo_status_manual
-                                    updates['Sub-Status'] = None
-                                    status_foi_mudado = True
+                                    updates['Sub-Status'] = None # Limpa substatus ao forçar manual
                                     precisa_recalcular = False # NÃO RECALCULA, FORÇA O MANUAL
                                     
                                     if novo_status_manual == "Finalizado" and nova_finalizacao is None:
@@ -582,7 +646,6 @@ def tela_dados_agencia():
                                         st.stop()
 
                                 elif novo_status_manual == "(Status Automático)":
-                                    status_foi_mudado = True
                                     precisa_recalcular = True
 
                                 with st.spinner(f"Atualizando {len(chamado_ids_internos_list)} chamados..."):
@@ -590,17 +653,16 @@ def tela_dados_agencia():
                                     for chamado_id in chamado_ids_internos_list:
                                         if utils_chamados.atualizar_chamado_db(chamado_id, updates): sucesso_count += 1
                                     
-                                    # FEEDBACK VISUAL e LIMPEZA DE CACHE
                                     st.success(f"✅ {sucesso_count} chamados atualizados!")
-                                    st.cache_data.clear()
-                                    time.sleep(1) # Delay tático de 1 segundo
                                     
                                     if precisa_recalcular:
+                                        st.info("Recalculando status automático...")
                                         df_chamados_atualizado = utils_chamados.carregar_chamados_db()
                                         df_projeto_atualizado = df_chamados_atualizado[df_chamados_atualizado['ID'].isin(chamado_ids_internos_list)]
-                                        if calcular_e_atualizar_status_projeto(df_projeto_atualizado, chamado_ids_internos_list):
-                                            st.cache_data.clear()
+                                        calcular_e_atualizar_status_projeto(df_projeto_atualizado, chamado_ids_internos_list)
                                     
+                                    st.cache_data.clear()
+                                    time.sleep(1) 
                                     st.rerun()
                             
                             # Edição Individual (Agrupada por Sistema)
