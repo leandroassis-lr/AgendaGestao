@@ -372,18 +372,20 @@ def limpar_tabela_chamados():
 
 # --- 6. Funções de Cor ---
 def get_status_color(status):
-    s = str(status or "").strip().lower()
-    if any(x in s for x in ['finalizad', 'fechado', 'conclui', 'concluí']): return "#66BB6A" 
-    if any(x in s for x in ['pendencia', 'pendência']): return "#FFA726" 
-    if any(x in s for x in ['nao iniciad', 'não iniciad']): return "#B0BEC5" 
-    if 'cancelad' in s: return "#EF5350" 
-    if 'pausad' in s: return "#FFEE58" 
-    return "#64B5F6"  
-
-def get_color_for_name(name_str):
-    """Gera uma cor determinística para um nome."""
-    COLORS = ["#D32F2F", "#1976D2", "#388E3C", "#F57C00", "#7B1FA2", "#00796B", "#C2185B", "#5D4037", "#455A64"]
-    
+    status = str(status).lower().strip()
+    if status == 'concluído' or status == 'finalizado' or status == 'fechado':
+        return "#4CAF50" # Verde
+    elif status == 'em andamento':
+        return "#2196F3" # Azul
+    elif status == 'cancelado':
+        return "#D32F2F" # Vermelho Escuro (PARA APARECER O CANCELADO)
+    elif 'pendência' in status:
+        return "#FF9800" # Laranja
+    elif status == 'não iniciado':
+        return "#90A4AE" # Cinza Azulado
+    else:
+        return "#B0BEC5" # Cinza Padrão
+        
     # 1. Normaliza o nome
     name_clean = str(name_str).strip().upper()
 
@@ -398,5 +400,6 @@ def get_color_for_name(name_str):
         return COLORS[color_index]
     except Exception: 
         return "#555" # Cor Padrão em caso de erro
+
 
 
