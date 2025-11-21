@@ -7,19 +7,17 @@ import re
 import html 
 import io
 import math 
-import time
+import time 
 
 # Configuração da Página
 st.set_page_config(page_title="Dados por Agência - GESTÃO", page_icon="🏦", layout="wide")
 
-# Tenta carregar CSS externo
 try:
     utils.load_css() 
 except:
     pass 
 
 # --- LISTA DE EXCEÇÃO (SERVIÇOS) ---
-# Esses serviços seguirão a mesma lógica de STATUS definida para serviços gerais
 SERVICOS_SEM_EQUIPAMENTO = [
     "vistoria",
     "adequação de gerador (recall)",
@@ -66,134 +64,106 @@ def formatar_agencia_excel(id_agencia, nome_agencia):
     return f"{id_str} - {nome_str}"
 
 def clean_val(val, default="N/A"):
-    if val is None or pd.isna(val) or str(val).lower() in ["none", "nan", "nat"]:
+    if val is None or pd.isna(val) or str(val).lower() in ["none", "nan", "nat", ""]:
         return default
     return str(val).strip()
 
-# --- 1. NOVA LÓGICA DE STATUS (PROFISSIONAL / CASCATA) ---
+# --- LÓGICA CASCATA DE STATUS (CORRIGIDA) ---
 def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
-    """
-    Aplica a regra de negócio estrita:
-    1. Checa Status Manuais (Soberanos).
-    2. Checa Finalização Financeira (Banco).
-    3. Aplica lógica de Serviço ou Equipamento baseada no preenchimento de colunas.
-    """
-    
-    # Pegamos a primeira linha para ler os dados do projeto
     row = df_projeto.iloc[0]
     
-    status_atual = clean_val(row.get('Status'), 'Não Iniciado')
-    sub_status_atual = clean_val(row.get('Sub-Status'), '')
+    # 1. Normalização
+    status_atual = clean_val(row.get('Status'), 'Não Iniciado').strip()
+    sub_status_atual = clean_val(row.get('Sub-Status'), '').strip()
     
-    # --- 1. STATUS SOBERANOS (MANUAIS) ---
-    # Se estiver em um desses status, NÃO mudamos nada automaticamente, 
-    # EXCETO se já estiver "Finalizado" (mas o Finalizado entra na regra 2).
-    status_soberanos = ["pendência de infra", "pendência de equipamento", "pausado", "cancelado"]
-    if status_atual.lower() in status_soberanos:
-        return False # Não faz nada, respeita a decisão manual
+    # 2. Status Manuais (Soberanos)
+    # Se o status for um desses, NADA muda automaticamente.
+    status_manuais = ["pendência de infra", "pendência de equipamento", "pausado", "cancelado"]
+    if status_atual.lower() in status_manuais:
+        # Apenas garante que o sub-status não fique com lixo antigo se não quiser
+        return False 
 
-    # --- VARIÁVEIS DE CONTROLE (FLAGS) ---
-    def tem_valor(col):
-        val = row.get(col)
-        return val is not None and not pd.isna(val) and str(val).strip() != ""
+    # 3. Variáveis de Verificação
+    def has(col): 
+        return pd.notna(row.get(col)) and str(row.get(col)).strip() != ""
 
-    # Verificação de colunas chaves
-    has_link = tem_valor('Link Externo')
-    has_tecnico = tem_valor('Técnico')
-    has_protocolo = tem_valor('Nº Protocolo')
-    has_pedido = tem_valor('Nº Pedido')
-    has_envio = tem_valor('Data Envio') or check_date_valid(row.get('Data Envio'))
+    has_link = has('Link Externo')
+    has_tecnico = has('Técnico')
+    has_protocolo = has('Nº Protocolo')
+    has_pedido = has('Nº Pedido')
+    has_envio = has('Data Envio')
     
-    # Verificação do Financeiro (Simula "Planilha Liberação Banco")
-    # Assumindo que importar a planilha preenche 'Status Financeiro' ou 'Data Finalização'
-    is_faturado_banco = tem_valor('Status Financeiro') or tem_valor('Data Finalização')
+    # Simulando "Planilha Liberação Banco" através do Status Financeiro preenchido
+    is_banco_ok = has('Status Financeiro') 
     
     # Verificação do "Sim/S" para Book
-    # Tenta ler coluna 'Book Enviado'. Se não existir, assume 'Não'
-    book_enviado_flag = False
-    col_book = 'Book Enviado' # Nome da coluna na planilha importada
+    book_ok = False
+    col_book = 'Book Enviado' # Assume que sua planilha tem essa coluna ou similar
     if col_book in df_projeto.columns:
         val_book = str(row.get(col_book, '')).strip().lower()
-        if val_book in ['sim', 's', 'yes', 'y']:
-            book_enviado_flag = True
+        if val_book in ['sim', 's', 'yes']: book_ok = True
 
+    # 4. Definição dos Novos Status (CASCATA)
     novo_status = "Não Iniciado"
     novo_acao = "Abrir chamado no Btime"
 
-    # --- 2. REGRA DE EQUIPAMENTO (Se tiver -E- e NÃO for Exceção) ---
-    is_equipamento = '-E-' in str(row.get('Nº Chamado', ''))
-    is_servico_excecao = clean_val(row.get('Serviço', '')).lower() in SERVICOS_SEM_EQUIPAMENTO
+    # Regra para Equipamentos (Se tiver -E- e não for exceção)
+    is_equip = '-E-' in str(row.get('Nº Chamado', ''))
+    is_serv_exc = clean_val(row.get('Serviço', '')).lower() in SERVICOS_SEM_EQUIPAMENTO
     
-    if is_equipamento and not is_servico_excecao:
-        # Lógica de Equipamento (Mantida a existente + Regra do Banco)
-        if is_faturado_banco:
-            novo_status = "Finalizado"
-            novo_acao = "Faturado"
+    if is_equip and not is_serv_exc:
+        # Mantendo a lógica existente de equipamento + Banco
+        if is_banco_ok:
+            novo_status = "Finalizado"; novo_acao = "Faturado"
         elif has_envio:
-            novo_status = "Concluído"
-            novo_acao = "Equipamento entregue"
+            novo_status = "Concluído"; novo_acao = "Equipamento entregue"
         elif has_pedido:
-            novo_status = "Em Andamento"
-            novo_acao = "Equipamento Solicitado"
+            novo_status = "Em Andamento"; novo_acao = "Equipamento Solicitado"
         else:
-            novo_status = "Não Iniciado"
-            novo_acao = "Solicitar Equipamento"
-
-    # --- 3. REGRA DE SERVIÇO (Ou Exceção) ---
+            novo_status = "Não Iniciado"; novo_acao = "Solicitar Equipamento"
     else:
-        # Lógica Nova Solicitada (Cascata Inversa ou Direta)
+        # Lógica Geral / Serviços (Prioridades Inversas)
         
-        # Prioridade 1: Banco (Liberação)
-        if is_faturado_banco:
+        # 1. Finalizado (Banco)
+        if is_banco_ok:
             novo_status = "Finalizado"
             novo_acao = "Faturado"
-            
-        # Prioridade 2: Book (Protocolo)
+        
+        # 2. Concluído (Protocolo/Book)
         elif has_protocolo:
             novo_status = "Concluído"
-            if book_enviado_flag:
+            if book_ok:
                 novo_acao = "Aguardando Faturamento"
             else:
                 novo_acao = "Enviar book"
-                
-        # Prioridade 3: Técnico
+        
+        # 3. Em Andamento (Técnico)
         elif has_tecnico:
             novo_status = "Em Andamento"
             novo_acao = "Enviar Status Cliente"
             
-        # Prioridade 4: Link
+        # 4. Em Andamento (Link)
         elif has_link:
             novo_status = "Em Andamento"
             novo_acao = "Acionar técnico"
             
-        # Prioridade 5: Padrão (Criado)
+        # 5. Default
         else:
             novo_status = "Não Iniciado"
             novo_acao = "Abrir chamado no Btime"
 
-    # --- 4. ATUALIZAÇÃO NO BANCO ---
-    # Só atualiza se mudou algo
+    # 5. Aplicação
     if status_atual != novo_status or sub_status_atual != novo_acao:
         updates = {"Status": novo_status, "Sub-Status": novo_acao}
         for chamado_id in ids_para_atualizar:
             utils_chamados.atualizar_chamado_db(chamado_id, updates)
-        return True # Houve mudança
-        
-    return False # Nenhuma mudança
+        return True
+    return False
 
-def check_date_valid(val):
-    try:
-        return pd.to_datetime(val).year > 2000
-    except:
-        return False
-
-# --- IMPORTS E DIALOGS (MANTIDOS IGUAIS AO SEU CÓDIGO, APENAS FORMATADOS) ---
-# ... (Importadores mantidos iguais para economizar espaço, o foco é a lógica acima e o layout abaixo)
-
+# --- 1. DIALOGS (Mantidos) ---
 @st.dialog("Importar Novos Chamados (Template Padrão)", width="large")
 def run_importer_dialog():
-    # ... (Código do importador igual ao anterior) ...
-    st.info("Arraste seu Template Padrão aqui.")
+    st.info("Arraste seu Template Padrão (.xlsx ou .csv). Colunas: CHAMADO e N° AGENCIA.")
     uploaded_files = st.file_uploader("Arquivos", type=["xlsx", "csv"], accept_multiple_files=True)
     if uploaded_files:
         dfs = []
@@ -204,15 +174,15 @@ def run_importer_dialog():
                 dfs.append(df)
             except: pass
         if dfs:
-            full_df = pd.concat(dfs, ignore_index=True)
-            if st.button("Importar"):
-                utils_chamados.bulk_insert_chamados_db(full_df)
+            full = pd.concat(dfs, ignore_index=True)
+            if st.button("Iniciar Importação"):
+                utils_chamados.bulk_insert_chamados_db(full)
                 st.success("Importado!"); st.session_state.importer_done = True
                 st.rerun()
 
 @st.dialog("🔗 Importar Links em Massa", width="medium")
 def run_link_importer_dialog():
-    st.info("Planilha com colunas: CHAMADO e LINK")
+    st.info("Planilha com: CHAMADO e LINK.")
     upl = st.file_uploader("Arquivo", type=["xlsx", "csv"])
     if upl:
         if upl.name.endswith('.csv'): df = pd.read_csv(upl, sep=';', dtype=str)
@@ -221,200 +191,195 @@ def run_link_importer_dialog():
         if st.button("Atualizar Links"):
             df_bd = utils_chamados.carregar_chamados_db()
             id_map = df_bd.set_index('Nº Chamado')['ID'].to_dict()
-            count = 0
+            c = 0
             for _, r in df.iterrows():
                 if r['CHAMADO'] in id_map:
                     utils_chamados.atualizar_chamado_db(id_map[r['CHAMADO']], {'Link Externo': r['LINK']})
-                    count += 1
-            st.success(f"{count} links atualizados."); st.session_state.importer_done = True
+                    c+=1
+            st.success(f"{c} links atualizados."); st.session_state.importer_done = True
 
-# --- TELA PRINCIPAL ---
+@st.dialog("⬇️ Exportar", width="small")
+def run_exporter_dialog(df):
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False)
+    st.download_button("Baixar Excel", data=buffer.getvalue(), file_name="dados.xlsx")
+
+# --- TELA PRINCIPAL (VISUAL RESTAURADO) ---
 def tela_dados_agencia():
     
-    # --- CSS RIGOROSO PARA LAYOUT ---
+    # CSS original ajustado para correção de posicionamento
     st.markdown("""
         <style>
-            /* Estilo do Card Principal */
+            .card-status-badge { 
+                background-color: #B0BEC5; color: white; padding: 5px 10px; 
+                border-radius: 15px; font-weight: bold; font-size: 0.8rem; 
+                display: inline-block; width: 100%; text-align: center; 
+            }
+            .card-action-text { 
+                text-align: center; font-size: 0.85em; font-weight: 600; 
+                color: #1565C0; background-color: #E3F2FD; 
+                padding: 4px; border-radius: 5px; border: 1px solid #BBDEFB;
+            } 
             .project-card {
-                background-color: #ffffff;
-                border: 1px solid #e0e0e0;
-                border-radius: 8px;
-                padding: 16px;
-                margin-bottom: 12px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                border: 1px solid #e0e0e0; border-radius: 8px; 
+                padding: 10px; margin-bottom: 10px; background-color: white;
             }
-            
-            /* BADGE DE STATUS (Principal) - Canto Superior Direito */
-            .status-badge-main {
-                display: block;
-                padding: 8px 0;
-                border-radius: 6px;
-                color: white;
-                font-weight: bold;
-                text-transform: uppercase;
-                text-align: center;
-                font-size: 0.9rem;
-                width: 100%;
-                box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-            }
-            
-            /* TEXTO DE AÇÃO (Sub-Status) - Canto Inferior Direito */
-            .action-box {
-                background-color: #E3F2FD;
-                border: 1px solid #90CAF9;
-                color: #1565C0;
-                padding: 8px;
-                border-radius: 6px;
-                text-align: center;
-                font-weight: 600;
-                font-size: 0.9rem;
-                margin-top: 5px;
-            }
-            
-            .label-small { font-size: 0.75rem; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
-            .value-large { font-size: 1.1rem; font-weight: 600; color: #333; }
+            .section-title-center { text-align: center; font-size: 1.8rem; font-weight: bold; margin-bottom: 20px; }
         </style>
     """, unsafe_allow_html=True)
-
-    st.markdown("<h2 style='text-align: center;'>GESTÃO DE DADOS POR AGÊNCIA</h2>", unsafe_allow_html=True)
     
-    # Carregar dados
+    st.markdown("<div class='section-title-center'>GESTÃO DE DADOS POR AGÊNCIA</div>", unsafe_allow_html=True)
+    
     utils_chamados.criar_tabela_chamados()
     try:
-        df_chamados_raw = utils_chamados.carregar_chamados_db()
+        df_raw = utils_chamados.carregar_chamados_db()
     except:
-        st.error("Erro de conexão."); st.stop()
-
-    if df_chamados_raw.empty:
-        st.warning("Sem dados."); 
-        if st.button("Importar"): run_importer_dialog()
         st.stop()
 
-    # Processamento Básico
-    df_chamados_raw['Agencia_Combinada'] = df_chamados_raw.apply(lambda r: formatar_agencia_excel(r.get('Cód. Agência'), r.get('Nome Agência')), axis=1)
-    
-    # Filtros (Simplificado para foco no layout)
-    col_f1, col_f2, col_f3, col_f4 = st.columns(4)
-    filtro_ag = col_f1.selectbox("Agência", ["Todos"] + sorted(df_chamados_raw['Agencia_Combinada'].unique()))
-    filtro_st = col_f2.selectbox("Status", ["Todos"] + sorted(df_chamados_raw['Status'].fillna('').unique()))
-    
-    # Botões de Importação
-    c_btn1, c_btn2 = st.columns(2)
-    if c_btn1.button("📥 Importar Geral", use_container_width=True): run_importer_dialog()
-    if c_btn2.button("🔗 Importar Links", use_container_width=True): run_link_importer_dialog()
-    
-    # Filtragem
-    df_filtrado = df_chamados_raw.copy()
-    if filtro_ag != "Todos": df_filtrado = df_filtrado[df_filtrado['Agencia_Combinada'] == filtro_ag]
-    if filtro_st != "Todos": df_filtrado = df_filtrado[df_filtrado['Status'] == filtro_st]
-    
-    st.divider()
-    
-    # --- RENDERIZAÇÃO DOS CARDS ---
-    if df_filtrado.empty:
-        st.info("Nenhum projeto encontrado.")
+    if df_raw.empty:
+        if st.button("📥 Importar"): run_importer_dialog()
         st.stop()
-        
-    # Agrupamento para visualização
+
+    if 'Cód. Agência' in df_raw.columns:
+        df_raw['Agencia_Combinada'] = df_raw.apply(lambda r: formatar_agencia_excel(r['Cód. Agência'], r['Nome Agência']), axis=1)
+
+    # Filtros
+    agencia_list = ["Todos"] + sorted(df_raw['Agencia_Combinada'].unique())
+    
+    c1, c2, c3 = st.columns([6, 2, 1])
+    with c2: 
+        if st.button("📥 Importar", use_container_width=True): run_importer_dialog()
+        if st.button("🔗 Links", use_container_width=True): run_link_importer_dialog()
+    with c3:
+        if st.button("⬇️ Exportar"): st.session_state.show_export_popup = True
+    
+    if st.session_state.get("show_export_popup"): run_exporter_dialog(df_raw)
+
+    with st.expander("🔎 Filtros"):
+        filtro_agencia = st.selectbox("Agência", agencia_list, on_change=lambda: st.session_state.update(pag_agencia_atual=0))
+    
+    df_filtrado = df_raw.copy()
+    if filtro_agencia != "Todos": df_filtrado = df_filtrado[df_filtrado['Agencia_Combinada'] == filtro_agencia]
+    
+    # KPI
+    st.markdown("### 📊 Resumo")
+    c1, c2 = st.columns(2)
+    c1.metric("Chamados", len(df_filtrado))
+    
+    # --- NIVEL 1: AGÊNCIAS (Paginado) ---
     df_filtrado['Agendamento_str'] = pd.to_datetime(df_filtrado['Agendamento'], errors='coerce').dt.strftime('%d/%m/%Y').fillna('Sem Data')
-    chave_proj = ['Agencia_Combinada', 'Projeto', 'Gestor', 'Serviço', 'Agendamento_str']
+    chave_projeto = ['Projeto', 'Gestor', 'Serviço', 'Agendamento_str']
     
-    grupos = df_filtrado.groupby(chave_proj)
+    agencias_unicas = sorted(df_filtrado['Agencia_Combinada'].unique())
+    total_ag = len(agencias_unicas)
+    ITENS_PAG = 10
+    if st.session_state.pag_agencia_atual * ITENS_PAG >= total_ag: st.session_state.pag_agencia_atual = 0
     
-    # Paginação Simples
-    lista_grupos = list(grupos)
-    total_grupos = len(lista_grupos)
-    page_size = 10
-    if st.session_state.pag_agencia_atual * page_size >= total_grupos: st.session_state.pag_agencia_atual = 0
-    start_idx = st.session_state.pag_agencia_atual * page_size
-    end_idx = start_idx + page_size
-    grupos_pagina = lista_grupos[start_idx:end_idx]
-    
-    # Controles de Paginação
-    c_nav1, c_nav2, c_nav3 = st.columns([1, 2, 1])
-    if c_nav1.button("⬅️ Anterior"): 
-        if st.session_state.pag_agencia_atual > 0: st.session_state.pag_agencia_atual -= 1; st.rerun()
-    c_nav2.markdown(f"<div style='text-align:center'>Exibindo {start_idx+1} a {min(end_idx, total_grupos)} de {total_grupos}</div>", unsafe_allow_html=True)
-    if c_nav3.button("Próximo ➡️"): 
-        if end_idx < total_grupos: st.session_state.pag_agencia_atual += 1; st.rerun()
+    inicio = st.session_state.pag_agencia_atual * ITENS_PAG
+    fim = inicio + ITENS_PAG
+    agencias_pag = agencias_unicas[inicio:fim]
 
-    # LOOP DOS CARDS
-    for (nome_agencia, nome_proj, nome_gestor, nome_servico, data_agend), df_proj in grupos_pagina:
-        row1 = df_proj.iloc[0]
-        ids_proj = df_proj['ID'].tolist()
+    # Navegação
+    col_n1, col_n2, col_n3 = st.columns([1, 2, 1])
+    if col_n1.button("⬅️ Ant"): st.session_state.pag_agencia_atual -= 1; st.rerun()
+    col_n2.markdown(f"<div style='text-align:center'>Pág {st.session_state.pag_agencia_atual+1}</div>", unsafe_allow_html=True)
+    if col_n3.button("Prox ➡️"): st.session_state.pag_agencia_atual += 1; st.rerun()
+
+    for nome_agencia in agencias_pag:
+        df_ag = df_filtrado[df_filtrado['Agencia_Combinada'] == nome_agencia]
         
-        # Dados para exibição
-        status_txt = clean_val(row1.get('Status'), "NÃO INICIADO").upper()
-        acao_txt = clean_val(row1.get('Sub-Status'), "Verificar")
-        status_color = utils_chamados.get_status_color(status_txt) # Assume que esta função retorna hex code
+        # Card Nível 1
+        st.markdown('<div class="project-card" style="background-color: #f8f9fa;">', unsafe_allow_html=True)
+        c1, c2, c3 = st.columns([4, 2, 2])
+        c1.markdown(f"#### {nome_agencia}")
+        c3.markdown(f"**{len(df_ag)} Chamados**")
         
-        st.markdown(f"""<div class="project-card">""", unsafe_allow_html=True)
+        # --- NIVEL 2: PROJETOS ---
+        with st.expander("Ver Projetos"):
+            grupos_proj = df_ag.groupby(chave_projeto)
+            for (nm_proj, nm_gestor, nm_servico, dt_agend), df_proj in grupos_proj:
+                row1 = df_proj.iloc[0]
+                status_txt = clean_val(row1.get('Status'), "NÃO INICIADO")
+                acao_txt = clean_val(row1.get('Sub-Status'), "")
+                cor_status = utils_chamados.get_status_color(status_txt)
+                
+                st.markdown('<div class="project-card">', unsafe_allow_html=True)
+                
+                # LINHA 1 DO CARD PROJETO
+                l1c1, l1c2, l1c3 = st.columns([3, 2, 2])
+                l1c1.markdown(f"**{clean_val(nm_proj).upper()}**")
+                l1c2.markdown(f"📅 {dt_agend}")
+                # STATUS NA DIREITA (TOPO)
+                l1c3.markdown(f"""<div class="card-status-badge" style="background-color: {cor_status};">{status_txt.upper()}</div>""", unsafe_allow_html=True)
+                
+                # LINHA 2 DO CARD PROJETO
+                l2c1, l2c2, l2c3 = st.columns([3, 2, 2])
+                l2c1.markdown(f"Serviço: {clean_val(nm_servico)}")
+                l2c2.markdown(f"Gestor: {clean_val(nm_gestor)}")
+                # AÇÃO NA DIREITA (BAIXO) - CORREÇÃO SOLICITADA
+                if acao_txt:
+                    l2c3.markdown(f"""<div class="card-action-text">{acao_txt}</div>""", unsafe_allow_html=True)
+                else:
+                    l2c3.markdown("-")
+
+                # --- NIVEL 3: FORMULÁRIO E CHAMADOS ---
+                with st.expander(f"Editar {len(df_proj)} Chamados (ID: {row1['ID']})"):
+                    ids_proj = df_proj['ID'].tolist()
+                    fk = f"f_lote_{row1['ID']}"
+                    with st.form(fk):
+                        st.write("Edição em Lote")
+                        c_a, c_b = st.columns(2)
+                        
+                        # Lógica para o dropdown não resetar se for Manual
+                        status_opts = ["(Status Automático)", "Pendência de Infra", "Pendência de Equipamento", "Pausado", "Cancelado", "Finalizado"]
+                        st_atual_norm = status_txt.title() if status_txt.lower() in [s.lower() for s in status_opts] else "(Status Automático)"
+                        try: idx_st = [s.lower() for s in status_opts].index(st_atual_norm.lower())
+                        except: idx_st = 0
+                        
+                        novo_st = c_a.selectbox("Status", status_opts, index=idx_st)
+                        nova_obs = c_b.text_area("Obs", value=clean_val(row1.get('Observações e Pendencias')))
+                        
+                        if st.form_submit_button("Salvar Projeto"):
+                            upd = {'Observações e Pendencias': nova_obs}
+                            
+                            recalc = False
+                            if novo_st != "(Status Automático)":
+                                upd['Status'] = novo_st
+                                upd['Sub-Status'] = None # Limpa ação se for manual
+                                recalc = False
+                                if novo_st == "Finalizado":
+                                     # Se for finalizado manual, verificar data
+                                     pass 
+                            else:
+                                recalc = True
+                            
+                            for i in ids_proj: utils_chamados.atualizar_chamado_db(i, upd)
+                            
+                            if recalc:
+                                # Recarrega e calcula
+                                df_bd = utils_chamados.carregar_chamados_db()
+                                df_p = df_bd[df_bd['ID'].isin(ids_proj)]
+                                calcular_e_atualizar_status_projeto(df_p, ids_proj)
+                            
+                            st.success("Salvo!"); time.sleep(1); st.rerun()
+
+                    # LISTA DE CHAMADOS INDIVIDUAIS
+                    st.divider()
+                    for _, r_ch in df_proj.iterrows():
+                        with st.expander(f"Chamado: {r_ch['Nº Chamado']}"):
+                            with st.form(f"f_ind_{r_ch['ID']}"):
+                                lk = st.text_input("Link", value=clean_val(r_ch.get('Link Externo')))
+                                if st.form_submit_button("Salvar Chamado"):
+                                    if utils_chamados.atualizar_chamado_db(r_ch['ID'], {'Link Externo': lk}):
+                                        # Tenta recalcular automação ao salvar link
+                                        df_bd = utils_chamados.carregar_chamados_db()
+                                        df_p = df_bd[df_bd['ID'].isin(ids_proj)]
+                                        calcular_e_atualizar_status_projeto(df_p, ids_proj)
+                                        st.rerun()
+
+                st.markdown('</div>', unsafe_allow_html=True) # Fim Card Projeto
         
-        # --- LAYOUT DO CARD: 2 LINHAS, 3 COLUNAS ---
-        # Linha 1: Agência/Projeto (Esq) | Data (Meio) | STATUS (Dir)
-        c1, c2, c3 = st.columns([3, 2, 2])
-        with c1:
-            st.markdown(f"<div class='label-small'>{nome_agencia}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='value-large'>{clean_val(nome_proj, 'Sem Nome')}</div>", unsafe_allow_html=True)
-        with c2:
-             st.markdown(f"<div class='label-small'>Agendamento</div>", unsafe_allow_html=True)
-             st.markdown(f"<div>📅 {data_agend}</div>", unsafe_allow_html=True)
-        with c3:
-            # STATUS AQUI - BEM VISÍVEL
-            st.markdown(f"""<div class="status-badge-main" style="background-color: {status_color};">{status_txt}</div>""", unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True) # Fim Card Agencia
 
-        st.markdown("<div style='margin-top: 8px'></div>", unsafe_allow_html=True) # Spacer
-
-        # Linha 2: Serviço (Esq) | Gestor (Meio) | AÇÃO (Dir)
-        c4, c5, c6 = st.columns([3, 2, 2])
-        with c4:
-             st.markdown(f"<div class='label-small'>Serviço</div>", unsafe_allow_html=True)
-             st.markdown(f"<div>{clean_val(nome_servico)}</div>", unsafe_allow_html=True)
-        with c5:
-             st.markdown(f"<div class='label-small'>Gestor</div>", unsafe_allow_html=True)
-             st.markdown(f"<div>👤 {clean_val(nome_gestor)}</div>", unsafe_allow_html=True)
-        with c6:
-            # AÇÃO AQUI - ABAIXO DO STATUS
-            if acao_txt and acao_txt != "N/A":
-                st.markdown(f"""<div class="action-box">{acao_txt}</div>""", unsafe_allow_html=True)
-            else:
-                st.markdown("-")
-
-        # --- ÁREA DE EDIÇÃO (EXPANDER) ---
-        with st.expander(f"Editar Detalhes ({len(ids_proj)} chamados)"):
-             with st.form(key=f"form_{ids_proj[0]}"):
-                 st.write("Edição Manual (Sobrescreve automação se Cancelado/Pausado)")
-                 # Inputs simplificados para exemplo
-                 col_e1, col_e2 = st.columns(2)
-                 new_status = col_e1.selectbox("Status Principal", 
-                                             ["(Automático)", "Cancelado", "Pausado", "Pendência de Infra", "Pendência de Equipamento", "Finalizado"], 
-                                             key=f"st_{ids_proj[0]}")
-                 new_obs = col_e2.text_area("Observações", value=clean_val(row1.get('Observações e Pendencias')), key=f"obs_{ids_proj[0]}")
-                 
-                 if st.form_submit_button("Salvar"):
-                     updates = {'Observações e Pendencias': new_obs}
-                     
-                     # Se o usuário escolher um status manual, força ele.
-                     if new_status != "(Automático)":
-                         updates['Status'] = new_status
-                         updates['Sub-Status'] = None # Limpa ação automática
-                         for i in ids_proj: utils_chamados.atualizar_chamado_db(i, updates)
-                         st.success("Salvo manual!")
-                     else:
-                         # Salva dados e RODA CÁLCULO
-                         for i in ids_proj: utils_chamados.atualizar_chamado_db(i, updates)
-                         
-                         # Recarrega para cálculo
-                         df_bd_temp = utils_chamados.carregar_chamados_db()
-                         df_proj_temp = df_bd_temp[df_bd_temp['ID'].isin(ids_proj)]
-                         if calcular_e_atualizar_status_projeto(df_proj_temp, ids_proj):
-                             st.success("Salvo e Recalculado!")
-                         else:
-                             st.success("Salvo (Sem mudança de status)!")
-                     
-                     time.sleep(1); st.rerun()
-
-        st.markdown("</div>", unsafe_allow_html=True) # Fim do Card
-
-# --- EXECUÇÃO ---
 tela_dados_agencia()
