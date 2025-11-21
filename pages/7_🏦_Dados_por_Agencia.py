@@ -616,11 +616,10 @@ def tela_dados_agencia():
                             st.markdown(f"##### {clean_val(nome_projeto, 'Sem Projeto').upper()}", unsafe_allow_html=True)
                         
                         with col2: 
-                            st.markdown(f"**📅 **\n{dt_ag}", unsafe_allow_html=True)
+                            st.markdown(f"####📅 \n{dt_ag}", unsafe_allow_html=True)
                         
                         with col3:
-                            # ADICIONADO: Título explícito para o Status
-                            st.markdown("****") 
+                            
                             status_html = html.escape(status_proj.upper())
                             st.markdown(f"""<div class="card-status-badge" style="background-color: {status_color};">{status_html}</div>""", unsafe_allow_html=True)
                         
@@ -837,6 +836,7 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia ()
+
 
 
 
