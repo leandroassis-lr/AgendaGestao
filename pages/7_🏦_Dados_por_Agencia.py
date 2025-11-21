@@ -137,7 +137,6 @@ def run_link_importer_dialog():
             else: 
                 df_links = pd.read_excel(uploaded_links, header=0, dtype=str)
             
-            # Normaliza cabeçalhos
             df_links.columns = [str(c).strip().upper() for c in df_links.columns]
             
             if 'CHAMADO' not in df_links.columns or 'LINK' not in df_links.columns:
@@ -146,21 +145,16 @@ def run_link_importer_dialog():
                 st.dataframe(df_links.head(), use_container_width=True)
                 if st.button("🚀 Atualizar Links"):
                     with st.spinner("Atualizando links..."):
-                        # 1. Carregar IDs do banco para mapear
                         df_bd = utils_chamados.carregar_chamados_db()
                         if df_bd.empty: st.error("Banco de dados vazio."); st.stop()
                         
                         id_map = df_bd.set_index('Nº Chamado')['ID'].to_dict()
                         count = 0
                         
-                        # 2. Loop de atualização
                         for _, row in df_links.iterrows():
                             chamado = row['CHAMADO']
                             link = row['LINK']
-                            
-                            # Se o chamado existe no banco e o link não é vazio
                             if chamado in id_map and pd.notna(link) and str(link).strip():
-                                # Atualiza apenas o campo link_externo
                                 internal_id = id_map[chamado]
                                 utils_chamados.atualizar_chamado_db(internal_id, {'Link Externo': link})
                                 count += 1
@@ -329,7 +323,6 @@ def tela_dados_agencia():
         with c_b1:
             if st.button("📥 Importar Geral", use_container_width=True): run_importer_dialog()
         with c_b2:
-            # NOVO BOTÃO DE IMPORTAÇÃO DE LINK
             if st.button("🔗 Importar Links", use_container_width=True): run_link_importer_dialog()
             
     with c_btn_exp:
@@ -381,21 +374,14 @@ def tela_dados_agencia():
         st.error(f"Erro ao processar datas para agrupamento: {e}")
         st.stop()
         
-    # --- 7. Painel de KPIs (REFEITO) ---
+    # --- 7. Painel de KPIs ---
     st.markdown(f"### 📊 Resumo")
-    
-    # Listas de status
     status_fechamento_kpi = ['fechado', 'concluido', 'resolvido', 'cancelado', 'encerrado', 'equipamento entregue - concluído', 'finalizado']
     status_fechamento_set = set(status_fechamento_kpi)
-
-    # 1. KPIs de Chamados
     df_aberto = df_filtrado[~df_filtrado['Status'].astype(str).str.lower().isin(status_fechamento_kpi)]
     df_finalizado = df_filtrado[df_filtrado['Status'].astype(str).str.lower().isin(status_fechamento_kpi)]
-    
     chamados_abertos_count = len(df_aberto)
     chamados_finalizados_count = len(df_finalizado)
-    
-    # 2. KPIs de Projetos
     projetos_abertos_count = 0
     projetos_finalizados_count = 0
     
@@ -404,21 +390,16 @@ def tela_dados_agencia():
             df_grupos = df_filtrado.groupby(chave_projeto)
             for _, df_grupo in df_grupos:
                 status_do_grupo = set(df_grupo['Status'].astype(str).str.lower().fillna('N/A').unique())
-                if status_do_grupo.issubset(status_fechamento_set):
-                    projetos_finalizados_count += 1
-                else:
-                    projetos_abertos_count += 1
-        except Exception as e:
-            st.error(f"Erro ao agrupar projetos para KPIs: {e}")
+                if status_do_grupo.issubset(status_fechamento_set): projetos_finalizados_count += 1
+                else: projetos_abertos_count += 1
+        except Exception as e: st.error(f"Erro ao agrupar projetos para KPIs: {e}")
 
-    # Layout dos KPIs
     kpi1, kpi2, kpi3, kpi4 = st.columns(4)
     kpi1.metric("Chamados Abertos", chamados_abertos_count)
     kpi2.metric("Projetos Abertos", projetos_abertos_count)
     kpi3.metric("Chamados Finalizados", chamados_finalizados_count)
     kpi4.metric("Projetos Finalizados", projetos_finalizados_count)
 
-    # 3. KPI de Quantidade por Status
     st.markdown("#### 📊 Status")
     status_counts = df_filtrado['Status'].fillna('N/A').value_counts()
     num_status = len(status_counts)
@@ -430,8 +411,7 @@ def tela_dados_agencia():
             col_atual = cols_status[idx % num_cols]
             col_atual.metric(status_nome, contagem)
             idx += 1
-    else:
-        st.info("Nenhum status para exibir.")
+    else: st.info("Nenhum status para exibir.")
     st.divider()
 
     # --- 8. NOVA VISÃO HIERÁRQUICA COM PAGINAÇÃO ---
@@ -441,7 +421,6 @@ def tela_dados_agencia():
         st.info("Nenhum chamado encontrado para os filtros selecionados.")
         st.stop() 
 
-    # 1. Prepara a lista ordenada de Agências (Total)
     status_fechamento_sort = ['concluído', 'cancelado', 'equipamento entregue - concluído', 'finalizado', 'fechado', 'resolvido', 'encerrado']
     df_abertos_sort = df_filtrado[~df_filtrado['Status'].astype(str).str.lower().isin(status_fechamento_sort)].copy()
     df_abertos_sort['Agendamento'] = pd.to_datetime(df_abertos_sort['Agendamento'], errors='coerce')
@@ -452,21 +431,16 @@ def tela_dados_agencia():
     sort_df = sort_df.sort_values(by='MinDate', ascending=True, na_position='last')
     
     # --- PAGINAÇÃO START ---
-    sorted_agency_list = sort_df['Agencia_Combinada'].tolist() # Lista completa
-    
+    sorted_agency_list = sort_df['Agencia_Combinada'].tolist() 
     ITENS_POR_PAGINA = 10
     total_itens = len(sorted_agency_list)
     total_paginas = math.ceil(total_itens / ITENS_POR_PAGINA)
     
     if st.session_state.pag_agencia_atual >= total_paginas: st.session_state.pag_agencia_atual = 0
-    
     inicio = st.session_state.pag_agencia_atual * ITENS_POR_PAGINA
     fim = inicio + ITENS_POR_PAGINA
-    
-    # Corta a lista para mostrar só 10
     agencias_da_pagina = sorted_agency_list[inicio:fim]
     
-    # Controles
     def nav_controls(key_prefix):
         c1, c2, c3, c4, c5 = st.columns([1, 1, 3, 1, 1])
         with c2:
@@ -480,9 +454,7 @@ def tela_dados_agencia():
     
     # --- PAGINAÇÃO END ---
 
-    # Filtra o DF principal para conter APENAS as agências dessa página
     df_pagina = df_filtrado[df_filtrado['Agencia_Combinada'].isin(agencias_da_pagina)]
-    
     agencias_agrupadas = df_pagina.groupby(chave_agencia)
     agencia_dfs_dict = dict(list(agencias_agrupadas))
     
@@ -491,7 +463,6 @@ def tela_dados_agencia():
         df_agencia = agencia_dfs_dict.get(nome_agencia)
         if df_agencia is None: continue
         
-        # --- Card Nível 1 (Agência) ---
         status_fechamento_proj = ['concluído', 'cancelado', 'equipamento entregue - concluído', 'finalizado']
         df_agencia_aberta = df_agencia[~df_agencia['Status'].astype(str).str.lower().isin(status_fechamento_proj)]
         hoje_ts = pd.Timestamp.now().normalize()
@@ -506,10 +477,7 @@ def tela_dados_agencia():
                 elif earliest_date == hoje_ts: tag_html = "<span style='color: #FFA726; font-weight: bold;'>🟧 PARA HOJE</span>"; urgency_text = f"📅 {earliest_date.strftime('%d/%m/%Y')}"
                 else: urgency_text = f"📅 {earliest_date.strftime('%d/%m/%Y')}"
                 
-                analistas_urgentes = df_agencia_aberta[
-                    df_agencia_aberta['Agendamento'] == earliest_date
-                ]['Analista'].dropna().unique()
-                
+                analistas_urgentes = df_agencia_aberta[df_agencia_aberta['Agendamento'] == earliest_date]['Analista'].dropna().unique()
                 if len(analistas_urgentes) == 0: analista_urgente_nome = "Sem Analista"
                 elif len(analistas_urgentes) == 1: analista_urgente_nome = analistas_urgentes[0]
                 else: analista_urgente_nome = "Múltiplos"
@@ -522,12 +490,10 @@ def tela_dados_agencia():
             with col1: st.markdown(tag_html, unsafe_allow_html=True)
             with col2: st.markdown(f"<span style='font-size: 1.15rem; font-weight: bold;'>{nome_agencia}</span>", unsafe_allow_html=True)
             with col3: st.markdown(urgency_text, unsafe_allow_html=True)
-            
             with col4:
                 analista_color = utils_chamados.get_color_for_name(analista_urgente_nome)
                 analista_html = f"<span style='color: {analista_color}; font-weight: 500;'>{analista_urgente_nome}</span>"
                 st.markdown(f"**Analista:** {analista_html}", unsafe_allow_html=True)
-            
             with col5: st.markdown(f"**{num_projetos} {'Projetos' if num_projetos > 1 else 'Projeto'}**", unsafe_allow_html=True)
     
             # --- Nível 2 (Serviços/Projetos) ---
@@ -537,13 +503,11 @@ def tela_dados_agencia():
                 except KeyError: continue
 
                 for (nome_projeto, nome_gestor, nome_servico, data_agend), df_projeto in projetos_agrupados:
-                    
                     first_row = df_projeto.iloc[0]
                     chamado_ids_internos_list = df_projeto['ID'].tolist()
                     
                     st.markdown('<div class="project-card" style="margin-top: 10px;">', unsafe_allow_html=True)
                     with st.container(border=True): 
-                        
                         status_proj = clean_val(first_row.get('Status'), "Não Iniciado")
                         sub_status_proj = clean_val(first_row.get('Sub-Status'), "")
                         status_color = utils_chamados.get_status_color(status_proj)
@@ -566,8 +530,7 @@ def tela_dados_agencia():
                             if sub_status_proj:
                                 st.markdown(f"**Ação:**")
                                 st.markdown(f"""<div class="card-action-text">{sub_status_proj}</div>""", unsafe_allow_html=True)
-                            else:
-                                st.markdown(f"**Ação:**\n-", unsafe_allow_html=True)
+                            else: st.markdown(f"**Ação:**\n-", unsafe_allow_html=True)
                         
                         # --- NÍVEL 3 (Expander com formulários) ---
                         expander_title = f"Ver/Editar {len(chamado_ids_internos_list)} Chamado(s) (ID: {first_row['ID']})"
@@ -624,31 +587,35 @@ def tela_dados_agencia():
                                         
                                         form_key_ind = f"form_ind_edit_{chamado_row['ID']}"
                                         with st.form(key=form_key_ind):
-                                            # --- CORREÇÃO: LÓGICA PARA EXIBIR CAMPOS ---
+                                            
+                                            # --- AJUSTE: CAMPO LINK E BOTÃO INTEGRADOS ---
+                                            # Lógica: Mostra os campos SE for serviço OU se estiver na lista de exceção
                                             is_servico = '-S-' in chamado_row['Nº Chamado']
                                             is_equipamento = '-E-' in chamado_row['Nº Chamado']
                                             nome_servico_norm_atual = str(nome_servico).strip().lower()
                                             eh_excecao = nome_servico_norm_atual in SERVICOS_SEM_EQUIPAMENTO
                                             
-                                            # Variável para guardar updates
                                             updates_individuais = {}
                                             
-                                            # Exibe link se existir
-                                            link_atual = chamado_row.get('Link Externo')
-                                            if pd.notna(link_atual) and str(link_atual).strip():
-                                                st.markdown(f"🔗 [**Acessar Link Salvo**]({link_atual})")
-
-                                            # Mostra campos SE for serviço OU se estiver na lista de exceção
                                             if is_servico or eh_excecao:
                                                 st.markdown("****")
-                                                c1, c2 = st.columns(2)
-                                                link_val = link_atual if pd.notna(link_atual) else ''
-                                                novo_link = c1.text_input("Link Externo", value=link_val, key=f"link_{chamado_row['ID']}")
-                                                updates_individuais['Link Externo'] = novo_link
                                                 
-                                                proto_val = chamado_row.get('Nº Protocolo', '')
-                                                novo_protocolo = c2.text_input("Nº Protocolo", value=proto_val, key=f"proto_{chamado_row['ID']}")
-                                                updates_individuais['Nº Protocolo'] = novo_protocolo
+                                                # Layout: Link input | Botão de Acesso
+                                                c_lnk, c_btn_lnk = st.columns([4, 1])
+                                                link_atual = chamado_row.get('Link Externo', '')
+                                                
+                                                with c_lnk:
+                                                    novo_link = st.text_input("Link Externo", value=link_atual if pd.notna(link_atual) else '', key=f"link_{chamado_row['ID']}")
+                                                    updates_individuais['Link Externo'] = novo_link
+                                                
+                                                with c_btn_lnk:
+                                                    # Espaço vazio para alinhar com o input
+                                                    st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+                                                    if pd.notna(link_atual) and str(link_atual).strip():
+                                                        st.link_button("🌐 Acessar", link_atual)
+                                                
+                                                c1, c2 = st.columns(2)
+                                                proto_val = chamado_row.get('Nº Protocolo', ''); novo_protocolo = c1.text_input("Nº Protocolo", value=proto_val, key=f"proto_{chamado_row['ID']}"); updates_individuais['Nº Protocolo'] = novo_protocolo
                                             
                                             if is_equipamento:
                                                 st.markdown("****"); c1, c2 = st.columns(2); pedido_val = chamado_row.get('Nº Pedido', ''); novo_pedido = c1.text_input("Nº Pedido", value=pedido_val, key=f"pedido_{chamado_row['ID']}"); updates_individuais['Nº Pedido'] = novo_pedido
@@ -657,6 +624,7 @@ def tela_dados_agencia():
                                             
                                             qtd_val_numeric_ind = pd.to_numeric(chamado_row.get('Qtd.'), errors='coerce'); qtd_int_ind = int(qtd_val_numeric_ind) if pd.notna(qtd_val_numeric_ind) else 0; equip_str_ind = str(chamado_row.get('Equipamento', 'N/A'))
                                             st.text_area("Descrição (equipamento deste chamado)", value=f"{qtd_int_ind:02d} - {equip_str_ind}", disabled=True, height=50, key=f"desc_ind_{chamado_row['ID']}")
+                                            
                                             btn_salvar_individual = st.form_submit_button("💾 Atualizar", use_container_width=True)
 
                                         if btn_salvar_individual:
@@ -675,7 +643,6 @@ def tela_dados_agencia():
                             if nome_servico_norm in SERVICOS_SEM_EQUIPAMENTO:
                                 if nome_servico_norm == servico_recolhimento: descricao_texto = f"Realizar o {nome_servico}"
                                 else: descricao_texto = f"Realizar a {nome_servico}"
-                                
                                 st.markdown(f"""<div style='background-color: #f0f2f5; border-radius: 5px; padding: 10px; font-size: 0.95rem; font-weight: 500;'>{descricao_texto}</div>""", unsafe_allow_html=True)
                             else:
                                 descricao_list_agrupada = []
@@ -688,16 +655,13 @@ def tela_dados_agencia():
                                         equip_str = str(chamado_row_desc.get('Equipamento', 'N/A'))
                                         descricao_list_agrupada.append(f"{qtd_int:02d} - {equip_str}")
                                     descricao_list_agrupada.append("") 
-                            
                                 descricao_texto = "<br>".join(descricao_list_agrupada)
                                 st.markdown(f"""<div style='background-color: #f0f2f5; border-radius: 5px; padding: 10px; font-size: 0.9rem; max-height: 200px; overflow-y: auto;'>{descricao_texto}</div>""", unsafe_allow_html=True)
                     
-                    st.markdown("</div>", unsafe_allow_html=True) # Fecha card Nível 2
-        
-        st.markdown("</div>", unsafe_allow_html=True) # Fecha card Nível 1
+                    st.markdown("</div>", unsafe_allow_html=True) 
+        st.markdown("</div>", unsafe_allow_html=True) 
         st.markdown("<br>", unsafe_allow_html=True) 
     
-    # Botões de navegação no fim da página também
     if total_paginas > 1:
         st.divider()
         nav_controls("bottom")
