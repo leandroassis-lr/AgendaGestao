@@ -15,7 +15,6 @@ st.markdown("""
         .fin-value { font-size: 1rem; font-weight: 500; color: #222; }
         .status-badge-fin { padding: 5px 10px; border-radius: 15px; font-weight: bold; font-size: 0.8rem; color: white; text-align: center; width: 100%; display: block; }
         .section-title-center { text-align: center; font-size: 1.8rem; font-weight: bold; margin-bottom: 20px; color: #333; }
-        /* Ajuste para cards */
         div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column;"] > div[data-testid="stVerticalBlock"] { gap: 0.5rem; }
     </style>
 """, unsafe_allow_html=True)
@@ -60,40 +59,27 @@ def carregar_dados_fin():
     )
 
 def calcular_valor_linha(row, lpu_f, lpu_s, lpu_e):
-    """Calcula o valor do serviço com base na LPU."""
     serv = str(row.get('Serviço', '')).strip().lower()
     equip = str(row.get('Equipamento', '')).strip().lower()
     qtd = pd.to_numeric(row.get('Qtd.'), errors='coerce')
     if pd.isna(qtd) or qtd == 0: qtd = 1
     
-    # 1. Tenta Valor Fixo (Prioridade)
     if serv in lpu_f: return lpu_f[serv]
-    
-    # 2. Tenta Serviço de Equipamento
     if equip in lpu_s:
         keywords_desinst = ['desativacao', 'desinstalação', 'desinstalacao']
-        if any(x in serv for x in keywords_desinst): 
-            return lpu_s[equip].get('desativacao', 0.0) * qtd
-        
+        if any(x in serv for x in keywords_desinst): return lpu_s[equip].get('desativacao', 0.0) * qtd
         keywords_reinst = ['reinstalacao', 'reinstalação', 'instalação nova', 'instalacao nova', 'remanejamento']
-        if any(x in serv for x in keywords_reinst): 
-            return lpu_s[equip].get('reinstalacao', 0.0) * qtd
-            
-    # 3. Tenta Preço Unitário Equipamento
+        if any(x in serv for x in keywords_reinst): return lpu_s[equip].get('reinstalacao', 0.0) * qtd
     if equip in lpu_e: return lpu_e.get(equip, 0.0) * qtd
-    
     return 0.0
 
 def definir_status_financeiro(row, lista_books, lista_liberados):
     chamado_id = str(row['Nº Chamado'])
     status_tecnico = str(row['Status']).lower()
-    
     if chamado_id in lista_liberados: return "FATURADO", "#43A047"
     if chamado_id in lista_books: return "PENDENTE FATURAMENTO", "#FB8C00"
-    
     fechado_keywords = ['finalizado', 'concluido', 'concluído', 'fechado', 'resolvido', 'encerrado']
     if any(k in status_tecnico for k in fechado_keywords): return "AGUARDANDO BOOK", "#E53935"
-    
     return "EM ANDAMENTO", "#1E88E5"
 
 # --- CARREGAMENTO ---
@@ -108,7 +94,8 @@ if df_chamados_raw.empty:
 # --- PROCESSAMENTO ---
 df_chamados_raw['Valor_Calculado'] = df_chamados_raw.apply(lambda x: calcular_valor_linha(x, lpu_f, lpu_s, lpu_e), axis=1)
 
-set_books = set(df_books[df_books['book_pronto'].astype(str).str.upper().isin(['SIM', 'S'])]['chamado'].astype(str))
+# Lista de chamados no Book (qualquer um na planilha)
+set_books = set(df_books['chamado'].astype(str))
 set_liberados = set(df_lib['chamado'].astype(str)) if not df_lib.empty else set()
 
 df_chamados_raw[['Status_Fin', 'Cor_Fin']] = df_chamados_raw.apply(
@@ -153,13 +140,43 @@ with st.expander("⚙️ Configurações e Importações (LPU, Books, Liberaçã
             except Exception as e: st.error(f"Erro: {e}")
 
     with tab2:
+        st.info("Importe o controle de Books. Todos os chamados presentes no arquivo terão Status atualizado para 'Finalizado' e Protocolo salvo.")
         up_bk = st.file_uploader("Books (.xlsx/.csv)", type=["xlsx", "csv"], key="up_bk")
-        if up_bk and st.button("Importar Books"):
+        if up_bk and st.button("Importar Books e Atualizar Sistema"):
             try:
                 df_b = pd.read_csv(up_bk, sep=';', dtype=str) if up_bk.name.endswith('.csv') else pd.read_excel(up_bk, dtype=str)
+                
+                # 1. Importar para tabela de Rastreio
                 suc, msg = utils_financeiro.importar_planilha_books(df_b)
-                if suc: st.success(msg); st.cache_data.clear(); time.sleep(1); st.rerun()
-                else: st.error(msg)
+                
+                if not suc: st.error(msg)
+                else:
+                    st.success(msg)
+                    # 2. Write-Back: Atualizar Tabela Principal de Chamados
+                    df_b.columns = [str(c).strip().upper() for c in df_b.columns]
+                    
+                    # --- AJUSTE: NÃO FILTRA MAIS POR 'SIM' ---
+                    # Processa TODOS os chamados da planilha
+                    df_bd = utils_chamados.carregar_chamados_db()
+                    id_map = df_bd.set_index('Nº Chamado')['ID'].to_dict()
+                    
+                    cnt = 0
+                    for _, r in df_b.iterrows():
+                        i_d = id_map.get(r['CHAMADO'])
+                        if i_d:
+                            updates = {
+                                'Nº Protocolo': r.get('PROTOCOLO'),
+                                'Status': 'Finalizado' # Força Finalizado pois está na planilha de books (concluído)
+                            }
+                            dt_conc = pd.to_datetime(r.get('DATA CONCLUSAO'), errors='coerce')
+                            if not pd.isna(dt_conc): updates['Data Finalização'] = dt_conc
+
+                            utils_chamados.atualizar_chamado_db(i_d, updates)
+                            cnt += 1
+                    
+                    st.info(f"✅ {cnt} chamados foram atualizados automaticamente com Protocolo e Status.")
+                    st.cache_data.clear(); st.cache_resource.clear(); time.sleep(1); st.rerun()
+
             except Exception as e: st.error(f"Erro: {e}")
 
     with tab3:
@@ -180,7 +197,7 @@ with col_f2:
     filtro_agencia = st.selectbox("Filtrar Agência", options=["Todas"] + sorted(df_chamados_raw['Agencia_Combinada'].unique().tolist()), on_change=lambda: st.session_state.update(pag_fin_atual=0))
 with col_f3:
     busca = st.text_input("Busca Rápida", placeholder="Chamado, Protocolo, Valor...")
-    if busca: st.session_state.pag_fin_atual = 0 # Resetar pag ao buscar
+    if busca: st.session_state.pag_fin_atual = 0
 
 # Aplica Filtros
 df_view = df_chamados_raw[df_chamados_raw['Status_Fin'].isin(filtro_status_fin)]
@@ -189,41 +206,34 @@ if busca:
     t = busca.lower()
     df_view = df_view[df_view.astype(str).apply(lambda x: x.str.lower().str.contains(t)).any(axis=1)]
 
-# --- PAGINAÇÃO (LÓGICA E CONTROLES) ---
-ITENS_POR_PAGINA = 10
+# --- PAGINAÇÃO ---
 lista_agencias_unicas = sorted(df_view['Agencia_Combinada'].unique())
 total_itens = len(lista_agencias_unicas)
+ITENS_POR_PAGINA = 10
 total_paginas = math.ceil(total_itens / ITENS_POR_PAGINA)
 
-# Garante que a página atual é válida
-if st.session_state.pag_fin_atual >= total_paginas:
-    st.session_state.pag_fin_atual = 0
-
+if st.session_state.pag_fin_atual >= total_paginas: st.session_state.pag_fin_atual = 0
 inicio = st.session_state.pag_fin_atual * ITENS_POR_PAGINA
 fim = inicio + ITENS_POR_PAGINA
 agencias_da_pagina = lista_agencias_unicas[inicio:fim]
 
-# Controles de Navegação
 def nav_controls(key_prefix):
     c1, c2, c3, c4, c5 = st.columns([1, 1, 3, 1, 1])
     with c2:
         if st.button("⬅️ Anterior", key=f"{key_prefix}_prev", disabled=(st.session_state.pag_fin_atual == 0)):
-            st.session_state.pag_fin_atual -= 1
-            st.rerun()
+            st.session_state.pag_fin_atual -= 1; st.rerun()
     with c3:
         st.markdown(f"<div style='text-align: center; padding-top: 5px;'>Página <strong>{st.session_state.pag_fin_atual + 1}</strong> de <strong>{max(1, total_paginas)}</strong></div>", unsafe_allow_html=True)
     with c4:
         if st.button("Próximo ➡️", key=f"{key_prefix}_next", disabled=(st.session_state.pag_fin_atual >= total_paginas - 1)):
-            st.session_state.pag_fin_atual += 1
-            st.rerun()
+            st.session_state.pag_fin_atual += 1; st.rerun()
 
 # --- VISÃO DE CARDS ---
 st.markdown(f"#### 📋 Detalhamento ({len(df_view)} chamados em {total_itens} agências)")
 
-nav_controls("top") # Controles no topo
+nav_controls("top")
 st.divider()
 
-# Filtrar o DF principal para mostrar APENAS as agências da página atual
 df_pagina = df_view[df_view['Agencia_Combinada'].isin(agencias_da_pagina)]
 agencias_view = df_pagina.groupby('Agencia_Combinada')
 
@@ -266,4 +276,4 @@ for nome_agencia, df_ag in agencias_view:
 
 if total_paginas > 1:
     st.divider()
-    nav_controls("bottom") # Controles no fundo também
+    nav_controls("bottom")
