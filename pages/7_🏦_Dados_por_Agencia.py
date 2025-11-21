@@ -201,23 +201,28 @@ def run_exporter_dialog(df_data_to_export):
     if st.button("Fechar", use_container_width=True):
         st.session_state.show_export_popup = False; st.rerun()
 
-# --- FUNÇÃO "CÉREBRO" DE STATUS (v11.1) ---
+# --- FUNÇÃO "CÉREBRO" DE STATUS (v11.1 - BLINDADA) ---
 def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
+    # Normaliza o status atual (case insensitive)
     status_atual = str(df_projeto.iloc[0].get('Status', 'Não Iniciado')).strip()
+    
+    # Lista de status que NÃO devem ser alterados automaticamente
     status_manual_list = ["Pendência de Infra", "Pendência de Equipamento", "Pausado", "Cancelado", "Finalizado"]
     
-    # Se já está num status manual, não deve ser alterado automaticamente,
-    # A menos que seja para limpar sub-status.
-    if status_atual in status_manual_list:
+    # Verifica se o status atual é um dos manuais (ignora maiuscula/minuscula)
+    if any(s.lower() == status_atual.lower() for s in status_manual_list):
+        # Se já é manual, a única coisa que fazemos é limpar o sub-status se necessário
         sub_status_atual_val = df_projeto.iloc[0].get('Sub-Status')
         sub_status_atual = "" if pd.isna(sub_status_atual_val) else str(sub_status_atual_val).strip()
+        
         if sub_status_atual != "":
             updates = {"Sub-Status": None}
-            for chamado_id in ids_para_atualizar: utils_chamados.atualizar_chamado_db(chamado_id, updates)
+            for chamado_id in ids_para_atualizar: 
+                utils_chamados.atualizar_chamado_db(chamado_id, updates)
             return True 
-        # Se já é manual e não tem sub-status, RETORNA FALSE para não continuar o cálculo
-        return False 
+        return False # NÃO CALCULA NADA, Mantém o status manual
     
+    # --- LÓGICA AUTOMÁTICA (Só roda se não for manual) ---
     has_S = df_projeto['Nº Chamado'].str.contains('-S-').any()
     has_E = df_projeto['Nº Chamado'].str.contains('-E-').any()
     
@@ -257,7 +262,7 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
     sub_status_atual = "" if pd.isna(sub_status_atual_val) else str(sub_status_atual_val).strip()
     
     if status_atual != novo_status or sub_status_atual != novo_sub_status:
-        st.info(f"Status do projeto mudou de '{status_atual} | {sub_status_atual}' para '{novo_status} | {novo_sub_status}'")
+        st.info(f"Status atualizado automaticamente para '{novo_status}'")
         updates = {"Status": novo_status, "Sub-Status": novo_sub_status}
         for chamado_id in ids_para_atualizar: utils_chamados.atualizar_chamado_db(chamado_id, updates)
         return True
@@ -292,7 +297,6 @@ def tela_dados_agencia():
         with st.spinner("Carregando dados..."):
             df_chamados_raw = utils_chamados.carregar_chamados_db()
     except Exception as e:
-        # Sem import time local
         st.warning(f"⚠️ A conexão com o banco oscilou. Tentando reconectar... ({e})")
         st.cache_data.clear(); st.cache_resource.clear()
         time.sleep(1); st.rerun()
@@ -543,7 +547,6 @@ def tela_dados_agencia():
                         expander_title = f"Ver/Editar {len(chamado_ids_internos_list)} Chamado(s) (ID: {first_row['ID']})"
                         with st.expander(expander_title):
                             
-                            # (Formulário de Lote Nível 2)
                             form_key_lote = f"form_lote_edit_{first_row['ID']}"
                             with st.form(key=form_key_lote):
                                 st.markdown(f"**Editar todos os {len(df_projeto)} chamados deste Serviço/Projeto:**")
@@ -565,41 +568,38 @@ def tela_dados_agencia():
                             if btn_salvar_lote:
                                 updates = {"Prazo": novo_prazo, "Data Abertura": nova_abertura,"Data Agendamento": novo_agendamento, "Data Finalização": nova_finalizacao,"Projeto": novo_projeto, "Analista": novo_analista, "Gestor": novo_gestor,"Sistema": novo_sistema, "Serviço": novo_servico, "Técnico": novo_tecnico,"Descrição": nova_descricao, "Observações e Pendencias": nova_obs_pend}
                                 
-                                # --- CORREÇÃO DA LÓGICA DE STATUS MANUAL ---
                                 status_foi_mudado = False
-                                precisa_recalcular = False # Nova flag para controlar o "cérebro"
+                                precisa_recalcular = False 
 
-                                # Se escolheu status manual (ex: Cancelado, Finalizado)
                                 if novo_status_manual != "(Status Automático)":
                                     updates['Status'] = novo_status_manual
                                     updates['Sub-Status'] = None
                                     status_foi_mudado = True
-                                    precisa_recalcular = False # NÃO chama a calculadora, respeita o manual
+                                    precisa_recalcular = False # NÃO RECALCULA, FORÇA O MANUAL
                                     
-                                    # Validação extra para finalizado
                                     if novo_status_manual == "Finalizado" and nova_finalizacao is None:
                                         st.error("Erro: Para 'Finalizado', a Data de Finalização é obrigatória.")
                                         st.stop()
 
-                                # Se escolheu automático
                                 elif novo_status_manual == "(Status Automático)":
                                     status_foi_mudado = True
-                                    precisa_recalcular = True # Chama a calculadora
+                                    precisa_recalcular = True
 
                                 with st.spinner(f"Atualizando {len(chamado_ids_internos_list)} chamados..."):
                                     sucesso_count = 0
                                     for chamado_id in chamado_ids_internos_list:
                                         if utils_chamados.atualizar_chamado_db(chamado_id, updates): sucesso_count += 1
-                                    st.success(f"{sucesso_count} chamados atualizados!")
                                     
+                                    # FEEDBACK VISUAL e LIMPEZA DE CACHE
+                                    st.success(f"✅ {sucesso_count} chamados atualizados!")
                                     st.cache_data.clear()
-                                    time.sleep(0.5)
+                                    time.sleep(1) # Delay tático de 1 segundo
                                     
                                     if precisa_recalcular:
                                         df_chamados_atualizado = utils_chamados.carregar_chamados_db()
                                         df_projeto_atualizado = df_chamados_atualizado[df_chamados_atualizado['ID'].isin(chamado_ids_internos_list)]
                                         if calcular_e_atualizar_status_projeto(df_projeto_atualizado, chamado_ids_internos_list):
-                                            st.cache_data.clear() # Limpa se houve recálculo
+                                            st.cache_data.clear()
                                     
                                     st.rerun()
                             
@@ -653,11 +653,9 @@ def tela_dados_agencia():
                                                 if utils_chamados.atualizar_chamado_db(chamado_row['ID'], updates_individuais):
                                                     st.success("Chamado salvo!")
                                                     st.cache_data.clear(); time.sleep(0.5)
-                                                    
                                                     df_chamados_atualizado = utils_chamados.carregar_chamados_db()
                                                     df_projeto_atualizado = df_chamados_atualizado[df_chamados_atualizado['ID'].isin(chamado_ids_internos_list)]
                                                     calcular_e_atualizar_status_projeto(df_projeto_atualizado, chamado_ids_internos_list)
-                                                    
                                                     st.cache_data.clear(); st.rerun()
                                                 else: st.error("Falha ao salvar o chamado.")
                             
