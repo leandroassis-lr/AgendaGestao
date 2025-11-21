@@ -631,37 +631,38 @@ def tela_dados_agencia():
                         with col5:
                             gestor_html = f"<span style='color: {gestor_color}; font-weight: 500;'>{clean_val(nome_gestor, 'N/D')}</span>"
                             st.markdown(f"######\n{gestor_html}", unsafe_allow_html=True)
-                        
+
                         with col6:
-                            # Normaliza o texto para garantir que pegue "Faturado", "faturado" ou "FATURADO"
-                            acao_txt = str(sub_status_proj).strip()
-                            acao_lower = acao_txt.lower()
-                    
-                            if acao_lower == "faturado":
-                                # --- ESTILO ESPECIAL: VERDE E COM CHECK ---
-                                st.markdown(f"****")
-                                st.markdown(f"""
-                                    <div style="
-                                        color: #2E7D32; 
-                                        font-weight: bold; 
-                                        font-size: 1.1rem; 
-                                        margin-top: 5px;
-                                        display: flex;
-                                        align-items: center;
-                                        gap: 5px;
-                                    ">
-                                        ✔️ Faturado
-                                    </div>
-                                """, unsafe_allow_html=True)
-                    
-                            elif acao_txt != "":
-                                # --- ESTILO PADRÃO (Caixa Azul para outras ações) ---
-                                st.markdown(f"****")
-                                st.markdown(f"""<div class="card-action-text">{acao_txt}</div>""", unsafe_allow_html=True)
-                            
-                            else:
-                                # Espaço vazio para manter alinhamento
-                                st.write("")  
+                                acao_txt = str(sub_status_proj).strip()
+                                acao_lower = acao_txt.lower()
+                        
+                                if acao_lower == "faturado":
+                                    # Se quiser o título "Ação:" centralizado também, descomente a linha abaixo:
+                                    # st.markdown("<div style='text-align: center; font-weight: bold;'>Ação:</div>", unsafe_allow_html=True)
+                                    
+                                    # --- BLOCO CENTRALIZADO ---
+                                    st.markdown(f"""
+                                        <div style="
+                                            color: #2E7D32; 
+                                            font-weight: bold; 
+                                            font-size: 1.1rem; 
+                                            margin-top: 10px; /* Um pouco mais de espaço no topo */
+                                            display: flex;
+                                            align-items: center;
+                                            justify-content: center; /* <--- É ISSO QUE CENTRALIZA */
+                                            gap: 5px;
+                                            width: 100%;
+                                        ">
+                                            ✔️ Faturado
+                                        </div>
+                                    """, unsafe_allow_html=True)
+                        
+                                elif acao_txt != "":
+                                    st.markdown(f"****")
+                                    st.markdown(f"""<div class="card-action-text">{acao_txt}</div>""", unsafe_allow_html=True)
+                                
+                                else:
+                                    st.write("")
                                 
                         # --- NÍVEL 3 (Expander com formulários) ---
                         expander_title = f"Ver/Editar {len(chamado_ids_internos_list)} Chamado(s) (ID: {first_row['ID']})"
@@ -836,6 +837,7 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia ()
+
 
 
 
