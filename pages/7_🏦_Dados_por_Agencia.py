@@ -550,8 +550,6 @@ def tela_dados_agencia():
             if st.button("Próximo ➡️", key=f"{key_prefix}_next", disabled=(st.session_state.pag_agencia_atual >= total_paginas - 1)):
                 st.session_state.pag_agencia_atual += 1; st.rerun()
     
-    # --- PAGINAÇÃO END ---
-
     df_pagina = df_filtrado[df_filtrado['Agencia_Combinada'].isin(agencias_da_pagina)]
     agencias_agrupadas = df_pagina.groupby(chave_agencia)
     agencia_dfs_dict = dict(list(agencias_agrupadas))
@@ -618,31 +616,54 @@ def tela_dados_agencia():
                             st.markdown(f"##### {clean_val(nome_projeto, 'Sem Projeto').upper()}", unsafe_allow_html=True)
                         
                         with col2: 
-                            st.markdown(f"**📅 Agendamento:**\n{dt_ag}", unsafe_allow_html=True)
+                            st.markdown(f"**📅 **\n{dt_ag}", unsafe_allow_html=True)
                         
                         with col3:
                             # ADICIONADO: Título explícito para o Status
-                            st.markdown("**Status Principal:**") 
+                            st.markdown("****") 
                             status_html = html.escape(status_proj.upper())
                             st.markdown(f"""<div class="card-status-badge" style="background-color: {status_color};">{status_html}</div>""", unsafe_allow_html=True)
                         
                         col4, col5, col6 = st.columns([3, 2, 2])
                         
                         with col4: 
-                            st.markdown(f"**Serviço:**\n{clean_val(nome_servico, 'N/D')}", unsafe_allow_html=True)
+                            st.markdown(f"****\n{clean_val(nome_servico, 'N/D')}", unsafe_allow_html=True)
                         
                         with col5:
                             gestor_html = f"<span style='color: {gestor_color}; font-weight: 500;'>{clean_val(nome_gestor, 'N/D')}</span>"
-                            st.markdown(f"**Gestor:**\n{gestor_html}", unsafe_allow_html=True)
+                            st.markdown(f"****\n{gestor_html}", unsafe_allow_html=True)
                         
                         with col6:
-                            # CORREÇÃO: Só mostra "Ação" se houver texto
-                            if sub_status_proj and sub_status_proj.strip() != "":
-                                st.markdown(f"**Ação:**")
-                                st.markdown(f"""<div class="card-action-text">{sub_status_proj}</div>""", unsafe_allow_html=True)
+                            # Normaliza o texto para garantir que pegue "Faturado", "faturado" ou "FATURADO"
+                            acao_txt = str(sub_status_proj).strip()
+                            acao_lower = acao_txt.lower()
+                    
+                            if acao_lower == "faturado":
+                                # --- ESTILO ESPECIAL: VERDE E COM CHECK ---
+                                st.markdown(f"****")
+                                st.markdown(f"""
+                                    <div style="
+                                        color: #2E7D32; 
+                                        font-weight: bold; 
+                                        font-size: 1.1rem; 
+                                        margin-top: 5px;
+                                        display: flex;
+                                        align-items: center;
+                                        gap: 5px;
+                                    ">
+                                        ✔️ Faturado
+                                    </div>
+                                """, unsafe_allow_html=True)
+                    
+                            elif acao_txt != "":
+                                # --- ESTILO PADRÃO (Caixa Azul para outras ações) ---
+                                st.markdown(f"****")
+                                st.markdown(f"""<div class="card-action-text">{acao_txt}</div>""", unsafe_allow_html=True)
+                            
                             else:
-                                # Espaço em branco para manter alinhamento se necessário, ou vazio
-                                st.write("")                        
+                                # Espaço vazio para manter alinhamento
+                                st.write("")  
+                                
                         # --- NÍVEL 3 (Expander com formulários) ---
                         expander_title = f"Ver/Editar {len(chamado_ids_internos_list)} Chamado(s) (ID: {first_row['ID']})"
                         with st.expander(expander_title):
@@ -816,6 +837,7 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia ()
+
 
 
 
