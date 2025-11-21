@@ -99,7 +99,6 @@ def criar_tabela_chamados():
         conn.rollback()
         st.error(f"Erro ao verificar tabela: {e}")
 
-
 # --- 3. FUNÇÃO PARA CARREGAR CHAMADOS ---
 @st.cache_data(ttl=60)
 def carregar_chamados_db(agencia_id_filtro=None):
@@ -207,7 +206,6 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         st.error("Erro: A planilha deve conter um cabeçalho 'N° AGENCIA'.")
         return False, 0
 
-    # O resto da função (processamento de datas, upsert) continua igual...
     df_to_insert['data_abertura'] = date.today()
     
     cols_data = ['data_abertura', 'data_fechamento', 'data_agendamento']
@@ -222,12 +220,9 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
     if 'quantidade' in df_to_insert.columns:
          df_to_insert['quantidade'] = pd.to_numeric(df_to_insert['quantidade'], errors='coerce').astype('Int64')
 
-    # Lista de colunas do DB que queremos inserir/atualizar
-    # (Pega da variável global 'colunas_necessarias' definida no topo do utils_chamados)
     global colunas_necessarias
     cols_db_validas = list(colunas_necessarias.keys()) + ['chamado_id']
-    
-    # Pega apenas as colunas que agora têm nomes de DB válidos
+
     df_final = df_to_insert[[col for col in df_to_insert.columns if col in cols_db_validas]]
     
     values = []
@@ -353,21 +348,61 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
         return False
 
 # --- 6. Funções de Cor ---
-    def get_status_color(status):
-        status = str(status).lower().strip()
-        if status == 'concluído' or status == 'finalizado' or status == 'fechado':
-            return "#4CAF50" # Verde
-        elif status == 'em andamento':
-            return "#2196F3" # Azul
-        elif status == 'cancelado':
-            return "#D32F2F" # Vermelho Escuro (PARA APARECER O CANCELADO)
-        elif 'pendência' in status:
-            return "#FF9800" # Laranja
-        elif status == 'não iniciado':
-            return "#90A4AE" # Cinza Azulado
-        else:
-            return "#B0BEC5" # Cinza Padrão
+def get_color_for_name(nome):
+    """
+    Gera uma cor consistente baseada no nome da pessoa.
+    Se o nome for o mesmo, a cor será sempre a mesma.
+    """
+    if pd.isna(nome) or str(nome).strip() == "" or str(nome).lower() in ["nan", "none", "n/d", "sem analista"]:
+        return "#9E9E9E" # Cinza neutro para vazios
+
+    # Paleta de cores (Material Design - Cores mais sóbrias)
+    cores = [
+        "#1976D2", # Azul
+        "#388E3C", # Verde
+        "#D32F2F", # Vermelho
+        "#7B1FA2", # Roxo
+        "#F57C00", # Laranja
+        "#0097A7", # Ciano
+        "#C2185B", # Rosa escuro
+        "#512DA8", # Roxo profundo
+        "#0288D1", # Azul claro
+        "#689F38"  # Verde oliva
+    ]
+    
+    # Usa um hash do nome para escolher sempre a mesma cor da lista
+    idx = hash(str(nome)) % len(cores)
+    return cores[idx]
+
+def get_status_color(status):
+    """
+    Retorna a cor HEX baseada no texto do status.
+    """
+    st_lower = str(status).lower().strip()
+    
+    # 1. Status de Sucesso/Fim
+    if st_lower in ['concluído', 'finalizado', 'fechado', 'resolvido', 'equipamento entregue', 'equipamento entregue - concluído']:
+        return "#2E7D32" # Verde Escuro (Success)
         
+    # 2. Status de Erro/Cancelamento
+    elif 'cancelado' in st_lower:
+        return "#C62828" # Vermelho Forte (Error)
+        
+    # 3. Status de Atenção/Pendência
+    elif 'pendência' in st_lower or 'pausado' in st_lower:
+        return "#EF6C00" # Laranja (Warning)
+        
+    # 4. Em Andamento
+    elif 'em andamento' in st_lower or 'iniciado' in st_lower:
+        return "#1565C0" # Azul (Primary)
+        
+    # 5. Padrão (Não Iniciado)
+    elif st_lower == 'não iniciado':
+        return "#78909C" # Cinza Azulado
+        
+    # 6. Default
+    return "#9E9E9E" # Cinza
+    
     # 1. Normaliza o nome
     name_clean = str(name_str).strip().upper()
 
@@ -382,3 +417,4 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
         return COLORS[color_index]
     except Exception: 
         return "#555" # Cor Padrão em caso de erro
+
