@@ -372,7 +372,7 @@ def tela_dados_agencia():
     else: st.error("Tabela de chamados incompleta."); st.stop()
 
     # --- 4. Preparar Listas de Opções ---
-    status_manual_options = ["(Status Automático)", "Pendência de Infra", "Pendência de Equipamento", "Pausado", "Cancelado", "Finalizado"]
+    status_manual_options = ["(Status Automático)", "Pendência de Infra", "Pendência de Equipamento", "Pausado", "Cancelado"]
     def get_options_list(df, column_name): return ["Todos"] + sorted(df[column_name].dropna().astype(str).unique())
     agencia_list = get_options_list(df_chamados_raw, 'Agencia_Combinada')
     analista_list = get_options_list(df_chamados_raw, 'Analista')
@@ -576,7 +576,7 @@ def tela_dados_agencia():
                     chamado_ids_internos_list = df_projeto['ID'].tolist()
                     
                     st.markdown('<div class="project-card" style="margin-top: 10px;">', unsafe_allow_html=True)
-                    with st.container(border=True): 
+                    with st.container(border=True):                        
                         status_proj = clean_val(first_row.get('Status'), "Não Iniciado")
                         sub_status_proj = clean_val(first_row.get('Sub-Status'), "")
                         status_color = utils_chamados.get_status_color(status_proj)
@@ -584,23 +584,36 @@ def tela_dados_agencia():
                         dt_ag = data_agend if data_agend != "Sem Data" else "Sem Agendamento"
                         
                         col1, col2, col3 = st.columns([3, 2, 2])
-                        with col1: st.markdown(f"##### {clean_val(nome_projeto, 'Sem Projeto').upper()}", unsafe_allow_html=True)
-                        with col2: st.markdown(f"**📅 Agendamento:**\n{dt_ag}", unsafe_allow_html=True)
+                        
+                        with col1: 
+                            st.markdown(f"##### {clean_val(nome_projeto, 'Sem Projeto').upper()}", unsafe_allow_html=True)
+                        
+                        with col2: 
+                            st.markdown(f"**📅 Agendamento:**\n{dt_ag}", unsafe_allow_html=True)
+                        
                         with col3:
+                            # ADICIONADO: Título explícito para o Status
+                            st.markdown("**Status Principal:**") 
                             status_html = html.escape(status_proj.upper())
                             st.markdown(f"""<div class="card-status-badge" style="background-color: {status_color};">{status_html}</div>""", unsafe_allow_html=True)
                         
                         col4, col5, col6 = st.columns([3, 2, 2])
-                        with col4: st.markdown(f"**Serviço:**\n{clean_val(nome_servico, 'N/D')}", unsafe_allow_html=True)
+                        
+                        with col4: 
+                            st.markdown(f"**Serviço:**\n{clean_val(nome_servico, 'N/D')}", unsafe_allow_html=True)
+                        
                         with col5:
                             gestor_html = f"<span style='color: {gestor_color}; font-weight: 500;'>{clean_val(nome_gestor, 'N/D')}</span>"
                             st.markdown(f"**Gestor:**\n{gestor_html}", unsafe_allow_html=True)
+                        
                         with col6:
-                            if sub_status_proj:
+                            # CORREÇÃO: Só mostra "Ação" se houver texto
+                            if sub_status_proj and sub_status_proj.strip() != "":
                                 st.markdown(f"**Ação:**")
                                 st.markdown(f"""<div class="card-action-text">{sub_status_proj}</div>""", unsafe_allow_html=True)
-                            else: st.markdown(f"**Ação:**\n-", unsafe_allow_html=True)
-                        
+                            else:
+                                # Espaço em branco para manter alinhamento se necessário, ou vazio
+                                st.write("")                        
                         # --- NÍVEL 3 (Expander com formulários) ---
                         expander_title = f"Ver/Editar {len(chamado_ids_internos_list)} Chamado(s) (ID: {first_row['ID']})"
                         with st.expander(expander_title):
@@ -624,43 +637,65 @@ def tela_dados_agencia():
                                 btn_salvar_lote = st.form_submit_button("💾 Salvar Alterações do Projeto", use_container_width=True)
 
                             if btn_salvar_lote:
-                                updates = {"Prazo": novo_prazo, "Data Abertura": nova_abertura,"Data Agendamento": novo_agendamento, "Data Finalização": nova_finalizacao,"Projeto": novo_projeto, "Analista": novo_analista, "Gestor": novo_gestor,"Sistema": novo_sistema, "Serviço": novo_servico, "Técnico": novo_tecnico,"Descrição": nova_descricao, "Observações e Pendencias": nova_obs_pend}
+                                updates = {
+                                    "Prazo": novo_prazo, 
+                                    "Data Abertura": nova_abertura,
+                                    "Data Agendamento": novo_agendamento, 
+                                    "Data Finalização": nova_finalizacao,
+                                    "Projeto": novo_projeto, 
+                                    "Analista": novo_analista, 
+                                    "Gestor": novo_gestor,
+                                    "Sistema": novo_sistema, 
+                                    "Serviço": novo_servico, 
+                                    "Técnico": novo_tecnico,
+                                    "Descrição": nova_descricao, 
+                                    "Observações e Pendencias": nova_obs_pend
+                                }
                                 
-                                status_foi_mudado = False
                                 precisa_recalcular = False 
-
+                            
+                                # LÓGICA DE STATUS MANUAL (CANCELADO, PAUSADO, ETC)
                                 if novo_status_manual != "(Status Automático)":
+                                    # 1. Força o novo status
                                     updates['Status'] = novo_status_manual
-                                    updates['Sub-Status'] = None
-                                    status_foi_mudado = True
-                                    precisa_recalcular = False # NÃO RECALCULA, FORÇA O MANUAL
+                                    # 2. Limpa a Ação/Sub-status (pois cancelado não tem ação pendente)
+                                    updates['Sub-Status'] = "" 
+                                    # 3. Bloqueia o recálculo
+                                    precisa_recalcular = False 
                                     
+                                    # Validação extra para Finalizado
                                     if novo_status_manual == "Finalizado" and nova_finalizacao is None:
-                                        st.error("Erro: Para 'Finalizado', a Data de Finalização é obrigatória.")
-                                        st.stop()
-
+                                         st.error("Erro: Para 'Finalizado', a Data de Finalização é obrigatória.")
+                                         st.stop()
+                                
+                                # Se deixou no automático, ativamos o recálculo
                                 elif novo_status_manual == "(Status Automático)":
-                                    status_foi_mudado = True
                                     precisa_recalcular = True
-
+                            
                                 with st.spinner(f"Atualizando {len(chamado_ids_internos_list)} chamados..."):
                                     sucesso_count = 0
                                     for chamado_id in chamado_ids_internos_list:
-                                        if utils_chamados.atualizar_chamado_db(chamado_id, updates): sucesso_count += 1
+                                        if utils_chamados.atualizar_chamado_db(chamado_id, updates):
+                                            sucesso_count += 1
                                     
-                                    # FEEDBACK VISUAL e LIMPEZA DE CACHE
-                                    st.success(f"✅ {sucesso_count} chamados atualizados!")
-                                    st.cache_data.clear()
-                                    time.sleep(1) # Delay tático de 1 segundo
-                                    
-                                    if precisa_recalcular:
-                                        df_chamados_atualizado = utils_chamados.carregar_chamados_db()
-                                        df_projeto_atualizado = df_chamados_atualizado[df_chamados_atualizado['ID'].isin(chamado_ids_internos_list)]
-                                        if calcular_e_atualizar_status_projeto(df_projeto_atualizado, chamado_ids_internos_list):
-                                            st.cache_data.clear()
-                                    
-                                    st.rerun()
-                            
+                                    if sucesso_count > 0:
+                                        st.success(f"✅ Atualizado com sucesso!")
+                                        
+                                        # ⚠️ CRÍTICO: Limpeza agressiva de Cache para garantir que a tela atualize
+                                        st.cache_data.clear()
+                                        
+                                        if precisa_recalcular:
+                                            # Recarrega apenas o necessário para calcular
+                                            df_temp = utils_chamados.carregar_chamados_db()
+                                            df_proj_temp = df_temp[df_temp['ID'].isin(chamado_ids_internos_list)]
+                                            calcular_e_atualizar_status_projeto(df_proj_temp, chamado_ids_internos_list)
+                                            st.cache_data.clear() # Limpa de novo após recalcular
+                                        
+                                        time.sleep(0.5)
+                                        st.rerun()
+                                    else:
+                                        st.error("Erro ao atualizar no banco de dados.")
+            
                             # Edição Individual (Agrupada por Sistema)
                             st.markdown("---")
                             st.markdown("##### 🔎 Detalhes por Chamado")
@@ -752,5 +787,6 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia ()
+
 
 
