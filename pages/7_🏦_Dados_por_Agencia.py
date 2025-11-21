@@ -305,12 +305,11 @@ def tela_dados_agencia():
         df_ag = grupos_dict.get(ag)
         if df_ag is None: continue
 
-        # --- INICIALIZAÇÃO DE VARIÁVEIS (CORREÇÃO DO NAMEERROR) ---
+        # --- CORREÇÃO CRÍTICA: INICIALIZAR VARIÁVEIS SEMPRE ---
         tag = "🟦"
         txt = "Sem Pendência"
         analista_urgente_nome = "N/D"
         
-        # Card Nível 1
         df_ag_aberta = df_ag[~df_ag['Status'].astype(str).str.lower().isin(fechados_list)]
         hoje = pd.Timestamp.now().normalize()
         datas = df_ag_aberta['Agendamento']
@@ -322,7 +321,6 @@ def tela_dados_agencia():
                 txt = f"📅 {min_d.strftime('%d/%m')}"
                 if min_d < hoje: tag = "🟥 ATRASADO"; txt = f"Urgente: {min_d.strftime('%d/%m')}"
                 elif min_d == hoje: tag = "🟧 HOJE"
-                
                 anas = df_ag_aberta[df_ag_aberta['Agendamento'] == min_d]['Analista'].dropna().unique()
                 analista_urgente_nome = anas[0] if len(anas) == 1 else ("Múltiplos" if len(anas) > 1 else "Sem Analista")
 
@@ -399,8 +397,6 @@ def tela_dados_agencia():
                             # DETALHES INDIVIDUAIS
                             st.markdown("---")
                             st.markdown("##### 🔎 Detalhes por Chamado")
-                            
-                            # Agrupa e Itera sobre os sistemas
                             sistemas_loop = df_p.groupby('Sistema')
                             for sis, df_s in sistemas_loop:
                                 st.caption(f"Sistema: {clean_val(sis)}")
@@ -425,7 +421,7 @@ def tela_dados_agencia():
                                                 aplicar_inteligencia_em_lote(df_all[df_all['ID'] == r['ID']])
                                                 st.cache_data.clear(); st.rerun()
 
-                            # DESCRIÇÃO EQUIPAMENTO (FORA DO LOOP DE DETALHES)
+                            # DESCRIÇÃO EQUIPAMENTO
                             st.markdown("---")
                             nome_servico_norm = str(serv).strip().lower()
                             servico_recolhimento = "recolhimento de eqto"
@@ -435,7 +431,6 @@ def tela_dados_agencia():
                                 st.markdown(f"""<div style='background-color: #f0f2f5; border-radius: 5px; padding: 10px; font-size: 0.95rem; font-weight: 500;'>{descricao_texto}</div>""", unsafe_allow_html=True)
                             else:
                                 descricao_list_agrupada = []
-                                # Recria o groupby para uso na descrição (segurança)
                                 sistemas_desc = df_p.groupby('Sistema')
                                 for nome_sistema, df_sistema in sistemas_desc:
                                     nome_sis_limpo = clean_val(nome_sistema, "Sistema não Definido")
