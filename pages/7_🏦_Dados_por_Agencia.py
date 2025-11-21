@@ -118,10 +118,6 @@ def run_exporter_dialog(df):
 
 # --- O CÉREBRO DA OPERAÇÃO (NOVA LÓGICA HIERÁRQUICA) ---
 def calcular_status_logico(row, set_books_sim, set_books_todos, set_liberados):
-    """
-    Define o status e a ação com base na hierarquia estrita.
-    Retorna: (Novo Status, Nova Ação/Sub-Status)
-    """
     chamado_id = str(row['Nº Chamado'])
     status_atual = str(row.get('Status', '')).strip()
     
@@ -129,65 +125,44 @@ def calcular_status_logico(row, set_books_sim, set_books_todos, set_liberados):
     if chamado_id in set_liberados:
         return "Finalizado", "Faturado"
 
-    # 2. MANUAL: Se o usuário definiu um status "travado", respeitamos.
-    # (Exceto se já tivermos passado pelo passo 1, que ganha de tudo)
+    # 2. MANUAL: Se já é um status final/manual, respeita.
     status_travados = ["Cancelado", "Pausado", "Pendência de Infra", "Pendência de Equipamento"]
-    # Normaliza para comparar
     if any(s.lower() == status_atual.lower() for s in status_travados):
         sub_atual = str(row.get('Sub-Status', ''))
-        return status_atual, sub_atual # Mantém o que o usuário pôs
+        return status_atual, sub_atual 
 
     # 3. BOOK: Verifica nas planilhas de Book
     if chamado_id in set_books_todos:
-        # Se está no book e tem "SIM"/"S"
-        if chamado_id in set_books_sim:
-            return "Concluído", "Aguardando Faturamento"
-        else:
-            return "Concluído", "Enviar Book"
+        if chamado_id in set_books_sim: return "Concluído", "Aguardando Faturamento"
+        else: return "Concluído", "Enviar Book"
 
     # 4. OPERACIONAL
     tecnico = str(row.get('Técnico', ''))
     link = str(row.get('Link Externo', ''))
     
-    # Tem técnico?
-    if tecnico and tecnico.lower() not in ['nan', 'none', '', 'n/a']:
-        return "Em Andamento", "Enviar Status Cliente"
-    
-    # Tem link?
-    if link and link.lower() not in ['nan', 'none', '', 'n/a']:
-        return "Em Andamento", "Acionar técnico"
+    if tecnico and tecnico.lower() not in ['nan', 'none', '', 'n/a']: return "Em Andamento", "Enviar Status Cliente"
+    if link and link.lower() not in ['nan', 'none', '', 'n/a']: return "Em Andamento", "Acionar técnico"
 
     # 5. DEFAULT
     return "Não Iniciado", "Abrir chamado no Btime"
 
 def aplicar_inteligencia_em_lote(df_alvo):
-    """Aplica a lógica acima para uma lista de chamados e salva no banco se mudar."""
-    
-    # Carrega dados financeiros para consulta rápida
     df_books = utils_financeiro.carregar_books_db()
     df_lib = utils_financeiro.carregar_liberacao_db()
     
-    # Cria Sets para performance (O(1) lookup)
-    set_books_todos = set(df_books['chamado'].astype(str))
-    set_books_sim = set(df_books[df_books['book_pronto'].astype(str).str.upper().isin(['SIM', 'S'])]['chamado'].astype(str))
+    set_books_todos = set(df_books['chamado'].astype(str)) if not df_books.empty else set()
+    set_books_sim = set(df_books[df_books['book_pronto'].astype(str).str.upper().isin(['SIM', 'S'])]['chamado'].astype(str)) if not df_books.empty else set()
     set_liberados = set(df_lib['chamado'].astype(str)) if not df_lib.empty else set()
     
     count_updates = 0
-    
     for _, row in df_alvo.iterrows():
         novo_status, novo_sub = calcular_status_logico(row, set_books_sim, set_books_todos, set_liberados)
-        
         status_atual = str(row.get('Status', ''))
         sub_atual = str(row.get('Sub-Status', ''))
         
-        # Só atualiza o banco se algo mudou (evita escritas desnecessárias)
         if novo_status != status_atual or novo_sub != sub_atual:
-            utils_chamados.atualizar_chamado_db(row['ID'], {
-                'Status': novo_status,
-                'Sub-Status': novo_sub
-            })
+            utils_chamados.atualizar_chamado_db(row['ID'], {'Status': novo_status, 'Sub-Status': novo_sub})
             count_updates += 1
-            
     return count_updates
 
 # --- TELA PRINCIPAL ---
@@ -286,6 +261,10 @@ def tela_dados_agencia():
     # --- PAGINAÇÃO E VISUALIZAÇÃO ---
     st.markdown("#### 📋 Projetos e Chamados")
     
+    if df_filtrado.empty:
+        st.info("Nenhum registro encontrado.")
+        st.stop() # Garante que para aqui se não houver dados
+
     # Ordenação por Data
     df_abertos_sort = df_filtrado[~df_filtrado['Status'].astype(str).str.lower().isin(fechados_list)].copy()
     df_abertos_sort['Agendamento'] = pd.to_datetime(df_abertos_sort['Agendamento'], errors='coerce')
@@ -304,17 +283,16 @@ def tela_dados_agencia():
     agencias_pag = sorted_list[inicio : inicio + ITENS_POR_PAGINA]
 
     # Controles Nav
-    c1, c2, c3, c4, c5 = st.columns([1, 1, 3, 1, 1])
-    with c2: 
-        if st.button("⬅️ Anterior", disabled=(st.session_state.pag_agencia_atual==0)):
-            st.session_state.pag_agencia_atual -= 1; st.rerun()
-    with c3: st.markdown(f"<div style='text-align:center'>Página {st.session_state.pag_agencia_atual+1} de {max(1, total_pags)}</div>", unsafe_allow_html=True)
-    with c4:
-        if st.button("Próximo ➡️", disabled=(st.session_state.pag_agencia_atual >= total_pags-1)):
-            st.session_state.pag_agencia_atual += 1; st.rerun()
+    def nav_controls(key_prefix):
+        c1, c2, c3, c4, c5 = st.columns([1, 1, 3, 1, 1])
+        with c2: 
+            if st.button("⬅️ Anterior", key=f"{key_prefix}_prev", disabled=(st.session_state.pag_agencia_atual==0)):
+                st.session_state.pag_agencia_atual -= 1; st.rerun()
+        with c3: st.markdown(f"<div style='text-align:center'>Página {st.session_state.pag_agencia_atual+1} de {max(1, total_pags)}</div>", unsafe_allow_html=True)
+        with c4:
+            if st.button("Próximo ➡️", key=f"{key_prefix}_next", disabled=(st.session_state.pag_agencia_atual >= total_pags-1)):
+                st.session_state.pag_agencia_atual += 1; st.rerun()
     
-    st.divider()
-
     # Renderização
     df_pag = df_filtrado[df_filtrado['Agencia_Combinada'].isin(agencias_pag)]
     grupos = df_pag.groupby('Agencia_Combinada')
@@ -397,7 +375,7 @@ def tela_dados_agencia():
                                 if novo_st != "(Status Automático)":
                                     updates['Status'] = novo_st
                                     updates['Sub-Status'] = None # Limpa sub-status ao forçar manual
-                                    recalcular = False # NÃO RECALCULA
+                                    recalcular = False # NÃO RECALCULA, MANTÉM MANUAL
                                 else:
                                     recalcular = True # Se voltar para auto, recalcula
                                 
@@ -425,25 +403,35 @@ def tela_dados_agencia():
                                 with st.expander(f"{r['Nº Chamado']} - {r['Equipamento']}"):
                                     # Link e Botão Juntos
                                     lk = r.get('Link Externo')
-                                    c_l1, c_l2 = st.columns([3, 1])
-                                    new_lk = c_l1.text_input("Link", value=lk if pd.notna(lk) else "", key=f"lk_{r['ID']}")
-                                    if pd.notna(lk) and str(lk).strip():
-                                        c_l2.markdown("<br>", unsafe_allow_html=True)
-                                        c_l2.link_button("Acessar", lk)
                                     
-                                    if st.button("Salvar Link", key=f"btn_{r['ID']}"):
-                                        utils_chamados.atualizar_chamado_db(r['ID'], {'Link Externo': new_lk})
-                                        st.success("Link Salvo!")
-                                        st.cache_data.clear(); time.sleep(0.5)
+                                    # --- CORREÇÃO: LÓGICA PARA EXIBIR CAMPOS ---
+                                    is_servico = '-S-' in str(r['Nº Chamado'])
+                                    eh_excecao = str(r.get('Serviço')).strip().lower() in SERVICOS_SEM_EQUIPAMENTO
+                                    
+                                    if is_servico or eh_excecao:
+                                        c_l1, c_l2 = st.columns([3, 1])
+                                        new_lk = c_l1.text_input("Link", value=lk if pd.notna(lk) else "", key=f"lk_{r['ID']}")
+                                        if pd.notna(lk) and str(lk).strip():
+                                            c_l2.markdown("<br>", unsafe_allow_html=True)
+                                            c_l2.link_button("Acessar", lk)
                                         
-                                        # Recalcular inteligência (pois link afeta status)
-                                        df_bd = utils_chamados.carregar_chamados_db()
-                                        # Apenas 1 linha para recalcular
-                                        aplicar_inteligencia_em_lote(df_bd[df_bd['ID'] == r['ID']])
-                                        st.cache_data.clear(); st.rerun()
+                                        if st.button("Salvar Link", key=f"btn_{r['ID']}"):
+                                            utils_chamados.atualizar_chamado_db(r['ID'], {'Link Externo': new_lk})
+                                            st.success("Link Salvo!")
+                                            st.cache_data.clear(); time.sleep(0.5)
+                                            
+                                            # Recalcular inteligência (pois link afeta status)
+                                            df_bd = utils_chamados.carregar_chamados_db()
+                                            aplicar_inteligencia_em_lote(df_bd[df_bd['ID'] == r['ID']])
+                                            st.cache_data.clear(); st.rerun()
 
                     st.markdown("</div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
-        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True) 
+    
+    if total_paginas > 1:
+        st.divider()
+        nav_controls("bottom")
 
-tela_dados_agencia()
+# --- Ponto de Entrada ---
+tela_dados_agencia ()
