@@ -4,6 +4,7 @@ import utils_chamados
 import utils_financeiro
 import time
 import math
+from datetime import date
 
 st.set_page_config(page_title="Gestão Financeira", page_icon="💸", layout="wide")
 
@@ -316,5 +317,6 @@ for nome_agencia, df_ag in agencias_view:
 if total_paginas > 1:
     st.divider()
     nav_controls("bottom")
+
 
 
