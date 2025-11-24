@@ -179,15 +179,54 @@ with st.expander("⚙️ Configurações e Importações (LPU, Books, Liberaçã
 
             except Exception as e: st.error(f"Erro: {e}")
 
-    with tab3:
-        up_lib = st.file_uploader("Liberação (.xlsx/.csv)", type=["xlsx", "csv"], key="up_lib")
-        if up_lib and st.button("Importar Liberação"):
-            try:
-                df_l = pd.read_csv(up_lib, sep=';', dtype=str) if up_lib.name.endswith('.csv') else pd.read_excel(up_lib, dtype=str)
-                suc, msg = utils_financeiro.importar_planilha_liberacao(df_l)
-                if suc: st.success(msg); st.cache_data.clear(); time.sleep(1); st.rerun()
-                else: st.error(msg)
-            except Exception as e: st.error(f"Erro: {e}")
+        with tab3:
+            up_lib = st.file_uploader("Liberação (.xlsx/.csv)", type=["xlsx", "csv"], key="up_lib")
+            if up_lib and st.button("Importar Liberação"):
+                try:
+                    df_l = pd.read_csv(up_lib, sep=';', dtype=str) if up_lib.name.endswith('.csv') else pd.read_excel(up_lib, dtype=str)
+                    
+                    # 1. Salva na tabela espelho (faturamento_liberado)
+                    suc, msg = utils_financeiro.importar_planilha_liberacao(df_l)
+                    
+                    if suc: 
+                        st.success(msg)
+                        
+                        # --- NOVO: SINCRONIZAÇÃO COM A PÁGINA 7 ---
+                        with st.spinner("Atualizando status na tabela principal..."):
+                            # Carrega os chamados para pegar o ID interno
+                            df_bd = utils_chamados.carregar_chamados_db()
+                            # Cria um mapa: Nº Chamado -> ID Interno (ex: 'CH-123' -> 55)
+                            id_map = df_bd.set_index('Nº Chamado')['ID'].to_dict()
+                            
+                            # Normaliza nomes das colunas do Excel importado
+                            df_l.columns = [str(c).strip().upper() for c in df_l.columns]
+                            
+                            cont_atualizados = 0
+                            
+                            # Percorre a planilha do banco
+                            for _, row in df_l.iterrows():
+                                chamado_banco = str(row.get('CHAMADO', '')).strip()
+                                
+                                # Se esse chamado existe no nosso sistema
+                                if chamado_banco in id_map:
+                                    id_interno = id_map[chamado_banco]
+                                    
+                                    # ATUALIZA A TABELA PRINCIPAL
+                                    # Escreve "FATURADO" na coluna Status Financeiro
+                                    utils_chamados.atualizar_chamado_db(id_interno, {
+                                        'Status Financeiro': 'FATURADO'
+                                    })
+                                    cont_atualizados += 1
+                            
+                            st.info(f"🔄 Sincronização completa: {cont_atualizados} chamados foram marcados como FATURADO na gestão principal.")
+                            
+                        st.cache_data.clear()
+                        time.sleep(2)
+                        st.rerun()
+                    else: 
+                        st.error(msg)
+                except Exception as e: 
+                    st.error(f"Erro: {e}")
 
 # --- FILTROS ---
 col_f1, col_f2, col_f3 = st.columns([2, 2, 4])
@@ -277,3 +316,4 @@ for nome_agencia, df_ag in agencias_view:
 if total_paginas > 1:
     st.divider()
     nav_controls("bottom")
+
