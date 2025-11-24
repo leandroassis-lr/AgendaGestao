@@ -77,7 +77,6 @@ def criar_tabelas_lpu():
         conn.rollback()
         st.error(f"Erro ao criar tabelas LPU: {e}")
 
-
 # --- 3. IMPORTAÇÃO DA LPU ---
 
 def _normalize_key(key):
@@ -231,9 +230,14 @@ def criar_tabela_books():
         st.error(f"Erro ao criar tabela books_faturamento: {e}")
 
 def importar_planilha_books(df_books: pd.DataFrame):
+    """
+    Limpa e insere/atualiza a tabela de books.
+    MODO ACUMULATIVO: Mantém o histórico e atualiza existentes.
+    """
     conn = get_valid_conn_fin()
     if not conn: return False, "Falha na conexão"
     
+    # Normaliza cabeçalhos
     df_books.columns = [str(col).strip().upper() for col in df_books.columns]
     
     if 'CHAMADO' not in df_books.columns:
@@ -243,7 +247,8 @@ def importar_planilha_books(df_books: pd.DataFrame):
         
     try:
         with conn.cursor() as cur:
-            cur.execute("TRUNCATE books_faturamento RESTART IDENTITY;")
+            # REMOVIDO: cur.execute("TRUNCATE books_faturamento RESTART IDENTITY;")
+            # Agora ele NÃO apaga os books antigos.
             
             vals_books = []
             for _, row in df_books.iterrows():
@@ -265,6 +270,8 @@ def importar_planilha_books(df_books: pd.DataFrame):
                     d_env
                 ))
             
+            # A Query já estava pronta para atualizar (UPSERT), agora ela vai funcionar
+            # mantendo os dados antigos e atualizando apenas os que baterem o ID.
             query = """
                 INSERT INTO books_faturamento 
                 (chamado, servico, sistema, protocolo, data_conclusao, book_pronto, data_envio) 
@@ -281,7 +288,7 @@ def importar_planilha_books(df_books: pd.DataFrame):
             
         conn.commit()
         st.cache_data.clear()
-        return True, f"{len(vals_books)} registros de book importados/atualizados."
+        return True, f"{len(vals_books)} registros de book processados (Histórico mantido)."
         
     except Exception as e:
         conn.rollback()
@@ -335,7 +342,7 @@ def criar_tabela_liberacao():
         st.error(f"Erro ao criar tabela faturamento_liberado: {e}")
 
 def importar_planilha_liberacao(df: pd.DataFrame):
-    """Importa a planilha de liberação do banco com conversão segura de tipos."""
+    """Importa a planilha de liberação (MODO ACUMULATIVO - Não apaga histórico)."""
     conn = get_valid_conn_fin()
     if not conn: return False, "Falha na conexão"
     
@@ -347,22 +354,20 @@ def importar_planilha_liberacao(df: pd.DataFrame):
 
     try:
         with conn.cursor() as cur:
-            cur.execute("TRUNCATE faturamento_liberado RESTART IDENTITY;")
+            # REMOVIDO: cur.execute("TRUNCATE faturamento_liberado RESTART IDENTITY;")
+            # Agora ele NÃO apaga mais os dados antigos!
             
             vals = []
             for _, row in df.iterrows():
                 
-                # --- FUNÇÃO DE CONVERSÃO (A MÁGICA AQUI) ---
                 def safe_num(col_name):
                     val = row.get(col_name)
                     try:
-                        # Converte para float do python, tratando NaN
                         v_float = float(pd.to_numeric(val, errors='coerce'))
                         return v_float if not np.isnan(v_float) else 0.0
                     except:
                         return 0.0
                 
-                # Preparar dados com conversão explícita para str e float nativos
                 vals.append((
                     str(row.get('CHAMADO', '')),
                     str(row.get('CODIGO_DO_PONTO', '')),
@@ -374,7 +379,7 @@ def importar_planilha_liberacao(df: pd.DataFrame):
                     str(row.get('TIPO_SERVICO', '')),
                     str(row.get('CODIGO_DO_EQUIPAMENTO', '')),
                     str(row.get('NOME_EQUIPAMENTO', '')),
-                    safe_num('QUANTIDADE_LIBERADA'), # Agora retorna float Python
+                    safe_num('QUANTIDADE_LIBERADA'),
                     safe_num('VALORUNITARIO'),
                     safe_num('TOTAL'),
                     str(row.get('PROTOCOLOATENDIMENTO', '')),
@@ -382,29 +387,28 @@ def importar_planilha_liberacao(df: pd.DataFrame):
                     str(row.get('NOMEUSUARIO', ''))
                 ))
 
+            # Query inteligente (UPSERT):
+            # Se o chamado não existe -> Insere.
+            # Se já existe -> Atualiza os valores (útil se o valor mudou ou corrigiram algo).
             query = """
                 INSERT INTO faturamento_liberado 
                 (chamado, codigo_ponto, nome_ponto, uf_agencia, cidade_agencia, nome_sistema, servico, tipo_servico, cod_equipamento, nome_equipamento, qtd_liberada, valor_unitario, total, protocolo_atendimento, nome_projeto, nome_usuario)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (chamado) DO NOTHING
+                ON CONFLICT (chamado) DO UPDATE SET
+                    qtd_liberada = EXCLUDED.qtd_liberada,
+                    valor_unitario = EXCLUDED.valor_unitario,
+                    total = EXCLUDED.total,
+                    protocolo_atendimento = EXCLUDED.protocolo_atendimento,
+                    servico = EXCLUDED.servico
             """
             cur.executemany(query, vals)
         
         conn.commit()
         st.cache_data.clear()
-        return True, f"{len(vals)} registros de liberação importados."
+        return True, f"{len(vals)} registros processados (Histórico mantido)."
         
     except Exception as e:
         conn.rollback()
         return False, f"Erro ao importar liberação: {e}"
-
-@st.cache_data(ttl=60)
-def carregar_liberacao_db():
-    """Carrega a tabela de liberação para conciliação."""
-    conn = get_valid_conn_fin()
-    if not conn: return pd.DataFrame()
-    try:
-        return pd.read_sql("SELECT * FROM faturamento_liberado", conn)
-    except Exception as e:
-        st.error(f"Erro ao carregar liberação: {e}")
         return pd.DataFrame()
+
