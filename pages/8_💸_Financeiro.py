@@ -212,9 +212,9 @@ with st.expander("⚙️ Configurações e Importações (LPU, Books, Liberaçã
                                     id_interno = id_map[chamado_banco]
                                     
                                     # ATUALIZA A TABELA PRINCIPAL
-                                    # Escreve "FATURADO" na coluna Status Financeiro
                                     utils_chamados.atualizar_chamado_db(id_interno, {
-                                        'Status Financeiro': 'FATURADO'
+                                        'Status Financeiro': 'FATURADO',
+                                        'Data Faturamento': date.today() # <--- NOVA LINHA: Grava o dia de hoje
                                     })
                                     cont_atualizados += 1
                             
@@ -316,4 +316,5 @@ for nome_agencia, df_ag in agencias_view:
 if total_paginas > 1:
     st.divider()
     nav_controls("bottom")
+
 
