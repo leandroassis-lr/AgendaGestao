@@ -203,18 +203,22 @@ def run_exporter_dialog(df_data_to_export):
         st.session_state.show_export_popup = False; st.rerun()
 
 def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
-    # --- 1. PREPARAÇÃO DOS DADOS DA LINHA (pega a primeira linha como referência do projeto) ---
+    # --- 1. PREPARAÇÃO DOS DADOS DA LINHA ---
     row = df_projeto.iloc[0]
     
-    # Funções auxiliares locais para checar preenchimento
+    # Funções auxiliares locais
     def has_val(col):
         return col in row and pd.notna(row[col]) and str(row[col]).strip() != ""
+
+    # NOVA FUNÇÃO: Verifica se realmente foi faturado (ignora "Pendente")
+    def is_faturado():
+        val = str(row.get('Status Financeiro', '')).strip().upper()
+        return val in ['FATURADO', 'PAGO', 'LIBERADO', 'RECEBIDO']
     
     status_atual = str(row.get('Status', 'Não Iniciado')).strip()
     sub_status_atual = str(row.get('Sub-Status', '')).strip()
     
     # --- 2. REGRA SUPREMA: STATUS DE BLOQUEIO MANUAL ---
-    # Se estiver nestes status, NADA muda automaticamente.
     status_bloqueio = [
         "pendência de infra", 
         "pendência de equipamento", 
@@ -223,8 +227,6 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
     ]
     
     if status_atual.lower() in status_bloqueio:
-        # Se quiser limpar o sub-status quando bloqueado, descomente a linha abaixo:
-        # if sub_status_atual != "": utils_chamados.atualizar_chamado_db(ids_para_atualizar[0], {"Sub-Status": None})
         return False # Encerra aqui. Não calcula nada.
 
     # --- 3. DEFINIÇÃO DO TIPO DE FLUXO ---
@@ -240,21 +242,15 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
     novo_acao = ""
 
     # --- 4. LÓGICA DE SERVIÇOS E EXCEÇÕES ---
-    # Aplica-se se tiver -S- OU for uma das exceções (ex: vistoria, recolhimento)
     if eh_servico or eh_excecao:
         
-        # Verificamos do FIM para o COMEÇO (O status mais avançado vence)
-        
-        # FASE 5: Financeiro / Faturamento (Vem da pág 8)
-        # Se tiver algo preenchido em "Status Financeiro" ou "Liberação Banco" (ajuste o nome da coluna se precisar)
-        if has_val('Status Financeiro'): 
+        # FASE 5: Financeiro / Faturamento (CORRIGIDO COM is_faturado)
+        if is_faturado(): 
              novo_status = "Finalizado"
              novo_acao = "Faturado"
              
         # FASE 4: Book / Conclusão
-        elif has_val('Nº Protocolo'): # Assumindo que Nº Protocolo indica que o Book foi importado
-            
-            # Verifica se a coluna "Book Enviado" existe e é "Sim"
+        elif has_val('Nº Protocolo'):
             book_enviado = str(row.get('Book Enviado', '')).strip().lower() == 'sim'
             
             if book_enviado:
@@ -274,24 +270,23 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
             novo_status = "Em Andamento"
             novo_acao = "Acionar técnico"
             
-        # FASE 1: Base (Apenas Chamado Importado)
+        # FASE 1: Base
         else:
             novo_status = "Não Iniciado"
             novo_acao = "Abrir chamado no Btime"
 
     # --- 5. LÓGICA APENAS EQUIPAMENTO (-E-) ---
-    # Só entra aqui se NÃO for serviço/exceção, mas tiver -E-
     elif eh_equipamento:
         
-        # FASE 4: Financeiro / Faturamento
-        if has_val('Status Financeiro'):
+        # FASE 4: Financeiro / Faturamento (CORRIGIDO COM is_faturado)
+        if is_faturado():
              novo_status = "Finalizado"
              novo_acao = "Faturado"
              
         # FASE 3: Data de Envio Preenchida
         elif has_val('Data Envio'):
             novo_status = "Em Andamento"
-            novo_acao = "Equipamento Enviado" # Ajustei para "Enviado" para fazer sentido com a data
+            novo_acao = "Equipamento Enviado"
             
         # FASE 2: Número do Pedido Preenchido
         elif has_val('Nº Pedido'):
@@ -303,13 +298,12 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
             novo_status = "Não Iniciado"
             novo_acao = "Solicitar equipamento"
 
-    # --- 6. CASO DE FALHA (Nem S nem E nem Exceção) ---
+    # --- 6. CASO DE FALHA ---
     else:
         novo_status = "Não Iniciado"
         novo_acao = "Verificar Cadastro"
 
     # --- 7. APLICAÇÃO DA MUDANÇA ---
-    # Só atualiza no banco se houver mudança real para evitar processamento inútil
     if status_atual != novo_status or sub_status_atual != novo_acao:
         
         st.toast(f"🔄 Atualizando status para: {novo_status} ({novo_acao})", icon="⚙️")
@@ -322,9 +316,9 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
         for chamado_id in ids_para_atualizar:
             utils_chamados.atualizar_chamado_db(chamado_id, updates)
             
-        return True # Indica que houve mudança
+        return True
 
-    return False # Nenhuma mudança necessária
+    return False
     
 # --- FUNÇÃO HELPER PARA LIMPAR VALORES ---
 def clean_val(val, default="N/A"):
@@ -837,6 +831,7 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia ()
+
 
 
 
