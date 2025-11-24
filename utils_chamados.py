@@ -51,7 +51,7 @@ colunas_necessarias = {
     'servico': 'TEXT', 'projeto_nome': 'TEXT', 'data_agendamento': 'DATE',
     'sistema': 'TEXT', 'cod_equipamento': 'TEXT', 'nome_equipamento': 'TEXT',
     'quantidade': 'INTEGER', 'gestor': 'TEXT', 
-    'data_abertura': 'DATE', 'data_fechamento': 'DATE',
+    'data_abertura': 'DATE', 'data_fechamento': 'DATE', 'data_faturamento': 'DATE',
     'status_chamado': 'TEXT', 'valor_chamado': 'NUMERIC(10, 2) DEFAULT 0.00',
     'status_financeiro': "TEXT DEFAULT 'Pendente'",
     'observacao': 'TEXT', 
@@ -246,7 +246,7 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
 # --- 5. FUNÇÃO PARA ATUALIZAR CHAMADO (CORRIGIDA) ---
 
 def atualizar_chamado_db(chamado_id_interno, updates: dict):
-    # CORREÇÃO 1: Removemos 'utils.' - chamamos direto a função deste arquivo
+   
     conn = get_valid_conn()
     if not conn: return False
     
@@ -279,6 +279,8 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
                 'finalização': 'data_fechamento',
                 'fechamento': 'data_fechamento',
                 'data fechamento': 'data_fechamento',
+                'data faturamento': 'data_faturamento',
+                'faturamento': 'data_faturamento',
                 
                 'data abertura': 'data_abertura',
                 'abertura': 'data_abertura',
@@ -390,3 +392,4 @@ def get_status_color(status):
         return "#78909C" # Cinza Azulado
     
     return "#9E9E9E" # Cinza Default
+
