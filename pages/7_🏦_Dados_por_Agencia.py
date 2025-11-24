@@ -604,62 +604,93 @@ def tela_dados_agencia():
                         gestor_color = utils_chamados.get_color_for_name(nome_gestor)
                         dt_ag = data_agend if data_agend != "Sem Data" else "Sem Agendamento"
                         
+                        # --- CABEÇALHO DO CARD ---
                         col1, col2, col3 = st.columns([3, 2, 2])
                         
                         with col1: 
                             st.markdown(f"##### {clean_val(nome_projeto, 'Sem Projeto').upper()}", unsafe_allow_html=True)
                         
                         with col2: 
-                            st.markdown(f"📅 \n{dt_ag}", unsafe_allow_html=True)
+                            st.markdown(f"📅 Agendamento:\n{dt_ag}", unsafe_allow_html=True)
                         
                         with col3:
-                            
+                            st.markdown("**Status Principal:**")
                             status_html = html.escape(status_proj.upper())
                             st.markdown(f"""<div class="card-status-badge" style="background-color: {status_color};">{status_html}</div>""", unsafe_allow_html=True)
                         
+                        # --- DETALHES DO CARD ---
                         col4, col5, col6 = st.columns([3, 2, 2])
                         
                         with col4: 
-                            st.markdown(f"######\n{clean_val(nome_servico, 'N/D')}", unsafe_allow_html=True)
+                            st.markdown(f"**Serviço:**\n{clean_val(nome_servico, 'N/D')}", unsafe_allow_html=True)
                         
                         with col5:
                             gestor_html = f"<span style='color: {gestor_color}; font-weight: 500;'>{clean_val(nome_gestor, 'N/D')}</span>"
-                            st.markdown(f"######\n{gestor_html}", unsafe_allow_html=True)
+                            st.markdown(f"**Gestor:**\n{gestor_html}", unsafe_allow_html=True)
 
                         with col6:
-                                acao_txt = str(sub_status_proj).strip()
-                                acao_lower = acao_txt.lower()
+                            acao_txt = str(sub_status_proj).strip()
+                            acao_lower = acao_txt.lower()
                         
-                                if acao_lower == "faturado":
-                                    # Se quiser o título "Ação:" centralizado também, descomente a linha abaixo:
-                                    # st.markdown("<div style='text-align: center; font-weight: bold;'>Ação:</div>", unsafe_allow_html=True)
-                                    
-                                    # --- BLOCO CENTRALIZADO ---
-                                    st.markdown(f"""
-                                        <div style="
-                                            color: #2E7D32; 
-                                            font-weight: bold; 
-                                            font-size: 1.1rem; 
-                                            margin-top: 10px; /* Um pouco mais de espaço no topo */
-                                            display: flex;
-                                            align-items: center;
-                                            justify-content: center; /* <--- É ISSO QUE CENTRALIZA */
-                                            gap: 5px;
-                                            width: 100%;
-                                        ">
-                                            ✔️ Faturado
-                                        </div>
-                                    """, unsafe_allow_html=True)
+                            if acao_lower == "faturado":
+                                # --- BLOCO FATURADO (Verde e Centralizado) ---
+                                st.markdown(f"""
+                                    <div style="
+                                        color: #2E7D32; 
+                                        font-weight: bold; 
+                                        font-size: 1.1rem; 
+                                        margin-top: 10px;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        gap: 5px;
+                                        width: 100%;
+                                    ">
+                                        ✔️ Faturado
+                                    </div>
+                                """, unsafe_allow_html=True)
+                            
+                            elif acao_txt != "":
+                                # --- BLOCO AÇÃO PADRÃO (Azul) ---
+                                st.markdown(f"**Ação:**")
+                                st.markdown(f"""<div class="card-action-text">{acao_txt}</div>""", unsafe_allow_html=True)
+                            
+                            else:
+                                st.write("")
+
+                        # --- LINHA DO TEMPO (NOVO) ---
+                        st.divider()
+                        t1, t2, t3 = st.columns(3)
                         
-                                elif acao_txt != "":
-                                    st.markdown(f"****")
-                                    st.markdown(f"""<div class="card-action-text">{acao_txt}</div>""", unsafe_allow_html=True)
-                                
-                                else:
-                                    st.write("")
-                                
-                        # --- NÍVEL 3 (Expander com formulários) ---
+                        # 1. Data de Abertura
+                        dt_abert = _to_date_safe(first_row.get('Abertura'))
+                        str_abert = dt_abert.strftime('%d/%m/%Y') if dt_abert else "-"
+                        t1.markdown(f"<small style='color:#666'>📅 Abertura</small><br><strong>{str_abert}</strong>", unsafe_allow_html=True)
+                        
+                        # 2. Data de Finalização (Técnica)
+                        dt_fim = _to_date_safe(first_row.get('Fechamento'))
+                        str_fim = dt_fim.strftime('%d/%m/%Y') if dt_fim else "-"
+                        t2.markdown(f"<small style='color:#666'>✅ Finalizado (Técnico)</small><br><strong>{str_fim}</strong>", unsafe_allow_html=True)
+                        
+                        # 3. Data de Faturamento (Financeiro)
+                        dt_fat = _to_date_safe(first_row.get('Data Faturamento'))
+                        if dt_fat:
+                            str_fat = dt_fat.strftime('%d/%m/%Y')
+                            cor_fat = "#2E7D32" # Verde
+                        else:
+                            str_fat = "Pendente"
+                            cor_fat = "#999" # Cinza
+                            
+                        t3.markdown(f"<small style='color:#666'>💰 Faturado (Banco)</small><br><strong style='color:{cor_fat}'>{str_fat}</strong>", unsafe_allow_html=True)
+                        
+                        # Log Detalhado
+                        with st.expander("📜 Ver Histórico Detalhado (Log)"):
+                            log_txt = str(first_row.get('Log do Chamado', 'Sem histórico')).replace('\n', '<br>')
+                            st.markdown(f"<div style='font-size:0.85em; color:#444; max-height:150px; overflow-y:auto;'>{log_txt}</div>", unsafe_allow_html=True)
+
+                        # --- NÍVEL 3 (FORMULÁRIO DE EDIÇÃO) ---
                         expander_title = f"Ver/Editar {len(chamado_ids_internos_list)} Chamado(s) (ID: {first_row['ID']})"
+                        
                         with st.expander(expander_title):
                             
                             form_key_lote = f"form_lote_edit_{first_row['ID']}"
@@ -697,7 +728,42 @@ def tela_dados_agencia():
                                 }
                                 
                                 precisa_recalcular = False 
-                            
+
+                                # LÓGICA DE STATUS MANUAL (BLINDADA)
+                                if novo_status_manual != "(Status Automático)":
+                                    updates['Status'] = novo_status_manual
+                                    updates['Sub-Status'] = "" # Limpa ação se for manual
+                                    precisa_recalcular = False 
+                                    
+                                    if novo_status_manual == "Finalizado" and nova_finalizacao is None:
+                                         st.error("Erro: Para 'Finalizado', a Data de Finalização é obrigatória.")
+                                         st.stop()
+                                
+                                elif novo_status_manual == "(Status Automático)":
+                                    precisa_recalcular = True
+
+                                with st.spinner(f"Atualizando {len(chamado_ids_internos_list)} chamados..."):
+                                    sucesso_count = 0
+                                    for chamado_id in chamado_ids_internos_list:
+                                        if utils_chamados.atualizar_chamado_db(chamado_id, updates):
+                                            sucesso_count += 1
+                                    
+                                    if sucesso_count > 0:
+                                        st.success(f"✅ Atualizado com sucesso!")
+                                        
+                                        st.cache_data.clear()
+                                        
+                                        if precisa_recalcular:
+                                            df_temp = utils_chamados.carregar_chamados_db()
+                                            df_proj_temp = df_temp[df_temp['ID'].isin(chamado_ids_internos_list)]
+                                            calcular_e_atualizar_status_projeto(df_proj_temp, chamado_ids_internos_list)
+                                            st.cache_data.clear()
+                                        
+                                        time.sleep(0.5)
+                                        st.rerun()
+                                    else:
+                                        st.error("Erro ao atualizar no banco de dados.")
+                                        
                                 # LÓGICA DE STATUS MANUAL (CANCELADO, PAUSADO, ETC)
                                 if novo_status_manual != "(Status Automático)":
                                     # 1. Força o novo status
@@ -831,6 +897,7 @@ def tela_dados_agencia():
 
 # --- Ponto de Entrada ---
 tela_dados_agencia ()
+
 
 
 
