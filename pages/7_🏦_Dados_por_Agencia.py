@@ -898,6 +898,27 @@ def tela_dados_agencia():
 # --- Ponto de Entrada ---
 tela_dados_agencia ()
 
+# --- ZONA DE PERIGO (LIMPEZA DE BASE) ---
+with st.sidebar.expander("🔥 ZONA DE PERIGO (Admin)", expanded=False):
+    st.warning("Atenção: Isso apagará TODOS os chamados do sistema.")
+    senha_limpeza = st.text_input("Senha de Acesso", type="password", key="senha_reset_db")
+    
+    if st.button("🗑️ DELETAR TUDO AGORA", use_container_width=True):
+        # Defina sua senha aqui
+        if senha_limpeza == "admin123": 
+            suc, msg = utils_chamados.resetar_tabela_chamados()
+            if suc:
+                st.success(msg)
+                st.cache_data.clear()
+                st.cache_resource.clear()
+                time.sleep(2)
+                st.rerun()
+            else:
+                st.error(msg)
+        else:
+            st.error("Senha incorreta!")
+
+
 
 
 
