@@ -393,3 +393,17 @@ def get_status_color(status):
     
     return "#9E9E9E" # Cinza Default
 
+# --- FUNÇÃO DE LIMPEZA TOTAL (PARA TESTES) ---
+def resetar_tabela_chamados():
+    conn = get_valid_conn()
+    if not conn: return False, "Erro de conexão"
+    
+    try:
+        with conn.cursor() as cur:
+            # TRUNCATE apaga tudo instantaneamente e reseta o ID para 1
+            cur.execute("TRUNCATE TABLE chamados RESTART IDENTITY CASCADE;")
+        conn.commit()
+        return True, "Base de chamados zerada com sucesso!"
+    except Exception as e:
+        conn.rollback()
+        return False, f"Erro ao limpar banco: {e}"
