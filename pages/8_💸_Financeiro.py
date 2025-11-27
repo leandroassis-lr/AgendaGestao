@@ -145,6 +145,56 @@ c4.metric("Potencial Total", f"R$ {total_geral:,.2f}", f"{qtd_geral} chamados", 
 
 st.divider()
 
+# ... logo após c4.metric(...) e st.divider() ...
+
+# --- BOTÃO DE SINCRONIZAÇÃO MANUAL ---
+col_sync, col_info = st.columns([1, 4])
+with col_sync:
+    if st.button("🔄 Sincronizar Tudo", help="Força a atualização dos status na Página 7 baseado no que está importado aqui."):
+        with st.spinner("Sincronizando Financeiro com Gestão..."):
+            
+            # 1. Carrega dados
+            df_bd = utils_chamados.carregar_chamados_db()
+            id_map = df_bd.set_index('Nº Chamado')['ID'].to_dict()
+            
+            # 2. Sincronizar Livro de Faturamento (Books Enviados)
+            if not df_books.empty:
+                count_books = 0
+                for _, row in df_books.iterrows():
+                    chamado = str(row['chamado'])
+                    if chamado in id_map:
+                        updates = {'Status': 'Finalizado', 'Sub-Status': 'Aguardando faturamento'}
+                        # Tenta pegar protocolo se tiver
+                        if 'protocolo' in row and pd.notna(row['protocolo']):
+                            updates['Nº Protocolo'] = row['protocolo']
+                            
+                        utils_chamados.atualizar_chamado_db(id_map[chamado], updates)
+                        count_books += 1
+            
+            # 3. Sincronizar Liberação (Faturados) - TEM PRIORIDADE
+            if not df_lib.empty:
+                count_fat = 0
+                from datetime import date
+                for _, row in df_lib.iterrows():
+                    chamado = str(row['chamado'])
+                    if chamado in id_map:
+                        utils_chamados.atualizar_chamado_db(id_map[chamado], {
+                            'Status Financeiro': 'FATURADO',
+                            'Status': 'Finalizado',
+                            'Sub-Status': 'Faturado',
+                            'Data Faturamento': date.today()
+                        })
+                        count_fat += 1
+            
+            st.toast(f"Sincronização concluída!", icon="✅")
+            time.sleep(1)
+            st.rerun()
+
+with col_info:
+    st.info("Caso a Página 7 não esteja mostrando 'Faturado' ou 'Finalizado' corretamente, clique neste botão para forçar a atualização.")
+
+st.divider()
+
 # --- IMPORTADORES ---
 with st.expander("⚙️ Configurações e Importações (LPU, Books, Liberação)"):
     tab1, tab2, tab3 = st.tabs(["Preços (LPU)", "Books (Enviados)", "Liberação (Banco)"])
@@ -336,6 +386,7 @@ for nome_agencia, df_ag in agencias_view:
 if total_paginas > 1:
     st.divider()
     nav_controls("bottom")
+
 
 
 
