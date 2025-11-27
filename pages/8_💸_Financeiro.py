@@ -75,13 +75,32 @@ def calcular_valor_linha(row, lpu_f, lpu_s, lpu_e):
     return 0.0
 
 def definir_status_financeiro(row, lista_books, lista_liberados):
-    chamado_id = str(row['Nº Chamado'])
-    status_tecnico = str(row['Status']).lower()
-    if chamado_id in lista_liberados: return "FATURADO", "#43A047"
-    if chamado_id in lista_books: return "PENDENTE FATURAMENTO", "#FB8C00"
-    fechado_keywords = ['finalizado', 'concluido', 'concluído', 'fechado', 'resolvido', 'encerrado']
-    if any(k in status_tecnico for k in fechado_keywords): return "AGUARDANDO BOOK", "#E53935"
-    return "EM ANDAMENTO", "#1E88E5"
+    chamado_id = str(row['Nº Chamado']).strip()
+    
+    # Normaliza textos para evitar erros de maiúscula/minúscula
+    status_tecnico = str(row.get('Status', '')).strip().lower()
+    sub_status = str(row.get('Sub-Status', '')).strip().lower()
+    
+    # 1. Se está na lista de liberados do banco -> FATURADO
+    if chamado_id in lista_liberados: 
+        return "FATURADO", "#2E7D32" # Verde Escuro
+        
+    # 2. Se está na lista de books enviados -> PENDENTE FATURAMENTO
+    if chamado_id in lista_books: 
+        return "PENDENTE FATURAMENTO", "#FB8C00" # Laranja
+        
+    # 3. Identificar "Aguardando Book"
+    # Pega se o status for de conclusão OU se a ação falar de book
+    palavras_chave_fim = ['finalizado', 'concluido', 'concluído', 'fechado', 'resolvido', 'encerrado', 'executado']
+    
+    status_ok = any(k in status_tecnico for k in palavras_chave_fim)
+    acao_book = 'book' in sub_status # Pega "Enviar Book", "Pendente Book", etc.
+    
+    if status_ok or acao_book: 
+        return "AGUARDANDO BOOK", "#C62828" # Vermelho
+        
+    # 4. Resto
+    return "EM ANDAMENTO", "#1565C0" # Azul
 
 # --- CARREGAMENTO ---
 st.markdown("<div class='section-title-center'>PAINEL FINANCEIRO E FATURAMENTO</div>", unsafe_allow_html=True)
@@ -317,6 +336,7 @@ for nome_agencia, df_ag in agencias_view:
 if total_paginas > 1:
     st.divider()
     nav_controls("bottom")
+
 
 
 
