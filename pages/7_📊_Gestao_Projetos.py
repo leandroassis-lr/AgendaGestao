@@ -293,52 +293,101 @@ else:
                     elif acao_atual:
                          st.markdown(f"<div style='text-align:center; color:#004D40; font-weight:bold; font-size:0.85em; text-transform:uppercase;'>{acao_atual}</div>", unsafe_allow_html=True)
 
-                # --- FORMULÁRIO DE EDIÇÃO (EXPANDER - Estilo Botão Cinza) ---
+                # --- FORMULÁRIO DE EDIÇÃO (REMODELADO) ---
                 with st.expander(f" >  Ver/Editar Detalhes - ID: {first_row['ID']}"):
                     
                     form_key = f"form_{first_row['ID']}"
                     with st.form(key=form_key):
-                        st.markdown("##### Dados Gerais")
-                        col_a, col_b = st.columns(2)
                         
+                        # --- LINHA 1: Status e Datas ---
+                        c1, c2, c3, c4 = st.columns(4)
+                        
+                        # Status (Lógica Manual/Auto)
                         status_opts = ["(Automático)", "Pendência de Infra", "Pendência de Equipamento", "Pausado", "Cancelado", "Finalizado"]
                         idx_st = 0
-                        # Tenta achar o index, se não achar (ex: 'Não Iniciado' não está na lista manual), deixa 0
                         if status_atual in status_opts: idx_st = status_opts.index(status_atual)
+                        novo_status = c1.selectbox("Status", status_opts, index=idx_st, key=f"st_{form_key}")
                         
-                        novo_status = col_a.selectbox("Status Manual", status_opts, index=idx_st, key=f"st_{form_key}")
+                        # Datas
+                        abert_val = _to_date_safe(first_row.get('Abertura')) or date.today()
+                        nova_abertura = c2.date_input("Data Abertura", value=abert_val, format="DD/MM/YYYY", key=f"ab_{form_key}")
                         
-                        dt_ag_orig = _to_date_safe(first_row.get('Agendamento'))
-                        novo_agend = col_b.date_input("Agendamento", value=dt_ag_orig, format="DD/MM/YYYY", key=f"ag_{form_key}")
+                        agend_val = _to_date_safe(first_row.get('Agendamento'))
+                        novo_agend = c3.date_input("Agendamento", value=agend_val, format="DD/MM/YYYY", key=f"ag_{form_key}")
                         
-                        st.markdown("##### Financeiro e Conclusão")
-                        col_c, col_d = st.columns(2)
-                        dt_fim_orig = _to_date_safe(first_row.get('Fechamento'))
-                        novo_fim = col_c.date_input("Data Finalização", value=dt_fim_orig, format="DD/MM/YYYY", key=f"fim_{form_key}")
+                        fim_val = _to_date_safe(first_row.get('Fechamento'))
+                        novo_fim = c4.date_input("Finalização", value=fim_val, format="DD/MM/YYYY", key=f"fim_{form_key}")
+
+                        # --- LINHA 2: Pessoas e Sistema ---
+                        c5, c6, c7, c8, c9 = st.columns(5)
+                        
+                        analista_val = first_row.get('Analista', '')
+                        novo_analista = c5.text_input("Analista", value=analista_val, key=f"ana_{form_key}")
+                        
+                        gestor_val = first_row.get('Gestor', '')
+                        # Se quiser dropdown para gestor, mude para selectbox aqui
+                        novo_gestor = c6.text_input("Gestor", value=gestor_val, key=f"ges_{form_key}")
                         
                         tecnico_val = first_row.get('Técnico', '')
-                        novo_tec = col_d.text_input("Técnico", value=tecnico_val, key=f"tec_{form_key}")
+                        novo_tec = c7.text_input("Técnico", value=tecnico_val, key=f"tec_{form_key}")
                         
+                        servico_val = first_row.get('Serviço', '')
+                        novo_servico = c8.text_input("Serviço", value=servico_val, key=f"serv_{form_key}")
+                        
+                        sistema_val = first_row.get('Sistema', '')
+                        novo_sistema = c9.text_input("Sistema", value=sistema_val, key=f"sis_{form_key}")
+
+                        # --- LINHA 3: Observações ---
                         obs_val = first_row.get('Observações e Pendencias', '')
-                        nova_obs = st.text_area("Observações", value=obs_val, height=70, key=f"obs_{form_key}")
+                        nova_obs = st.text_area("Observações e Pendências", value=obs_val, height=100, key=f"obs_{form_key}")
+
+                        # --- LINHA 4: Detalhes do Chamado ---
+                        st.markdown("##### 🔗 Detalhes do Chamado")
+                        c10, c11, c12 = st.columns([1, 2, 1])
                         
+                        # Número do Chamado (Somente Leitura)
+                        chamado_num = str(first_row.get('Nº Chamado', ''))
+                        c10.text_input("Nº Chamado", value=chamado_num, disabled=True, key=f"ncham_{form_key}")
+                        
+                        # Link
+                        link_val = first_row.get('Link Externo', '')
+                        if pd.isna(link_val): link_val = ""
+                        novo_link = c11.text_input("Link Externo", value=link_val, placeholder="Cole o link aqui...", key=f"lnk_{form_key}")
+                        
+                        # Protocolo
+                        proto_val = first_row.get('Nº Protocolo', '')
+                        if pd.isna(proto_val): proto_val = ""
+                        novo_proto = c12.text_input("Nº Protocolo", value=proto_val, key=f"prot_{form_key}")
+
+                        st.markdown("<br>", unsafe_allow_html=True)
                         btn_salvar = st.form_submit_button("💾 Salvar Alterações", use_container_width=True)
                     
                     if btn_salvar:
                         updates = {
+                            "Data Abertura": nova_abertura,
                             "Data Agendamento": novo_agend,
                             "Data Finalização": novo_fim,
+                            "Analista": novo_analista,
+                            "Gestor": novo_gestor,
                             "Técnico": novo_tec,
-                            "Observações e Pendencias": nova_obs
+                            "Serviço": novo_servico,
+                            "Sistema": novo_sistema,
+                            "Observações e Pendencias": nova_obs,
+                            "Link Externo": novo_link,
+                            "Nº Protocolo": novo_proto
                         }
                         
                         recalcular = False
                         if novo_status != "(Automático)":
                             updates["Status"] = novo_status
-                            updates["Sub-Status"] = ""
+                            # Se for cancelado, limpa o sub-status, senão mantém
+                            if novo_status in ["Cancelado", "Pausado"]:
+                                updates["Sub-Status"] = ""
+                            
                             recalcular = False
+                            
                             if novo_status == "Finalizado" and novo_fim is None:
-                                st.error("Data Finalização obrigatória para Finalizado!")
+                                st.error("Erro: Data de Finalização é obrigatória para status 'Finalizado'.")
                                 st.stop()
                         else:
                             recalcular = True
@@ -349,15 +398,18 @@ else:
                                 if utils_chamados.atualizar_chamado_db(cid, updates): count += 1
                             
                             if count > 0:
-                                st.success("Salvo!")
+                                st.success("Salvo com sucesso!")
                                 st.cache_data.clear()
+                                
                                 if recalcular:
                                     # Recalcula lógica automática
                                     df_all = utils_chamados.carregar_chamados_db()
+                                    # Filtra apenas os IDs afetados para ser rápido
                                     df_target = df_all[df_all['ID'].isin(ids_chamados)]
                                     calcular_e_atualizar_status_projeto(df_target, ids_chamados)
-                                    st.cache_data.clear()
+                                    st.cache_data.clear() # Limpa de novo após recálculo
+                                
                                 time.sleep(0.5)
                                 st.rerun()
                             else:
-                                st.error("Erro ao salvar.")
+                                st.error("Erro ao salvar no banco de dados.")
