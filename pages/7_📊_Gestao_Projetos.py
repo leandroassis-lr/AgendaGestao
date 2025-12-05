@@ -192,7 +192,7 @@ if escolha_visao == "Visão Geral (Cockpit)":
                 mostrar_detalhes_projeto(proj, df_filtrado)
 
 else:
-    # --- MODO OPERACIONAL (ANTIGA PÁGINA 7) ---
+    # --- MODO OPERACIONAL ---
     col_sel, col_rest = st.columns([1, 2])
     with col_sel:
         projeto_selecionado = st.selectbox("Selecione o Projeto para Trabalhar:", lista_projetos)
@@ -218,34 +218,84 @@ else:
     if TOTAL_GRUPOS == 0:
         st.info("Nenhum chamado encontrado neste projeto com os filtros atuais.")
     else:
+# --- LOOP DOS GRUPOS (CARDS) ---
         for (nome_agencia, nome_servico, data_str), df_grupo in grupos_lista:
             first_row = df_grupo.iloc[0]
             ids_chamados = df_grupo['ID'].tolist()
             
-            # --- DESENHO DO CARD DE EDIÇÃO ---
+            # Preparação de Variáveis Visuais
+            status_atual = clean_val(first_row.get('Status'), "Não Iniciado")
+            acao_atual = clean_val(first_row.get('Sub-Status'), "")
+            cor_status = utils_chamados.get_status_color(status_atual)
+            analista = clean_val(first_row.get('Analista'), "N/D").upper()
+            gestor = clean_val(first_row.get('Gestor'), "N/D").upper()
+            
+            # --- CÁLCULO DE SLA (Novo) ---
+            sla_texto = ""
+            sla_cor = "#333"
+            prazo_val = _to_date_safe(first_row.get('Prazo'))
+            if prazo_val:
+                hoje = date.today()
+                dias_restantes = (prazo_val - hoje).days
+                if dias_restantes < 0:
+                    sla_texto = f"SLA: {abs(dias_restantes)}d atrasado"
+                    sla_cor = "#D32F2F" # Vermelho
+                else:
+                    sla_texto = f"SLA: {dias_restantes}d restantes"
+                    sla_cor = "#388E3C" # Verde
+            
+            # --- DESENHO DO CARD (LAYOUT NOVO) ---
             with st.container(border=True):
-                c1, c2, c3 = st.columns([3, 2, 2])
-                with c1: st.markdown(f"**🏦 {nome_agencia}**")
-                with c2: st.markdown(f"📅 {data_str}")
+                # 1. Barra Dourada Superior (Estilo Visual)
+                st.markdown("""<div style="height: 4px; background-color: #D4AF37; margin-bottom: 12px; border-radius: 2px;"></div>""", unsafe_allow_html=True)
                 
-                status_atual = clean_val(first_row.get('Status'), "Não Iniciado")
-                acao_atual = clean_val(first_row.get('Sub-Status'), "")
-                cor_status = utils_chamados.get_status_color(status_atual)
+                # 2. Primeira Linha: Data | Analista | Agência | Status
+                c1, c2, c3, c4 = st.columns([1.2, 2, 3, 2])
+                
+                with c1:
+                    # Data com ícone
+                    st.markdown(f"🗓️ **{data_str}**")
+                
+                with c2:
+                    # Analista
+                    st.markdown(f"<span style='color:#555; font-size:0.9em;'>Analista:</span> <span style='color:#1565C0; font-weight:500;'>{analista}</span>", unsafe_allow_html=True)
                 
                 with c3:
-                    st.markdown(f"""<div class="card-status-badge" style="background-color: {cor_status};">{status_atual}</div>""", unsafe_allow_html=True)
+                    # Agência
+                    cod_ag = str(first_row.get('Cód. Agência', '')).split('.')[0]
+                    nome_ag = str(nome_agencia).replace(cod_ag, '').strip(' -')
+                    st.markdown(f"<span style='color:#555; font-size:0.9em;'>Agência:</span> **AG {cod_ag} {nome_ag}**", unsafe_allow_html=True)
                 
-                # Linha 2: Serviço e Ação
-                c4, c5 = st.columns([3, 2])
-                with c4: st.caption(f"Serviço: {nome_servico}")
-                with c5:
-                    if str(acao_atual).lower() == "faturado":
-                        st.markdown("<strong style='color:#2E7D32'>✔️ Faturado</strong>", unsafe_allow_html=True)
-                    elif acao_atual:
-                        st.markdown(f"<div class='card-action-text'>{acao_atual}</div>", unsafe_allow_html=True)
+                with c4:
+                    # Badge de Status (Direita)
+                    st.markdown(f"""<div class="card-status-badge" style="background-color: {cor_status}; margin-bottom: 5px;">{status_atual}</div>""", unsafe_allow_html=True)
 
-                # --- FORMULÁRIO DE EDIÇÃO (EXPANDER) ---
-                with st.expander(f"✏️ Editar {len(df_grupo)} chamado(s)"):
+                # 3. Segunda Linha: Nome Serviço | SLA | Gestor | Ação
+                c5, c6, c7, c8 = st.columns([2.5, 1.5, 2, 2])
+                
+                with c5:
+                    # Nome do Serviço (Maior e Azul Escuro)
+                    st.markdown(f"<div style='color:#0D47A1; font-weight:bold; font-size:1.1em; text-transform:uppercase;'>{nome_servico}</div>", unsafe_allow_html=True)
+                
+                with c6:
+                    # SLA (Verde ou Vermelho)
+                    if sla_texto:
+                        st.markdown(f"<span style='color:{sla_cor}; font-weight:bold; font-size:0.9em;'>{sla_texto}</span>", unsafe_allow_html=True)
+                
+                with c7:
+                    # Gestor (Vermelho/Vinho conforme imagem)
+                    st.markdown(f"<span style='color:#555; font-size:0.9em;'>Gestor:</span> <span style='color:#C2185B; font-weight:bold;'>{gestor}</span>", unsafe_allow_html=True)
+                
+                with c8:
+                    # Ação (Alinhada à direita/baixo do status, Verde Escuro)
+                    if str(acao_atual).lower() == "faturado":
+                         st.markdown("<div style='text-align:center; color:#2E7D32; font-weight:bold;'>✔️ FATURADO</div>", unsafe_allow_html=True)
+                    elif acao_atual:
+                         st.markdown(f"<div style='text-align:center; color:#004D40; font-weight:bold; font-size:0.85em; text-transform:uppercase;'>{acao_atual}</div>", unsafe_allow_html=True)
+
+                # --- FORMULÁRIO DE EDIÇÃO (EXPANDER - Estilo Botão Cinza) ---
+                with st.expander(f" >  Ver/Editar Detalhes - ID: {first_row['ID']}"):
+                    
                     form_key = f"form_{first_row['ID']}"
                     with st.form(key=form_key):
                         st.markdown("##### Dados Gerais")
@@ -253,6 +303,7 @@ else:
                         
                         status_opts = ["(Automático)", "Pendência de Infra", "Pendência de Equipamento", "Pausado", "Cancelado", "Finalizado"]
                         idx_st = 0
+                        # Tenta achar o index, se não achar (ex: 'Não Iniciado' não está na lista manual), deixa 0
                         if status_atual in status_opts: idx_st = status_opts.index(status_atual)
                         
                         novo_status = col_a.selectbox("Status Manual", status_opts, index=idx_st, key=f"st_{form_key}")
