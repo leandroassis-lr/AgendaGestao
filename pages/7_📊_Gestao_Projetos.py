@@ -60,37 +60,44 @@ if filtro_gestor != "Todos":
 lista_projetos = sorted(df_filtrado['Projeto'].dropna().unique().tolist())
 
 # --- NAVEGAÇÃO ENTRE PROJETOS ---
-# O usuário escolhe: Ver Resumo Geral ou Entrar num Projeto
+
 escolha_visao = st.radio("Modo de Visualização:", ["Visão Geral (Todos)", "Detalhar um Projeto"], horizontal=True)
 
-# --- FUNÇÃO DO POP-UP (Coloque isso antes do if escolha_visao...) ---
-@st.dialog("Detalhes Rápidos do Projeto", width="large")
+# --- FUNÇÃO DO POP-UP (SIMPLIFICADA) ---
+@st.dialog("Resumo do Projeto", width="large")
 def mostrar_detalhes_projeto(nome_projeto, df_origem):
-    st.caption(f"Visualizando status das agências para: **{nome_projeto}**")
+    st.markdown(f"**Projeto:** {nome_projeto}")
     
     # Filtra apenas este projeto
     df_p = df_origem[df_origem['Projeto'] == nome_projeto].copy()
     
-    # Seleciona colunas úteis
-    df_view = df_p[['Nº Chamado', 'Nome Agência', 'UF', 'Status', 'Agendamento', 'Técnico']]
+    # 1. Cria a coluna Unificada (Agência)
+    # Tenta usar ID + Nome, ou só o Nome se falhar
+    def unificar_agencia(row):
+        cod = str(row.get('Cód. Agência', '')).split('.')[0] # Remove .0 se tiver
+        nome = str(row.get('Nome Agência', '')).strip()
+        return f"{cod} - {nome}"
+        
+    df_p['Agência Unificada'] = df_p.apply(unificar_agencia, axis=1)
     
-    # Formata a data para ficar bonita
-    df_view['Agendamento'] = pd.to_datetime(df_view['Agendamento']).dt.strftime('%d/%m/%Y').fillna("-")
+    # 2. Formata a Data
+    df_p['Agendamento'] = pd.to_datetime(df_p['Agendamento']).dt.strftime('%d/%m/%Y').fillna("-")
     
-    # Mostra a tabela interativa
+    # 3. Seleciona APENAS as colunas que você pediu
+    colunas_finais = ['Agência Unificada', 'Agendamento', 'Status', 'Analista']
+    
+    # Garante que as colunas existem antes de mostrar
+    colunas_existentes = [c for c in colunas_finais if c in df_p.columns]
+    df_view = df_p[colunas_existentes]
+    
+    # 4. Exibe a tabela limpa
     st.dataframe(
         df_view, 
         use_container_width=True, 
-        hide_index=True,
-        column_config={
-            "Status": st.column_config.TextColumn(
-                "Status",
-                help="Status Atual",
-                validate="^[a-zA-Z0-9_]+$"
-            ),
-        }
+        hide_index=True
     )
-
+    st.caption("Para editar ou ver detalhes financeiros, troque para o modo 'Detalhar um Projeto' no topo da página.")
+    
 # --- BLOCO VISÃO GERAL ATUALIZADO ---
 if escolha_visao == "Visão Geral (Todos)":
     st.title("📌 Visão Geral dos Projetos")
@@ -194,3 +201,4 @@ else:
         
         c1.dataframe(status_counts, use_container_width=True, hide_index=True)
         c2.bar_chart(status_counts.set_index('Status'))
+
