@@ -115,37 +115,96 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
         return True
     return False
 
-# --- FUNÇÃO DO POP-UP RESUMO ---
-@st.dialog("Resumo do Projeto", width="large")
+# --- FUNÇÃO DO POP-UP (LAYOUT PREMIUM) ---
+@st.dialog("Resumo Executivo", width="large")
 def mostrar_detalhes_projeto(nome_projeto, df_origem):
-    st.markdown(f"### 📂 {nome_projeto}")
+    # 1. Cabeçalho Estilizado
+    st.markdown(f"""
+        <div style="
+            background-color: #F8F9FA; 
+            padding: 15px; 
+            border-radius: 8px; 
+            border-left: 5px solid #1E88E5; 
+            margin-bottom: 20px;
+        ">
+            <h3 style="margin: 0; color: #333; font-family: sans-serif;">📂 {nome_projeto}</h3>
+            <div style="color: #666; font-size: 0.9em; margin-top: 5px;">Visão sintética de status e responsáveis.</div>
+        </div>
+    """, unsafe_allow_html=True)
     
+    # Preparação dos Dados
     df_p = df_origem[df_origem['Projeto'] == nome_projeto].copy()
     
     def unificar_agencia(row):
         cod = str(row.get('Cód. Agência', '')).split('.')[0]
         nome = str(row.get('Nome Agência', '')).strip()
+        # Trata casos de 'nan' ou vazios
+        if cod.lower() in ['nan', 'none', '']: cod = "?"
         return f"{cod} - {nome}"
-    df_p['Agência'] = df_p.apply(unificar_agencia, axis=1)
-    df_p['Agendamento'] = pd.to_datetime(df_p['Agendamento']).dt.strftime('%d/%m/%Y').fillna("-")
-    
-    cols = ['Agência', 'Agendamento', 'Status', 'Analista']
-    st.dataframe(df_p[[c for c in cols if c in df_p.columns]], use_container_width=True, hide_index=True)
-    
-    st.divider()
-    
-    # --- BOTÃO DE NAVEGAÇÃO INTERNA ---
-    # Ao clicar aqui, mudamos o estado da sessão para trocar de aba automaticamente
-    col_l, col_btn = st.columns([3, 2])
-    with col_btn:
-        if st.button("🛠️ Ir para Gestão deste Projeto", use_container_width=True):
-            # 1. Muda o Rádio para "Detalhar"
-            st.session_state["nav_radio"] = "Detalhar um Projeto (Operacional)"
-            # 2. Muda o Selectbox para o Projeto Atual
-            st.session_state["sel_projeto"] = nome_projeto
-            # 3. Recarrega a página para aplicar
-            st.rerun()
 
+    df_p['Agência'] = df_p.apply(unificar_agencia, axis=1)
+    
+    # Converte para datetime real para o st.dataframe formatar bonito
+    df_p['Agendamento'] = pd.to_datetime(df_p['Agendamento'], errors='coerce')
+    
+    # Tratamento de Nulos para visualização
+    df_p['Analista'] = df_p['Analista'].fillna("-")
+    df_p['Status'] = df_p['Status'].fillna("Não Iniciado")
+
+    # 2. Métricas de Topo (KPIs)
+    total = len(df_p)
+    # Lista de status considerados "Prontos"
+    status_ok = ['concluído', 'finalizado', 'faturado', 'fechado']
+    concluidos = len(df_p[df_p['Status'].str.lower().isin(status_ok)])
+    pendentes = total - concluidos
+    
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Total Agências", total, border=True)
+    c2.metric("✅ Concluídos", concluidos, border=True)
+    c3.metric("⏳ Pendentes", pendentes, border=True)
+
+    st.divider()
+
+    # 3. Tabela Configurada
+    cols_view = ['Agência', 'Agendamento', 'Status', 'Analista']
+    
+    st.dataframe(
+        df_p[cols_view],
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Agência": st.column_config.TextColumn(
+                "Agência / Unidade",
+                width="medium",
+                help="Código e Nome da Agência"
+            ),
+            "Agendamento": st.column_config.DateColumn(
+                "Data Agendada",
+                format="DD/MM/YYYY",  # Formato brasileiro
+                width="small"
+            ),
+            "Status": st.column_config.TextColumn(
+                "Status Atual",
+                width="small"
+            ),
+            "Analista": st.column_config.TextColumn(
+                "Analista",
+                width="small"
+            )
+        }
+    )
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # 4. Botão de Ação (Destacado)
+    col_l, col_btn = st.columns([2, 2])
+    with col_btn:
+        # Estilo CSS inline para o botão parecer "Principal"
+        if st.button("🛠️ Gerenciar / Editar Projeto ➤", use_container_width=True, type="primary"):
+            st.session_state["nav_radio"] = "Detalhar um Projeto (Operacional)"
+            st.session_state["sel_projeto"] = nome_projeto
+            st.rerun()
+            
 # --- CARREGAMENTO DE DADOS ---
 df = utils_chamados.carregar_chamados_db()
 if df.empty: st.warning("Sem dados."); st.stop()
@@ -398,3 +457,4 @@ else:
                                 time.sleep(0.5)
                                 st.rerun()
                             else: st.error("Erro ao salvar.")
+
