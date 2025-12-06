@@ -236,23 +236,26 @@ def mostrar_detalhes_projeto(nome_projeto, df_origem):
             st.session_state["sel_projeto"] = nome_projeto
             st.rerun()
 
-# --- 5. CARREGAMENTO DE DADOS ---
+# --- 5. CARREGAMENTO E SIDEBAR (PADRÃO STREAMLIT) ---
 df = utils_chamados.carregar_chamados_db()
 
-# --- BARRA LATERAL (BOTÕES DE IMPORTAÇÃO) ---
-st.sidebar.markdown("### 📂 Importação de Dados")
-c_imp1, c_imp2 = st.sidebar.columns(2)
-with c_imp1:
-    if st.button("📥 Chamados", help="Importar novos chamados"):
+# SIDEBAR PADRÃO
+with st.sidebar:
+    st.header("Ações")
+    if st.button("➕ Novo Projeto / Importar Chamados"):
         run_importer_dialog()
-with c_imp2:
-    if st.button("🔗 Links", help="Importar links externos"):
+    
+    if st.button("🔗 Importar Links"):
         run_link_importer_dialog()
 
-st.sidebar.divider()
-
-if df.empty: st.warning("Sem dados. Importe chamados na barra lateral."); st.stop()
-
+    st.divider()
+    st.header("Filtros de Gestão")
+    analistas = ["Todos"] + sorted(df['Analista'].dropna().unique().tolist())
+    filtro_analista = st.selectbox("Analista", analistas)
+    
+    gestores = ["Todos"] + sorted(df['Gestor'].dropna().unique().tolist())
+    filtro_gestor = st.selectbox("Gestor", gestores)
+    
 # --- FILTROS LATERAIS ---
 st.sidebar.header("🎯 Filtros de Gestão")
 filtro_analista = st.sidebar.selectbox("Analista", ["Todos"] + sorted(df['Analista'].dropna().unique().tolist()))
@@ -461,3 +464,4 @@ else:
                                 time.sleep(0.5)
                                 st.rerun()
                             else: st.error("Erro ao salvar.")
+
