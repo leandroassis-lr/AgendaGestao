@@ -236,10 +236,14 @@ def mostrar_detalhes_projeto(nome_projeto, df_origem):
             st.session_state["sel_projeto"] = nome_projeto
             st.rerun()
 
-# --- 5. CARREGAMENTO E SIDEBAR (PADRÃO STREAMLIT) ---
+# --- 5. CARREGAMENTO E SIDEBAR ---
 df = utils_chamados.carregar_chamados_db()
 
-# SIDEBAR PADRÃO
+# Inicializa variáveis de filtro com valor padrão para evitar erros se o DF estiver vazio
+filtro_analista = "Todos"
+filtro_gestor = "Todos"
+
+# SIDEBAR UNIFICADA
 with st.sidebar:
     st.header("Ações")
     if st.button("➕ Novo Projeto / Importar Chamados"):
@@ -249,21 +253,30 @@ with st.sidebar:
         run_link_importer_dialog()
 
     st.divider()
+    
+    # FILTROS DE GESTÃO (Apenas uma vez aqui dentro)
     st.header("Filtros de Gestão")
-    analistas = ["Todos"] + sorted(df['Analista'].dropna().unique().tolist())
-    filtro_analista = st.selectbox("Analista", analistas)
     
-    gestores = ["Todos"] + sorted(df['Gestor'].dropna().unique().tolist())
-    filtro_gestor = st.selectbox("Gestor", gestores)
+    # Prepara listas
+    lista_analistas = ["Todos"] + sorted(df['Analista'].dropna().unique().tolist())
+    lista_gestores = ["Todos"] + sorted(df['Gestor'].dropna().unique().tolist())
     
-# --- FILTROS LATERAIS ---
-st.sidebar.header("🎯 Filtros de Gestão")
-filtro_analista = st.sidebar.selectbox("Analista", ["Todos"] + sorted(df['Analista'].dropna().unique().tolist()))
-filtro_gestor = st.sidebar.selectbox("Gestor", ["Todos"] + sorted(df['Gestor'].dropna().unique().tolist()))
+    # Cria os componentes
+    filtro_analista = st.selectbox("Analista", lista_analistas)
+    filtro_gestor = st.selectbox("Gestor", lista_gestores)
+
+# --- APLICAÇÃO DOS FILTROS ---
+if df.empty:
+    st.warning("Sem dados. Importe chamados na barra lateral.")
+    st.stop()
 
 df_filtrado = df.copy()
-if filtro_analista != "Todos": df_filtrado = df_filtrado[df_filtrado['Analista'] == filtro_analista]
-if filtro_gestor != "Todos": df_filtrado = df_filtrado[df_filtrado['Gestor'] == filtro_gestor]
+
+if filtro_analista != "Todos": 
+    df_filtrado = df_filtrado[df_filtrado['Analista'] == filtro_analista]
+
+if filtro_gestor != "Todos": 
+    df_filtrado = df_filtrado[df_filtrado['Gestor'] == filtro_gestor]
 
 lista_projetos = sorted(df_filtrado['Projeto'].dropna().unique().tolist())
 
@@ -464,4 +477,5 @@ else:
                                 time.sleep(0.5)
                                 st.rerun()
                             else: st.error("Erro ao salvar.")
+
 
