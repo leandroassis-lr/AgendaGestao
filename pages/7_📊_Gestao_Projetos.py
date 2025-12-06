@@ -489,7 +489,6 @@ else:
 
                 with st.expander(f" >  Ver/Editar Detalhes - ID: {first_row['ID']}"):
                     form_key = f"form_{first_row['ID']}"
-                    # --- SUBSTITUA O BLOCO 'with st.form(key=form_key):' POR ESTE ---
                     with st.form(key=form_key):
                         
                         # --- 1. CARREGAR LISTAS VINCULADAS (CONFIGURAÇÕES) ---
@@ -619,3 +618,4 @@ else:
                                     time.sleep(0.5)
                                     st.rerun()
                                 else: st.error("Erro ao salvar.")
+
