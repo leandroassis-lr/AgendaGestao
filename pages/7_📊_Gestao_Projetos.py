@@ -208,7 +208,7 @@ df = utils_chamados.carregar_chamados_db()
 # SIDEBAR PADRÃO
 with st.sidebar:
     st.header("Ações")
-    if st.button("➕ Novo Projeto / Importar Chamados"):
+    if st.button("➕ Importar Chamados"):
         run_importer_dialog()
     
     if st.button("🔗 Importar Links"):
@@ -420,3 +420,4 @@ else:
                                     st.cache_data.clear()
                                 time.sleep(0.5); st.rerun()
                             else: st.error("Erro ao salvar.")
+
