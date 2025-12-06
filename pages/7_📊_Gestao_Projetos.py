@@ -63,7 +63,7 @@ def clean_val(val, default="N/A"):
     if val is None or pd.isna(val) or str(val).lower() in ["none", "nan"]: return default
     return str(val)
 
-# --- 2. FUNÇÕES DE IMPORTAÇÃO (NOVAS) ---
+# --- 2. FUNÇÕES DE IMPORTAÇÃO ---
 
 @st.dialog("📥 Importar Chamados (Geral)", width="large")
 def run_importer_dialog():
@@ -133,7 +133,7 @@ def run_link_importer_dialog():
                    st.rerun()
         except Exception as e: st.error(f"Erro: {e}")
 
-# --- 3. LÓGICA DE STATUS (CÉREBRO) ---
+# --- 3. LÓGICA DE STATUS ---
 def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
     row = df_projeto.iloc[0]
     
@@ -149,7 +149,6 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
     
     status_bloqueio = ["pendência de infra", "pendência de equipamento", "pausada", "cancelada"]
     if status_atual.lower() in status_bloqueio: return False 
-
 
     n_chamado = str(row.get('Nº Chamado', '')).upper()
     servico_nome = str(row.get('Serviço', '')).strip().lower()
@@ -257,14 +256,10 @@ with st.sidebar:
 
     st.divider()
     
-    # FILTROS DE GESTÃO (Apenas uma vez aqui dentro)
+    # FILTROS DE GESTÃO
     st.header("Filtros de Gestão")
-    
-    # Prepara listas
     lista_analistas = ["Todos"] + sorted(df['Analista'].dropna().unique().tolist())
     lista_gestores = ["Todos"] + sorted(df['Gestor'].dropna().unique().tolist())
-    
-    # Cria os componentes
     filtro_analista = st.selectbox("Analista", lista_analistas)
     filtro_gestor = st.selectbox("Gestor", lista_gestores)
 
@@ -341,86 +336,55 @@ else:
     # 1. Filtros
     col_busca, col_proj, col_status, col_data = st.columns(4)
     
-    # A. Buscador Geral
     busca_geral = col_busca.text_input("Buscador Geral (Texto)")
     
-    # B. Filtro por Projeto
-    # Usa a lista_projetos que já vem do filtro lateral ou pega do DF total
     opcoes_projeto = sorted(df_filtrado['Projeto'].dropna().unique().tolist())
-    # Tenta manter a seleção anterior se existir
     sel_padrao = st.session_state.get("sel_projeto", opcoes_projeto)
-    if not isinstance(sel_padrao, list): sel_padrao = [sel_padrao] # Garante lista para multiselect
-    # Se o valor salvo não estiver nas opções atuais, reseta para tudo
+    if not isinstance(sel_padrao, list): sel_padrao = [sel_padrao] 
     if not all(x in opcoes_projeto for x in sel_padrao): sel_padrao = opcoes_projeto
-    
     filtro_projeto_multi = col_proj.multiselect("Projetos", options=opcoes_projeto, default=sel_padrao)
     
-    # C. Filtro por Status
     opcoes_status = sorted(df_filtrado['Status'].dropna().unique().tolist())
     filtro_status_multi = col_status.multiselect("Status", options=opcoes_status, default=opcoes_status)
     
-    # D. Filtro por Data
     df_filtrado['Agendamento'] = pd.to_datetime(df_filtrado['Agendamento'], errors='coerce')
     data_min = df_filtrado['Agendamento'].min()
     data_max = df_filtrado['Agendamento'].max()
     if pd.isna(data_min): data_min = date.today()
     if pd.isna(data_max): data_max = date.today()
-    
     filtro_data_range = col_data.date_input("Período (Agendamento)", value=(data_min, data_max))
 
-    # --- APLICAR FILTROS AO DATAFRAME DA VISÃO ---
+    # --- APLICAR FILTROS ---
     df_view = df_filtrado.copy()
     
-    # Filtro Texto
     if busca_geral:
         termo = busca_geral.lower()
-        # Concatena colunas texto para busca rápida
         df_view = df_view[
             df_view.astype(str).apply(lambda x: x.str.lower()).apply(lambda x: x.str.contains(termo)).any(axis=1)
         ]
-    
-    # Filtro Projeto
-    if filtro_projeto_multi:
-        df_view = df_view[df_view['Projeto'].isin(filtro_projeto_multi)]
-        
-    # Filtro Status
-    if filtro_status_multi:
-        df_view = df_view[df_view['Status'].isin(filtro_status_multi)]
-        
-    # Filtro Data
+    if filtro_projeto_multi: df_view = df_view[df_view['Projeto'].isin(filtro_projeto_multi)]
+    if filtro_status_multi: df_view = df_view[df_view['Status'].isin(filtro_status_multi)]
     if len(filtro_data_range) == 2:
         d_inicio, d_fim = filtro_data_range
-        # Converte para timestamp para comparar com a coluna datetime
-        df_view = df_view[
-            (df_view['Agendamento'] >= pd.to_datetime(d_inicio)) & 
-            (df_view['Agendamento'] <= pd.to_datetime(d_fim))
-        ]
+        df_view = df_view[(df_view['Agendamento'] >= pd.to_datetime(d_inicio)) & (df_view['Agendamento'] <= pd.to_datetime(d_fim))]
 
     st.divider()
 
-    # 2. KPIs
+    # 2. KPIs SUPERIORES
     status_conclusao = ['concluído', 'finalizado', 'faturado', 'fechado']
-    
     kpi_qtd_chamados = len(df_view)
     kpi_chamados_fin = len(df_view[df_view['Status'].str.lower().isin(status_conclusao)])
     
-    # Logica Projetos
-    # Agrupa o DF filtrado por projeto para ver quantos existem na visão atual
     if not df_view.empty:
         gr_proj = df_view.groupby('Projeto')
         kpi_proj_total_view = gr_proj.ngroups
-        
-        # Projeto finalizado na visão = aquele onde todos os itens VISÍVEIS estão com status de conclusão
         proj_fin_count = 0
         for nome, dados in gr_proj:
             if dados['Status'].str.lower().isin(status_conclusao).all():
                 proj_fin_count += 1
-        
         kpi_proj_abertos = kpi_proj_total_view - proj_fin_count
     else:
-        kpi_proj_total_view = 0
-        kpi_proj_abertos = 0
-        proj_fin_count = 0
+        kpi_proj_total_view = 0; kpi_proj_abertos = 0; proj_fin_count = 0
 
     col_k1, col_k2, col_k3, col_k4 = st.columns(4)
     col_k1.metric("Chamados (Filtro)", kpi_qtd_chamados)
@@ -430,33 +394,38 @@ else:
     
     st.divider()
 
-    # 3. Gráfico + Lista
-    col_graf, col_lista = st.columns([1, 2])
+    # 3. LISTA DE KPIS DE STATUS + DETALHES
+    col_kpi_status, col_lista = st.columns([1, 2])
     
-    with col_graf:
-        st.subheader("Quantidade por Status")
+    with col_kpi_status:
+        st.subheader("Resumo por Status")
         if not df_view.empty:
-            contagem_status = df_view['Status'].value_counts().reset_index()
-            contagem_status.columns = ['Status', 'Quantidade']
-            fig = px.bar(contagem_status, x='Status', y='Quantidade', color='Status', text='Quantidade')
-            st.plotly_chart(fig, use_container_width=True)
+            counts = df_view['Status'].value_counts()
+            for status, count in counts.items():
+                # Tenta pegar a cor do utils ou usa cinza padrão
+                try: cor = utils_chamados.get_status_color(status)
+                except: cor = "#90A4AE"
+                
+                st.markdown(f"""
+                <div style="background-color: white; border: 1px solid #eee; border-radius: 8px; padding: 12px; margin-bottom: 8px; border-left: 5px solid {cor}; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-size: 0.85em; color: #666; text-transform: uppercase; font-weight: 600;">{status}</div>
+                    <div style="font-size: 1.4em; font-weight: 700; color: #333;">{count}</div>
+                </div>
+                """, unsafe_allow_html=True)
         else:
-            st.info("Sem dados para gráfico.")
+            st.info("Sem dados.")
 
     with col_lista:
         st.markdown(f"### 📋 Detalhes ({len(df_view)} registros)")
-        
         df_view['Agendamento_str'] = pd.to_datetime(df_view['Agendamento']).dt.strftime('%d/%m/%Y').fillna("Sem Data")
         
-        # Agrupamento (Adicionei Projeto no agrupamento para evitar mistura caso filtre multiplos projetos)
+        # Agrupa
         chave_agrupamento = ['Projeto', 'Nome Agência', 'Serviço', 'Agendamento_str']
         grupos = df_view.groupby(chave_agrupamento)
-        
         grupos_lista = list(grupos)
         
         if not grupos_lista: st.info("Nenhum chamado encontrado com esses filtros.")
         else:
-            # Iterar sobre os grupos filtrados
             for (proj_nome, nome_agencia, nome_servico, data_str), df_grupo in grupos_lista:
                 first_row = df_grupo.iloc[0]
                 ids_chamados = df_grupo['ID'].tolist()
@@ -474,8 +443,7 @@ else:
                     else: sla_texto = f"SLA: {dias_restantes}d restantes"; sla_cor = "#388E3C"
                 
                 with st.container(border=True):
-                    st.markdown(f"**{proj_nome}** | 🗓️ **{data_str}**") # Mostra o nome do projeto no card
-                    
+                    st.markdown(f"**{proj_nome}** | 🗓️ **{data_str}**")
                     c1, c2, c3, c4 = st.columns([1.2, 2, 3, 2])
                     with c2: st.markdown(f"<span style='color:#555; font-size:0.9em;'>Analista:</span> <span style='color:#1565C0; font-weight:500;'>{analista}</span>", unsafe_allow_html=True)
                     with c3:
@@ -500,31 +468,25 @@ else:
                             status_opts = ["(Automático)", "Pendência de Infra", "Pendência de Equipamento", "Pausado", "Cancelado", "Finalizado"]
                             idx_st = status_opts.index(status_atual) if status_atual in status_opts else 0
                             novo_status = c1.selectbox("Status", status_opts, index=idx_st, key=f"st_{form_key}")
-                            
                             abert_val = _to_date_safe(first_row.get('Abertura')) or date.today()
                             nova_abertura = c2.date_input("Abertura", value=abert_val, format="DD/MM/YYYY", key=f"ab_{form_key}")
                             agend_val = _to_date_safe(first_row.get('Agendamento'))
                             novo_agend = c3.date_input("Agendamento", value=agend_val, format="DD/MM/YYYY", key=f"ag_{form_key}")
                             fim_val = _to_date_safe(first_row.get('Fechamento'))
                             novo_fim = c4.date_input("Finalização", value=fim_val, format="DD/MM/YYYY", key=f"fim_{form_key}")
-
                             c5, c6, c7 = st.columns(3)
                             novo_analista = c5.text_input("Analista", value=first_row.get('Analista', ''), key=f"ana_{form_key}")
                             novo_gestor = c6.text_input("Gestor", value=first_row.get('Gestor', ''), key=f"ges_{form_key}")
                             novo_tec = c7.text_input("Técnico", value=first_row.get('Técnico', ''), key=f"tec_{form_key}")
-
                             c8, c9, c10 = st.columns(3)
                             proj_val = first_row.get('Projeto', '')
-                            # Lista de projetos global para o selectbox do form
                             proj_list_local = sorted(df_filtrado['Projeto'].unique().tolist())
                             idx_proj = proj_list_local.index(proj_val) if proj_val in proj_list_local else 0
                             novo_projeto = c8.selectbox("Nome do Projeto", proj_list_local, index=idx_proj, key=f"proj_{form_key}")
                             novo_servico = c9.text_input("Serviço", value=first_row.get('Serviço', ''), key=f"serv_{form_key}")
                             novo_sistema = c10.text_input("Sistema", value=first_row.get('Sistema', ''), key=f"sis_{form_key}")
-
                             obs_val = first_row.get('Observações e Pendencias', '')
                             nova_obs = st.text_area("Observações e Pendências", value=obs_val, height=100, key=f"obs_{form_key}")
-
                             st.markdown("##### 🔗 Links e Protocolos")
                             c11, c12, c13 = st.columns([1, 2, 1])
                             chamado_num = str(first_row.get('Nº Chamado', ''))
@@ -536,7 +498,6 @@ else:
                             if pd.isna(link_atual): link_atual = ""
                             novo_link = c12.text_input("Link Externo (Cole aqui)", value=link_atual, key=f"lnk_{form_key}")
                             proto_val = first_row.get('Nº Protocolo', ''); novo_proto = c13.text_input("Nº Protocolo", value=proto_val if pd.notna(proto_val) else "", key=f"prot_{form_key}")
-
                             st.markdown("---")
                             st.markdown("##### 📦 Descrição (Equipamentos do Projeto)")
                             desc_texto_final = ""
@@ -553,7 +514,6 @@ else:
                             st.markdown(f"<div style='background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 5px; padding: 10px; font-size: 0.9rem; max-height: 200px; overflow-y: auto;'>{desc_texto_final}</div>", unsafe_allow_html=True)
                             st.markdown("<br>", unsafe_allow_html=True)
                             btn_salvar = st.form_submit_button("💾 Salvar Alterações", use_container_width=True)
-                            
                             if btn_salvar:
                                 updates = {
                                     "Data Abertura": nova_abertura, "Data Agendamento": novo_agend, "Data Finalização": novo_fim,
@@ -568,7 +528,6 @@ else:
                                     recalcular = False
                                     if novo_status == "Finalizado" and novo_fim is None: st.error("Data Finalização obrigatória!"); st.stop()
                                 else: recalcular = True
-                                
                                 with st.spinner("Salvando..."):
                                     count = 0
                                     for cid in ids_chamados:
