@@ -246,7 +246,7 @@ filtro_gestor = "Todos"
 # SIDEBAR UNIFICADA
 with st.sidebar:
     st.header("Ações")
-    if st.button("➕ Novo Projeto / Importar Chamados"):
+    if st.button("➕ Importar Chamados"):
         run_importer_dialog()
     
     if st.button("🔗 Importar Links"):
@@ -477,5 +477,6 @@ else:
                                 time.sleep(0.5)
                                 st.rerun()
                             else: st.error("Erro ao salvar.")
+
 
 
