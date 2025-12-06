@@ -218,7 +218,7 @@ else:
     if TOTAL_GRUPOS == 0:
         st.info("Nenhum chamado encontrado neste projeto com os filtros atuais.")
     else:
-# --- LOOP DOS GRUPOS (CARDS) ---
+        # --- LOOP DOS GRUPOS (CARDS) ---
         for (nome_agencia, nome_servico, data_str), df_grupo in grupos_lista:
             first_row = df_grupo.iloc[0]
             ids_chamados = df_grupo['ID'].tolist()
@@ -293,16 +293,16 @@ else:
                     elif acao_atual:
                          st.markdown(f"<div style='text-align:center; color:#004D40; font-weight:bold; font-size:0.85em; text-transform:uppercase;'>{acao_atual}</div>", unsafe_allow_html=True)
 
-                # --- FORMULÁRIO DE EDIÇÃO (REMODELADO) ---
+                # --- FORMULÁRIO DE EDIÇÃO (LAYOUT REFINADO) ---
                 with st.expander(f" >  Ver/Editar Detalhes - ID: {first_row['ID']}"):
                     
                     form_key = f"form_{first_row['ID']}"
                     with st.form(key=form_key):
                         
-                        # --- LINHA 1: Status e Datas ---
+                        # --- LINHA 1: Status | Abertura | Agendamento | Finalização ---
                         c1, c2, c3, c4 = st.columns(4)
                         
-                        # Status (Lógica Manual/Auto)
+                        # Status
                         status_opts = ["(Automático)", "Pendência de Infra", "Pendência de Equipamento", "Pausado", "Cancelado", "Finalizado"]
                         idx_st = 0
                         if status_atual in status_opts: idx_st = status_opts.index(status_atual)
@@ -310,7 +310,7 @@ else:
                         
                         # Datas
                         abert_val = _to_date_safe(first_row.get('Abertura')) or date.today()
-                        nova_abertura = c2.date_input("Data Abertura", value=abert_val, format="DD/MM/YYYY", key=f"ab_{form_key}")
+                        nova_abertura = c2.date_input("Abertura", value=abert_val, format="DD/MM/YYYY", key=f"ab_{form_key}")
                         
                         agend_val = _to_date_safe(first_row.get('Agendamento'))
                         novo_agend = c3.date_input("Agendamento", value=agend_val, format="DD/MM/YYYY", key=f"ag_{form_key}")
@@ -318,46 +318,93 @@ else:
                         fim_val = _to_date_safe(first_row.get('Fechamento'))
                         novo_fim = c4.date_input("Finalização", value=fim_val, format="DD/MM/YYYY", key=f"fim_{form_key}")
 
-                        # --- LINHA 2: Pessoas e Sistema ---
-                        c5, c6, c7, c8, c9 = st.columns(5)
+                        # --- LINHA 2: Analista | Gestor | Técnico ---
+                        c5, c6, c7 = st.columns(3)
                         
                         analista_val = first_row.get('Analista', '')
                         novo_analista = c5.text_input("Analista", value=analista_val, key=f"ana_{form_key}")
                         
                         gestor_val = first_row.get('Gestor', '')
-                        # Se quiser dropdown para gestor, mude para selectbox aqui
                         novo_gestor = c6.text_input("Gestor", value=gestor_val, key=f"ges_{form_key}")
                         
                         tecnico_val = first_row.get('Técnico', '')
                         novo_tec = c7.text_input("Técnico", value=tecnico_val, key=f"tec_{form_key}")
+
+                        # --- LINHA 3: Projeto | Serviço | Sistema ---
+                        c8, c9, c10 = st.columns(3)
+                        
+                        # Projeto (Selectbox para manter consistência)
+                        proj_val = first_row.get('Projeto', '')
+                        proj_list_local = sorted(df_filtrado['Projeto'].unique().tolist())
+                        idx_proj = proj_list_local.index(proj_val) if proj_val in proj_list_local else 0
+                        novo_projeto = c8.selectbox("Nome do Projeto", proj_list_local, index=idx_proj, key=f"proj_{form_key}")
                         
                         servico_val = first_row.get('Serviço', '')
-                        novo_servico = c8.text_input("Serviço", value=servico_val, key=f"serv_{form_key}")
+                        novo_servico = c9.text_input("Serviço", value=servico_val, key=f"serv_{form_key}")
                         
                         sistema_val = first_row.get('Sistema', '')
-                        novo_sistema = c9.text_input("Sistema", value=sistema_val, key=f"sis_{form_key}")
+                        novo_sistema = c10.text_input("Sistema", value=sistema_val, key=f"sis_{form_key}")
 
-                        # --- LINHA 3: Observações ---
+                        # --- LINHA 4: Observações (Caixa Grande) ---
                         obs_val = first_row.get('Observações e Pendencias', '')
                         nova_obs = st.text_area("Observações e Pendências", value=obs_val, height=100, key=f"obs_{form_key}")
 
-                        # --- LINHA 4: Detalhes do Chamado ---
-                        st.markdown("##### 🔗 Detalhes do Chamado")
-                        c10, c11, c12 = st.columns([1, 2, 1])
+                        # --- LINHA 5: Detalhes (Chamado Clicável | Link | Protocolo) ---
+                        st.markdown("##### 🔗 Links e Protocolos")
+                        c11, c12, c13 = st.columns([1, 2, 1])
                         
-                        # Número do Chamado (Somente Leitura)
+                        # Coluna 1: Nº Chamado (Clicável se tiver link)
                         chamado_num = str(first_row.get('Nº Chamado', ''))
-                        c10.text_input("Nº Chamado", value=chamado_num, disabled=True, key=f"ncham_{form_key}")
+                        link_atual = first_row.get('Link Externo', '')
                         
-                        # Link
-                        link_val = first_row.get('Link Externo', '')
-                        if pd.isna(link_val): link_val = ""
-                        novo_link = c11.text_input("Link Externo", value=link_val, placeholder="Cole o link aqui...", key=f"lnk_{form_key}")
+                        with c11:
+                            st.caption("Nº Chamado (Acesso)")
+                            if pd.notna(link_atual) and str(link_atual).startswith('http'):
+                                st.link_button(f"🔗 {chamado_num}", link_atual, use_container_width=True)
+                            else:
+                                st.text_input("Chamado", value=chamado_num, disabled=True, label_visibility="collapsed", key=f"dis_ch_{form_key}")
+
+                        # Coluna 2: Input do Link
+                        if pd.isna(link_atual): link_atual = ""
+                        novo_link = c12.text_input("Link Externo (Cole aqui)", value=link_atual, key=f"lnk_{form_key}")
                         
-                        # Protocolo
+                        # Coluna 3: Protocolo
                         proto_val = first_row.get('Nº Protocolo', '')
                         if pd.isna(proto_val): proto_val = ""
-                        novo_proto = c12.text_input("Nº Protocolo", value=proto_val, key=f"prot_{form_key}")
+                        novo_proto = c13.text_input("Nº Protocolo", value=proto_val, key=f"prot_{form_key}")
+
+                        # --- LINHA 6: Descrição (Equipamentos) ---
+                        st.markdown("---")
+                        st.markdown("##### 📦 Descrição (Equipamentos do Projeto)")
+                        
+                        # Lógica para montar a descrição agrupada
+                        desc_texto_final = ""
+                        nome_serv_lower = str(nome_servico).lower().strip()
+                        
+                        if nome_serv_lower in SERVICOS_SEM_EQUIPAMENTO:
+                            if nome_serv_lower == "recolhimento de eqto":
+                                desc_texto_final = f"Realizar o {nome_servico}"
+                            else:
+                                desc_texto_final = f"Realizar a {nome_servico}"
+                        else:
+                            # Lista equipamentos
+                            itens_desc = []
+                            # Agrupa por Sistema dentro deste grupo
+                            for sys, df_sys in df_grupo.groupby('Sistema'):
+                                sys_clean = clean_val(sys, "Sistema Geral")
+                                itens_desc.append(f"**{sys_clean}**")
+                                for _, row_eq in df_sys.iterrows():
+                                    qtd = row_eq.get('Qtd.', 0)
+                                    equip = row_eq.get('Equipamento', 'Indefinido')
+                                    itens_desc.append(f"- {qtd}x {equip}")
+                                itens_desc.append("") # Linha vazia
+                            desc_texto_final = "<br>".join(itens_desc)
+
+                        st.markdown(f"""
+                            <div style='background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 5px; padding: 10px; font-size: 0.9rem; max-height: 200px; overflow-y: auto;'>
+                                {desc_texto_final}
+                            </div>
+                        """, unsafe_allow_html=True)
 
                         st.markdown("<br>", unsafe_allow_html=True)
                         btn_salvar = st.form_submit_button("💾 Salvar Alterações", use_container_width=True)
@@ -370,6 +417,7 @@ else:
                             "Analista": novo_analista,
                             "Gestor": novo_gestor,
                             "Técnico": novo_tec,
+                            "Projeto": novo_projeto,
                             "Serviço": novo_servico,
                             "Sistema": novo_sistema,
                             "Observações e Pendencias": nova_obs,
@@ -380,7 +428,6 @@ else:
                         recalcular = False
                         if novo_status != "(Automático)":
                             updates["Status"] = novo_status
-                            # Se for cancelado, limpa o sub-status, senão mantém
                             if novo_status in ["Cancelado", "Pausado"]:
                                 updates["Sub-Status"] = ""
                             
@@ -400,15 +447,11 @@ else:
                             if count > 0:
                                 st.success("Salvo com sucesso!")
                                 st.cache_data.clear()
-                                
                                 if recalcular:
-                                    # Recalcula lógica automática
                                     df_all = utils_chamados.carregar_chamados_db()
-                                    # Filtra apenas os IDs afetados para ser rápido
                                     df_target = df_all[df_all['ID'].isin(ids_chamados)]
                                     calcular_e_atualizar_status_projeto(df_target, ids_chamados)
-                                    st.cache_data.clear() # Limpa de novo após recálculo
-                                
+                                    st.cache_data.clear()
                                 time.sleep(0.5)
                                 st.rerun()
                             else:
