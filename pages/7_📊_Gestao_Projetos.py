@@ -7,7 +7,7 @@ import html
 
 st.set_page_config(page_title="Gestão de Projetos", page_icon="📊", layout="wide")
 
-# --- CSS E ESTILOS PERSONALIZADOS (PARA FICAR IGUAL ÀS FOTOS) ---
+# --- CSS E ESTILOS (APENAS PARA O CONTEÚDO PRINCIPAL) ---
 st.markdown("""
     <style>
         /* Estilo dos Cards de Métricas do Cockpit */
@@ -24,7 +24,7 @@ st.markdown("""
         
         /* Estilo do Badge de Status (Cinza/Azulado) */
         .card-status-badge { 
-            background-color: #90A4AE; /* Cinza azulado igual da foto */
+            background-color: #90A4AE;
             color: white !important; 
             padding: 4px 12px; 
             border-radius: 4px; 
@@ -52,29 +52,6 @@ st.markdown("""
         .project-card [data-testid="stExpander"] p {
             font-size: 0.9em;
             font-weight: 500;
-        }
-
-        /* --- ESTILO DA SIDEBAR (Imagem 1) --- */
-        [data-testid="stSidebar"] {
-            background-color: #262730; /* Fundo Escuro */
-        }
-        .sidebar-welcome {
-            color: white;
-            font-size: 1.2rem;
-            font-weight: bold;
-            margin-bottom: 20px;
-        }
-        .sidebar-section {
-            color: #bdc3c7;
-            font-size: 0.9rem;
-            font-weight: 600;
-            margin-top: 20px;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-        }
-        /* Botões da Sidebar ocupando 100% */
-        [data-testid="stSidebar"] button {
-            width: 100%;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -197,12 +174,10 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
         return True
     return False
 
-# --- 4. FUNÇÃO DO POP-UP RESUMO (Igual Imagem 3) ---
+# --- 4. FUNÇÃO DO POP-UP RESUMO ---
 @st.dialog("Resumo do Projeto", width="large")
 def mostrar_detalhes_projeto(nome_projeto, df_origem):
-    # Visual limpo com ícone de pasta (Imagem 3)
     st.markdown(f"#### 📂 {nome_projeto}")
-    
     df_p = df_origem[df_origem['Projeto'] == nome_projeto].copy()
     
     def unificar_agencia(row):
@@ -212,67 +187,40 @@ def mostrar_detalhes_projeto(nome_projeto, df_origem):
         return f"{cod} - {nome}"
 
     df_p['Agência'] = df_p.apply(unificar_agencia, axis=1)
-    # Formata data para DD/MM/YYYY
     df_p['Agendamento'] = pd.to_datetime(df_p['Agendamento'], errors='coerce')
-    
-    # Remove 'None' e 'NaN' para ficar limpo como na foto
     df_p['Analista'] = df_p['Analista'].fillna("")
     df_p['Status'] = df_p['Status'].fillna("")
 
     cols_view = ['Agência', 'Agendamento', 'Status', 'Analista']
-    
-    # Exibe tabela limpa
     st.dataframe(
-        df_p[cols_view], 
-        use_container_width=True, 
-        hide_index=True,
-        column_config={
-            "Agendamento": st.column_config.DateColumn("Agendamento", format="DD/MM/YYYY")
-        }
+        df_p[cols_view], use_container_width=True, hide_index=True,
+        column_config={"Agendamento": st.column_config.DateColumn("Agendamento", format="DD/MM/YYYY")}
     )
-    
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("🛠️ Gerenciar este Projeto ➤", use_container_width=True):
         st.session_state["nav_radio"] = "Detalhar um Projeto (Operacional)"
         st.session_state["sel_projeto"] = nome_projeto
         st.rerun()
 
-# --- 5. CARREGAMENTO E SIDEBAR (Igual Imagem 1) ---
+# --- 5. CARREGAMENTO E SIDEBAR (PADRÃO STREAMLIT) ---
 df = utils_chamados.carregar_chamados_db()
 
-# SIDEBAR VISUAL
+# SIDEBAR PADRÃO
 with st.sidebar:
-    # "Bem-vindo" (Simulado com HTML/CSS)
-    st.markdown("""
-        <div class="sidebar-welcome">
-            Bem-vindo(a),<br>
-            Leandro
-        </div>
-    """, unsafe_allow_html=True)
-    
-    # Seção Ações
-    st.markdown('<div class="sidebar-section">Ações</div>', unsafe_allow_html=True)
+    st.header("Ações")
     if st.button("➕ Novo Projeto / Importar Chamados"):
         run_importer_dialog()
     
     if st.button("🔗 Importar Links"):
         run_link_importer_dialog()
 
-    # Seção Sistema (Filtros são o sistema de gestão)
-    st.markdown('<div class="sidebar-section">Filtros de Gestão</div>', unsafe_allow_html=True)
-    
-    # Filtros
+    st.divider()
+    st.header("Filtros de Gestão")
     analistas = ["Todos"] + sorted(df['Analista'].dropna().unique().tolist())
     filtro_analista = st.selectbox("Analista", analistas)
     
     gestores = ["Todos"] + sorted(df['Gestor'].dropna().unique().tolist())
     filtro_gestor = st.selectbox("Gestor", gestores)
-    
-    st.divider()
-    # Logout Vermelho
-    if st.button("Logout", type="primary"):
-        st.session_state.logado = False
-        st.rerun()
 
 # --- FILTRAGEM ---
 df_filtrado = df.copy()
@@ -280,7 +228,7 @@ if filtro_analista != "Todos": df_filtrado = df_filtrado[df_filtrado['Analista']
 if filtro_gestor != "Todos": df_filtrado = df_filtrado[df_filtrado['Gestor'] == filtro_gestor]
 lista_projetos = sorted(df_filtrado['Projeto'].dropna().unique().tolist())
 
-if df.empty: st.warning("Sem dados."); st.stop()
+if df.empty: st.warning("Sem dados. Importe chamados na barra lateral."); st.stop()
 
 # --- NAVEGAÇÃO PRINCIPAL ---
 if "nav_radio" not in st.session_state: st.session_state["nav_radio"] = "Visão Geral (Cockpit)"
@@ -324,7 +272,7 @@ if escolha_visao == "Visão Geral (Cockpit)":
                 mostrar_detalhes_projeto(proj, df_filtrado)
 
 else:
-    # --- MODO OPERACIONAL (VISUAL IGUAL À IMAGEM 2) ---
+    # --- MODO OPERACIONAL ---
     c_sel, _ = st.columns([1, 2])
     with c_sel:
         if "sel_projeto" not in st.session_state:
@@ -334,11 +282,9 @@ else:
     df_proj = df_filtrado[df_filtrado['Projeto'] == projeto_selecionado].copy()
     st.divider()
     
-    # Formatação de data curta (12/12/25) para o layout
     df_proj['Agendamento_dt'] = pd.to_datetime(df_proj['Agendamento'], errors='coerce')
-    df_proj['Agendamento_str'] = df_proj['Agendamento_dt'].dt.strftime('%d/%m/%y').fillna("-") # <-- Formato curto
+    df_proj['Agendamento_str'] = df_proj['Agendamento_dt'].dt.strftime('%d/%m/%y').fillna("-")
     
-    # Agrupamento
     chave_agrupamento = ['Nome Agência', 'Serviço', 'Agendamento_str']
     grupos = df_proj.groupby(chave_agrupamento)
     grupos_lista = list(grupos)
@@ -349,27 +295,22 @@ else:
             first_row = df_grupo.iloc[0]
             ids_chamados = df_grupo['ID'].tolist()
             
-            # --- PREPARAÇÃO VISUAL (IGUAL IMAGEM 2) ---
             status_atual = clean_val(first_row.get('Status'), "NÃO INICIADA")
             acao_atual = clean_val(first_row.get('Sub-Status'), "")
             analista = clean_val(first_row.get('Analista'), "").upper()
             gestor = clean_val(first_row.get('Gestor'), "").upper()
             
-            # SLA Verde/Vermelho
             sla_html = ""
             prazo_val = _to_date_safe(first_row.get('Prazo'))
             if prazo_val:
                 hoje = date.today(); dias = (prazo_val - hoje).days
-                cor_sla = "#D32F2F" if dias < 0 else "#388E3C" # Vermelho ou Verde
+                cor_sla = "#D32F2F" if dias < 0 else "#388E3C"
                 txt_sla = f"{abs(dias)}d atrasado" if dias < 0 else f"{dias}d restantes"
                 sla_html = f"<span style='color:{cor_sla}; font-weight:bold; font-size:0.9em;'>SLA: {txt_sla}</span>"
 
-            # --- CARD RENDER ---
             with st.container(border=True):
-                # Linha Dourada
                 st.markdown("""<div style="height: 3px; background-color: #D4AF37; margin-bottom: 8px; border-radius: 2px;"></div>""", unsafe_allow_html=True)
                 
-                # Linha 1: Data | Analista | Agência | Status (Badge Cinza)
                 c1, c2, c3, c4 = st.columns([1, 2, 3, 2])
                 with c1: st.markdown(f"🗓️ **{data_str}**")
                 with c2: st.markdown(f"<span style='color:#555; font-size:0.85em;'>Analista:</span> <span style='color:#555;'>{analista}</span>", unsafe_allow_html=True)
@@ -377,26 +318,17 @@ else:
                     cod_ag = str(first_row.get('Cód. Agência', '')).split('.')[0]
                     nome_ag = str(nome_agencia).replace(cod_ag, '').strip(' -')
                     st.markdown(f"<span style='color:#555; font-size:0.85em;'>Agência:</span> <span style='color:#555;'>AG {cod_ag} {nome_ag}</span>", unsafe_allow_html=True)
-                with c4: 
-                    # Badge Cinza alinhado à direita
-                    st.markdown(f"""<div class="card-status-badge">{status_atual}</div>""", unsafe_allow_html=True)
+                with c4: st.markdown(f"""<div class="card-status-badge">{status_atual}</div>""", unsafe_allow_html=True)
 
-                # Linha 2: Serviço (Azul/Bold) | SLA | Gestor (Vinho) | Ação (Verde/Bold)
                 c5, c6, c7, c8 = st.columns([3, 1.5, 1.5, 2])
-                with c5: 
-                    st.markdown(f"<div style='color:#0D47A1; font-weight:bold; font-size:1rem; text-transform:uppercase;'>{nome_servico}</div>", unsafe_allow_html=True)
-                with c6: 
-                    st.markdown(sla_html, unsafe_allow_html=True)
+                with c5: st.markdown(f"<div style='color:#0D47A1; font-weight:bold; font-size:1rem; text-transform:uppercase;'>{nome_servico}</div>", unsafe_allow_html=True)
+                with c6: st.markdown(sla_html, unsafe_allow_html=True)
                 with c7: 
                     if gestor: st.markdown(f"<span style='color:#C2185B; font-weight:bold; font-size:0.85em;'>Gestor: {gestor}</span>", unsafe_allow_html=True)
                 with c8:
-                    # Ação Verde Alinhada à direita
-                    if str(acao_atual).lower() == "faturado":
-                        st.markdown("<div style='text-align:right; color:#2E7D32; font-weight:bold; font-size:0.85em;'>✔️ FATURADO</div>", unsafe_allow_html=True)
-                    elif acao_atual:
-                        st.markdown(f"<div style='text-align:right; color:#004D40; font-weight:bold; font-size:0.75em; text-transform:uppercase;'>{acao_atual}</div>", unsafe_allow_html=True)
+                    if str(acao_atual).lower() == "faturado": st.markdown("<div style='text-align:right; color:#2E7D32; font-weight:bold; font-size:0.85em;'>✔️ FATURADO</div>", unsafe_allow_html=True)
+                    elif acao_atual: st.markdown(f"<div style='text-align:right; color:#004D40; font-weight:bold; font-size:0.75em; text-transform:uppercase;'>{acao_atual}</div>", unsafe_allow_html=True)
 
-                # --- FORMULÁRIO ---
                 with st.expander(f" >  Ver/Editar Detalhes - ID: {first_row['ID']}"):
                     form_key = f"form_{first_row['ID']}"
                     with st.form(key=form_key):
@@ -434,8 +366,7 @@ else:
                         link_atual = first_row.get('Link Externo', '')
                         with c11:
                             st.caption("Acesso")
-                            if pd.notna(link_atual) and str(link_atual).startswith('http'):
-                                st.link_button(f"🔗 {chamado_num}", link_atual, use_container_width=True)
+                            if pd.notna(link_atual) and str(link_atual).startswith('http'): st.link_button(f"🔗 {chamado_num}", link_atual, use_container_width=True)
                             else: st.text_input("Nº", value=chamado_num, disabled=True, key=f"d_{form_key}", label_visibility="collapsed")
                         
                         if pd.isna(link_atual): link_atual = ""
@@ -458,7 +389,6 @@ else:
                             desc_texto_final = "<br>".join(itens)
                         st.markdown(f"<div style='background-color:#f5f5f5; padding:10px; font-size:0.9rem; max-height:200px; overflow-y:auto;'>{desc_texto_final}</div>", unsafe_allow_html=True)
                         st.markdown("<br>", unsafe_allow_html=True)
-                        
                         btn_salvar = st.form_submit_button("💾 Salvar", use_container_width=True)
                     
                     if btn_salvar:
