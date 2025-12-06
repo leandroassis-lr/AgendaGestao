@@ -493,38 +493,42 @@ else:
                         
                         # --- 1. CARREGAR LISTAS VINCULADAS (CONFIGURAÇÕES) ---
                         try:
-                            # Carrega Configurações de Status
                             df_status_cfg = utils.carregar_config_db("status")
-                            opts_status_db = df_status_cfg.iloc[:, 0].tolist() if not df_status_cfg.empty else []
+                            # Convertemos para string e removemos vazios imediatamente
+                            opts_status_db = [str(x) for x in df_status_cfg.iloc[:, 0].dropna().tolist()] if not df_status_cfg.empty else []
                             
-                            # Carrega Configurações de Projetos
                             df_proj_cfg = utils.carregar_config_db("projetos_nomes")
-                            opts_proj_db = df_proj_cfg.iloc[:, 0].tolist() if not df_proj_cfg.empty else []
+                            opts_proj_db = [str(x) for x in df_proj_cfg.iloc[:, 0].dropna().tolist()] if not df_proj_cfg.empty else []
                             
-                            # Carrega Configurações de TÉCNICOS (Para usar no campo Técnico de Campo)
                             df_tec_cfg = utils.carregar_config_db("tecnicos")
-                            opts_tec_db = df_tec_cfg.iloc[:, 0].tolist() if not df_tec_cfg.empty else []
+                            opts_tec_db = [str(x) for x in df_tec_cfg.iloc[:, 0].dropna().tolist()] if not df_tec_cfg.empty else []
                         except:
                             opts_status_db = []; opts_proj_db = []; opts_tec_db = []
 
-                        # --- 2. PREPARAR AS LISTAS PARA OS CAMPOS ---
+                        # --- 2. PREPARAR AS LISTAS PARA OS CAMPOS (COM LIMPEZA) ---
                         
-                        # A. Status (Combina banco + atual + padrões)
-                        lista_final_status = sorted(list(set(opts_status_db + [status_atual] + ["(Automático)", "Finalizado", "Cancelado"])))
-                        lista_final_status = [x for x in lista_final_status if x and str(x).lower() != 'nan']
+                        # Função auxiliar para limpar valor atual
+                        def safe_str(val):
+                            if pd.isna(val) or str(val).lower() in ['nan', 'none', '']: return ""
+                            return str(val)
+
+                        # A. Status
+                        status_atual = safe_str(first_row.get('Status', '(Automático)'))
+                        lista_raw_st = opts_status_db + [status_atual] + ["(Automático)", "Finalizado", "Cancelado"]
+                        # Remove duplicados e vazios, garante ordenação
+                        lista_final_status = sorted(list(set([s for s in lista_raw_st if s])))
                         idx_st = lista_final_status.index(status_atual) if status_atual in lista_final_status else 0
                         
                         # B. Projetos
-                        val_proj_atual = first_row.get('Projeto', '')
-                        lista_final_proj = sorted(list(set(opts_proj_db + [val_proj_atual])))
-                        lista_final_proj = [x for x in lista_final_proj if x and str(x).lower() != 'nan']
+                        val_proj_atual = safe_str(first_row.get('Projeto', ''))
+                        lista_raw_proj = opts_proj_db + [val_proj_atual]
+                        lista_final_proj = sorted(list(set([p for p in lista_raw_proj if p])))
                         idx_proj = lista_final_proj.index(val_proj_atual) if val_proj_atual in lista_final_proj else 0
 
-                        # C. Técnico de Campo (Usa a lista 'tecnicos' da configuração)
-                        val_tec_atual = first_row.get('Técnico', '')
-                        lista_final_tec = sorted(list(set(opts_tec_db + [val_tec_atual])))
-                        lista_final_tec = [x for x in lista_final_tec if x and str(x).lower() != 'nan']
-                        # Se não tiver técnico definido, tenta selecionar o primeiro ou vazio
+                        # C. Técnico de Campo
+                        val_tec_atual = safe_str(first_row.get('Técnico', ''))
+                        lista_raw_tec = opts_tec_db + [val_tec_atual]
+                        lista_final_tec = sorted(list(set([t for t in lista_raw_tec if t])))
                         idx_tec = lista_final_tec.index(val_tec_atual) if val_tec_atual in lista_final_tec else 0
 
                         # --- 3. CAMPOS DO FORMULÁRIO ---
@@ -541,13 +545,12 @@ else:
                         novo_fim = c4.date_input("Finalização", value=fim_val, format="DD/MM/YYYY", key=f"fim_{form_key}")
 
                         c5, c6, c7 = st.columns(3)
-                        # ANALISTA: Voltei para Text Input (pois não temos lista de analistas configurada ainda)
-                        # Se quiser lista, precisa criar tabela 'analistas' na config e carregar igual fizemos com 'tecnicos'
+                        # Analista continua como Texto Livre (ou crie a lista se desejar)
                         novo_analista = c5.text_input("Analista", value=first_row.get('Analista', ''), key=f"ana_{form_key}")
                         
                         novo_gestor = c6.text_input("Gestor", value=first_row.get('Gestor', ''), key=f"ges_{form_key}")
                         
-                        # TÉCNICO CAMPO: Agora sim usa o Selectbox correto da lista de Tecnicos
+                        # Técnico Campo CORRIGIDO com a lista segura
                         novo_tec = c7.selectbox("Técnico Campo", lista_final_tec, index=idx_tec, key=f"tec_{form_key}")
 
                         c8, c9, c10 = st.columns(3)
@@ -555,7 +558,6 @@ else:
                         novo_servico = c9.text_input("Serviço", value=first_row.get('Serviço', ''), key=f"serv_{form_key}")
                         novo_sistema = c10.text_input("Sistema", value=first_row.get('Sistema', ''), key=f"sis_{form_key}")
 
-                        # ... (Resto do código igual: Obs, Links, Botão Salvar) ...
                         obs_val = first_row.get('Observações e Pendencias', '')
                         nova_obs = st.text_area("Observações e Pendências", value=obs_val, height=100, key=f"obs_{form_key}")
 
