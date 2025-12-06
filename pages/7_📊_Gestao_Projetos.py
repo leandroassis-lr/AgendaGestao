@@ -6,6 +6,7 @@ from datetime import date, timedelta, datetime
 import time
 import html
 import math
+import utils
 
 st.set_page_config(page_title="Gestão de Projetos", page_icon="📊", layout="wide")
 
@@ -349,11 +350,24 @@ else:
     
     busca_geral = col_busca.text_input("Buscador Geral (Texto)")
     
-    opcoes_projeto = sorted(df_filtrado['Projeto'].dropna().unique().tolist())
-    sel_padrao = st.session_state.get("sel_projeto", opcoes_projeto)
+    # Tenta carregar lista de projetos do banco de configurações, se não der, usa do DF
+    try:
+        df_proj_cfg = utils.carregar_config_db("projetos_nomes")
+        opcoes_projeto_db = df_proj_cfg.iloc[:, 0].tolist() if not df_proj_cfg.empty else []
+    except: opcoes_projeto_db = []
+    
+    # Se a lista do banco estiver vazia, usa a do dataframe atual
+    if not opcoes_projeto_db:
+        opcoes_projeto_db = sorted(df_filtrado['Projeto'].dropna().unique().tolist())
+    
+    # Lógica para manter seleção
+    sel_padrao = st.session_state.get("sel_projeto", opcoes_projeto_db)
     if not isinstance(sel_padrao, list): sel_padrao = [sel_padrao] 
-    if not all(x in opcoes_projeto for x in sel_padrao): sel_padrao = opcoes_projeto
-    filtro_projeto_multi = col_proj.multiselect("Projetos", options=opcoes_projeto, default=sel_padrao)
+    # Filtra apenas o que é válido
+    sel_padrao = [x for x in sel_padrao if x in opcoes_projeto_db]
+    if not sel_padrao: sel_padrao = opcoes_projeto_db
+    
+    filtro_projeto_multi = col_proj.multiselect("Projetos", options=opcoes_projeto_db, default=sel_padrao)
     
     opcoes_status = sorted(df_filtrado['Status'].dropna().unique().tolist())
     filtro_status_multi = col_status.multiselect("Status", options=opcoes_status, default=opcoes_status)
@@ -405,19 +419,17 @@ else:
     
     st.divider()
 
-    # 3. RESUMO POR STATUS (AGORA HORIZONTAL, EMBAIXO DOS KPIs)
+    # 3. RESUMO POR STATUS (HORIZONTAL)
     st.subheader("Resumo por Status")
     
     if not df_view.empty:
         counts = df_view['Status'].value_counts()
-        # Cria 4 colunas para distribuir os cards de status
         cols_status = st.columns(4)
         
         for index, (status, count) in enumerate(counts.items()):
             try: cor = utils_chamados.get_status_color(status)
             except: cor = "#90A4AE"
             
-            # Distribui os cards nas colunas usando o índice
             with cols_status[index % 4]:
                 st.markdown(f"""
                 <div class="status-mini-card" style="border-left: 5px solid {cor};">
@@ -430,7 +442,7 @@ else:
 
     st.divider()
 
-    # 4. LISTA DETALHADA (AGORA OCUPA LARGURA TOTAL)
+    # 4. LISTA DETALHADA + FORMULÁRIO INTELIGENTE
     st.markdown(f"### 📋 Detalhes ({len(df_view)} registros)")
     df_view['Agendamento_str'] = pd.to_datetime(df_view['Agendamento']).dt.strftime('%d/%m/%Y').fillna("Sem Data")
     
@@ -478,29 +490,66 @@ else:
                 with st.expander(f" >  Ver/Editar Detalhes - ID: {first_row['ID']}"):
                     form_key = f"form_{first_row['ID']}"
                     with st.form(key=form_key):
+                        
+                        # --- CARREGAR DADOS VINCULADOS (CONFIGURAÇÕES) ---
+                        try:
+                            df_status_cfg = utils.carregar_config_db("status")
+                            opts_status_db = df_status_cfg.iloc[:, 0].tolist() if not df_status_cfg.empty else []
+                            
+                            df_proj_cfg = utils.carregar_config_db("projetos_nomes")
+                            opts_proj_db = df_proj_cfg.iloc[:, 0].tolist() if not df_proj_cfg.empty else []
+                            
+                            df_tec_cfg = utils.carregar_config_db("tecnicos")
+                            opts_tec_db = df_tec_cfg.iloc[:, 0].tolist() if not df_tec_cfg.empty else []
+                        except:
+                            opts_status_db = []; opts_proj_db = []; opts_tec_db = []
+
+                        # --- COMBINAR LISTAS COM VALOR ATUAL (Fallback) ---
+                        
+                        # Status
+                        lista_final_status = sorted(list(set(opts_status_db + [status_atual] + ["(Automático)", "Finalizado", "Cancelado"])))
+                        # Remove vazios ou nulos
+                        lista_final_status = [x for x in lista_final_status if x and str(x).lower() != 'nan']
+                        idx_st = lista_final_status.index(status_atual) if status_atual in lista_final_status else 0
+                        
+                        # Projetos
+                        val_proj_atual = first_row.get('Projeto', '')
+                        lista_final_proj = sorted(list(set(opts_proj_db + [val_proj_atual])))
+                        lista_final_proj = [x for x in lista_final_proj if x and str(x).lower() != 'nan']
+                        idx_proj = lista_final_proj.index(val_proj_atual) if val_proj_atual in lista_final_proj else 0
+
+                        # Analistas
+                        val_ana_atual = first_row.get('Analista', '')
+                        lista_final_ana = sorted(list(set(opts_tec_db + [val_ana_atual])))
+                        lista_final_ana = [x for x in lista_final_ana if x and str(x).lower() != 'nan']
+                        idx_ana = lista_final_ana.index(val_ana_atual) if val_ana_atual in lista_final_ana else 0
+
+                        # --- CAMPOS DO FORMULÁRIO ---
                         c1, c2, c3, c4 = st.columns(4)
-                        status_opts = ["(Automático)", "Pendência de Infra", "Pendência de Equipamento", "Pausado", "Cancelado", "Finalizado"]
-                        idx_st = status_opts.index(status_atual) if status_atual in status_opts else 0
-                        novo_status = c1.selectbox("Status", status_opts, index=idx_st, key=f"st_{form_key}")
+                        novo_status = c1.selectbox("Status", lista_final_status, index=idx_st, key=f"st_{form_key}")
+                        
                         abert_val = _to_date_safe(first_row.get('Abertura')) or date.today()
                         nova_abertura = c2.date_input("Abertura", value=abert_val, format="DD/MM/YYYY", key=f"ab_{form_key}")
+                        
                         agend_val = _to_date_safe(first_row.get('Agendamento'))
                         novo_agend = c3.date_input("Agendamento", value=agend_val, format="DD/MM/YYYY", key=f"ag_{form_key}")
+                        
                         fim_val = _to_date_safe(first_row.get('Fechamento'))
                         novo_fim = c4.date_input("Finalização", value=fim_val, format="DD/MM/YYYY", key=f"fim_{form_key}")
+
                         c5, c6, c7 = st.columns(3)
-                        novo_analista = c5.text_input("Analista", value=first_row.get('Analista', ''), key=f"ana_{form_key}")
+                        novo_analista = c5.selectbox("Analista", lista_final_ana, index=idx_ana, key=f"ana_{form_key}")
                         novo_gestor = c6.text_input("Gestor", value=first_row.get('Gestor', ''), key=f"ges_{form_key}")
-                        novo_tec = c7.text_input("Técnico", value=first_row.get('Técnico', ''), key=f"tec_{form_key}")
+                        novo_tec = c7.text_input("Técnico Campo", value=first_row.get('Técnico', ''), key=f"tec_{form_key}")
+
                         c8, c9, c10 = st.columns(3)
-                        proj_val = first_row.get('Projeto', '')
-                        proj_list_local = sorted(df_filtrado['Projeto'].unique().tolist())
-                        idx_proj = proj_list_local.index(proj_val) if proj_val in proj_list_local else 0
-                        novo_projeto = c8.selectbox("Nome do Projeto", proj_list_local, index=idx_proj, key=f"proj_{form_key}")
+                        novo_projeto = c8.selectbox("Nome do Projeto", lista_final_proj, index=idx_proj, key=f"proj_{form_key}")
                         novo_servico = c9.text_input("Serviço", value=first_row.get('Serviço', ''), key=f"serv_{form_key}")
                         novo_sistema = c10.text_input("Sistema", value=first_row.get('Sistema', ''), key=f"sis_{form_key}")
+
                         obs_val = first_row.get('Observações e Pendencias', '')
                         nova_obs = st.text_area("Observações e Pendências", value=obs_val, height=100, key=f"obs_{form_key}")
+
                         st.markdown("##### 🔗 Links e Protocolos")
                         c11, c12, c13 = st.columns([1, 2, 1])
                         chamado_num = str(first_row.get('Nº Chamado', ''))
@@ -513,6 +562,8 @@ else:
                         novo_link = c12.text_input("Link Externo (Cole aqui)", value=link_atual, key=f"lnk_{form_key}")
                         proto_val = first_row.get('Nº Protocolo', ''); novo_proto = c13.text_input("Nº Protocolo", value=proto_val if pd.notna(proto_val) else "", key=f"prot_{form_key}")
                         st.markdown("---")
+                        
+                        # DESCRIÇÃO DINÂMICA
                         st.markdown("##### 📦 Descrição (Equipamentos do Projeto)")
                         desc_texto_final = ""
                         nome_serv_lower = str(nome_servico).lower().strip()
@@ -527,6 +578,7 @@ else:
                             desc_texto_final = "<br>".join(itens_desc)
                         st.markdown(f"<div style='background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 5px; padding: 10px; font-size: 0.9rem; max-height: 200px; overflow-y: auto;'>{desc_texto_final}</div>", unsafe_allow_html=True)
                         st.markdown("<br>", unsafe_allow_html=True)
+                        
                         btn_salvar = st.form_submit_button("💾 Salvar Alterações", use_container_width=True)
                         if btn_salvar:
                             updates = {
@@ -542,6 +594,7 @@ else:
                                 recalcular = False
                                 if novo_status == "Finalizado" and novo_fim is None: st.error("Data Finalização obrigatória!"); st.stop()
                             else: recalcular = True
+                            
                             with st.spinner("Salvando..."):
                                 count = 0
                                 for cid in ids_chamados:
