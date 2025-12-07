@@ -153,119 +153,104 @@ def carregar_chamados_db(agencia_id_filtro=None):
         
 # --- 4. FUNÇÃO PARA IMPORTAR CHAMADOS ---
 
-        df_insert = df_insert.rename(columns={
-            'Nº Chamado': 'CHAMADO',
-            'Cód. Agência': 'N° AGENCIA'
-        })
-        
-        df_update = df_update.rename(columns={
-            'Nº Chamado': 'CHAMADO',
-            'Cód. Agência': 'N° AGENCIA'
-        })
-        
-        # Padroniza para maiúsculas (backend exige)
-        df_insert.columns = [c.strip().upper() for c in df_insert.columns]
-        df_update.columns = [c.strip().upper() for c in df_update.columns]
-        
+df_insert = df_insert.rename(columns={
+    'Nº Chamado': 'CHAMADO',
+    'Cód. Agência': 'N° AGENCIA'
+})
+
+df_update = df_update.rename(columns={
+    'Nº Chamado': 'CHAMADO',
+    'Cód. Agência': 'N° AGENCIA'
+})
+
+
 def bulk_insert_chamados_db(df: pd.DataFrame):
-  
+
     conn = get_valid_conn()
     if not conn:
         return False, 0
-    
-    NEW_COLUMN_MAP = {
-        'CHAMADO': 'chamado_id',
-        'N° AGENCIA': 'agencia_id',
-        'NOME AGÊNCIA': 'agencia_nome',
-        'UF': 'agencia_uf',
-        'TIPO DO SERVIÇO': 'servico',
-        'NOME DO PROJETO': 'projeto_nome',
-        'AGENDAMENTO': 'data_agendamento',
-        'SISTEMA': 'sistema',
-        'CODIGO': 'cod_equipamento',
-        'DESCRIÇÃO EQUIPAMENTO': 'nome_equipamento',
-        'QTD': 'quantidade',
-        'GESTOR ITAU': 'gestor',
-        'RESPONSÁVEL': 'analista'
+
+    # MAPEAMENTO DE IMPORTAÇÃO
+    MAP_IMPORT = {
+        "Nº Chamado": "CHAMADO",
+        "Cód. Agência": "N° AGENCIA",
+        "Analista": "RESPONSÁVEL",
+        "Gestor": "GESTOR ITAU",
+        "Serviço": "TIPO DO SERVIÇO",
+        "Projeto": "NOME DO PROJETO",
+        "Agendamento": "AGENDAMENTO",
+        "Sistema": "SISTEMA",
+        "Qtd": "QTD"
     }
 
-    # --- Padroniza cabeçalhos do DataFrame recebido ---
-    df_renamed = df.copy()
-    df_renamed.columns = [str(col).strip().upper() for col in df_renamed.columns]
+    # Renomeia colunas do DF ORIGINAL
+    df_renamed = df.rename(columns=lambda c: str(c).strip().upper())
 
-    headers_no_excel = df_renamed.columns
-
-    # Mapeia somente colunas realmente existentes
+    # Mapeia colunas que EXISTEM no arquivo
     map_para_renomear = {
-        excel_header: db_col
-        for excel_header, db_col in NEW_COLUMN_MAP.items()
-        if excel_header in headers_no_excel
+        excel_header.upper(): db_col.upper()
+        for excel_header, db_col in MAP_IMPORT.items()
+        if excel_header.upper() in df_renamed.columns
     }
 
     df_to_insert = df_renamed.rename(columns=map_para_renomear)
 
-    # --- Validações obrigatórias ---
-    if 'chamado_id' not in df_to_insert.columns:
-        st.error("Erro: A planilha deve conter um cabeçalho 'CHAMADO'.")
+    # VALIDAÇÕES
+    if 'CHAMADO' not in df_to_insert.columns:
+        st.error("Erro: A planilha deve conter o cabeçalho 'Nº Chamado'.")
         return False, 0
 
-    if 'agencia_id' not in df_to_insert.columns:
-        st.error("Erro: A planilha deve conter um cabeçalho 'N° AGENCIA'.")
+    if 'N° AGENCIA' not in df_to_insert.columns:
+        st.error("Erro: A planilha deve conter o cabeçalho 'Cód. Agência'.")
         return False, 0
 
-    # --- Datas ---
-    df_to_insert['data_abertura'] = date.today()
+    # TRATA DATAS
+    df_to_insert['DATA_ABERTURA'] = date.today()
 
-    cols_data = ['data_abertura', 'data_fechamento', 'data_agendamento']
+    cols_data = ['DATA_ABERTURA', 'DATA_FECHAMENTO', 'AGENDAMENTO']
     for col in cols_data:
         if col in df_to_insert.columns:
             df_to_insert[col] = pd.to_datetime(df_to_insert[col], errors='coerce', dayfirst=True)
         else:
             df_to_insert[col] = None
 
-    # --- Numéricos ---
-    if 'valor_chamado' in df_to_insert.columns:
-        df_to_insert['valor_chamado'] = pd.to_numeric(df_to_insert['valor_chamado'], errors='coerce').fillna(0.0)
+    # TRATA NUMÉRICOS
+    if 'VALOR_CHAMADO' in df_to_insert.columns:
+        df_to_insert['VALOR_CHAMADO'] = pd.to_numeric(df_to_insert['VALOR_CHAMADO'], errors='coerce').fillna(0.0)
 
-    if 'quantidade' in df_to_insert.columns:
-        df_to_insert['quantidade'] = pd.to_numeric(df_to_insert['quantidade'], errors='coerce').astype('Int64')
+    if 'QTD' in df_to_insert.columns:
+        df_to_insert['QTD'] = pd.to_numeric(df_to_insert['QTD'], errors='coerce').astype('Int64')
 
-    # --- Seleciona somente colunas válidas ---
-    global colunas_necessarias
-    cols_db_validas = list(colunas_necessarias.keys()) + ['chamado_id']
+    # SELECIONA COLUNAS VÁLIDAS
+    colunas_validas = [c.upper() for c in MAP_IMPORT.values()] + ['DATA_ABERTURA']
+    df_final = df_to_insert[[c for c in df_to_insert.columns if c in colunas_validas]]
 
-    df_final = df_to_insert[[col for col in df_to_insert.columns if col in cols_db_validas]]
-
-    # --- Ajusta valores para INSERT ---
+    # CONVERTE LINHAS EM VALORES
     values = []
-    for record in df_final.to_records(index=False):
-        processed = []
-        for cell in record:
+    for _, row in df_final.iterrows():
+        linha = []
+        for cell in row:
             if pd.isna(cell) or cell is pd.NaT:
-                processed.append(None)
-            elif isinstance(cell, (np.integer, int)):
-                processed.append(int(cell))
-            elif isinstance(cell, (np.floating, float)):
-                processed.append(float(cell))
-            elif isinstance(cell, (pd.Timestamp, datetime, np.datetime64)):
-                processed.append(pd.to_datetime(cell).date())
+                linha.append(None)
+            elif isinstance(cell, (pd.Timestamp, datetime)):
+                linha.append(cell.date())
             else:
-                processed.append(str(cell) if cell is not None else None)
-        values.append(tuple(processed))
+                linha.append(cell)
+        values.append(tuple(linha))
 
+    # MONTA SQL
     cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns))
     placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
 
-    update_clause = sql.SQL(', ').join(
+    update_clause = sql.SQL(", ").join(
         sql.SQL("{} = EXCLUDED.{}").format(sql.Identifier(col), sql.Identifier(col))
-        for col in df_final.columns if col not in ('chamado_id', 'data_abertura')
+        for col in df_final.columns if col != 'CHAMADO'
     )
 
-    query = sql.SQL("""
-        INSERT INTO chamados ({}) 
-        VALUES ({}) 
-        ON CONFLICT (chamado_id) DO UPDATE SET {}
-    """).format(cols_sql, placeholders, update_clause)
+    query = sql.SQL(
+        "INSERT INTO chamados ({}) VALUES ({}) "
+        "ON CONFLICT (CHAMADO) DO UPDATE SET {}"
+    ).format(cols_sql, placeholders, update_clause)
 
     try:
         with conn.cursor() as cur:
@@ -443,6 +428,7 @@ def resetar_tabela_chamados():
     except Exception as e:
         conn.rollback()
         return False, f"Erro ao limpar banco: {e}"
+
 
 
 
