@@ -122,15 +122,14 @@ def run_importer_dialog():
                 df_raw = pd.concat(dfs_list, ignore_index=True)
                 
                 # --- 2. MAPEAMENTO POR ÍNDICE (IGUAL AO CÓDIGO ANTIGO) ---
-                # Garante que temos colunas suficientes
-                if len(df_raw.columns) < 17:
+               
+                if len(df_raw.columns) < 23:
+                    st.error("Arquivo inválido: faltam colunas obrigatórias.")
+                    return
+
                     st.error(f"O arquivo tem apenas {len(df_raw.columns)} colunas. O sistema espera pelo menos 20.")
                     st.write("Colunas encontradas:", df_raw.columns.tolist())
                     return
-
-                # Cria um novo DataFrame só com as colunas que importam, usando ILOC (Posição)
-                # Baseado no seu snippet: 0=ID, 1=Agencia, 9=Serviço, 10=Projeto, 11=Data, 14=Equip, 16=Qtd, 19=Gestor
-                # Adicionei 4=Analista (padrão comum) e 8=Status (padrão comum) - AJUSTE SE NECESSÁRIO
                 
                 # Prepara dicionário de dados vazio
                 dados_mapeados = {
@@ -176,8 +175,9 @@ def run_importer_dialog():
                 df_grouped = df_final.groupby('Nº Chamado', as_index=False).agg(regras)
                 
                 # Joga o texto agrupado na coluna Sistema
+                df_grouped = df_grouped.drop(columns=['Sistema'], errors='ignore')
                 df_grouped = df_grouped.rename(columns={'Item_Formatado': 'Sistema'})
-                
+
                 # --- 5. SEPARAÇÃO (NOVOS vs ATUALIZAR) ---
                 df_banco = utils_chamados.carregar_chamados_db()
                 lista_novos = []; lista_atualizar = []
@@ -194,8 +194,8 @@ def run_importer_dialog():
                 else:
                     lista_novos = df_grouped.to_dict('records')
 
-                df_insert = pd.DataFrame(lista_novos)
-                df_update = pd.DataFrame(lista_atualizar)
+                st.session_state['df_insert'] = pd.DataFrame(lista_novos)
+                st.session_state['df_update'] = pd.DataFrame(lista_atualizar)
 
                 # --- 6. EXIBIÇÃO ---
                 c1, c2 = st.columns(2)
@@ -211,7 +211,7 @@ def run_importer_dialog():
                     
                     if not df_insert.empty:
                         status_txt.text("Inserindo novos...")
-                        utils_chamados.bulk_insert_chamados_db(df_insert)
+                        utils_chamados.bulk_insert_chamados_db(st.session_state['df_insert'])
                         bar.progress(50)
                     
                     if not df_update.empty:
@@ -234,7 +234,8 @@ def run_importer_dialog():
                     st.cache_data.clear()
                     st.rerun()
 
-            except Exception as e: st.error(f"Erro no processamento: {e}")                
+            except Exception as e: st.error(f"Erro no processamento: {e}")           
+                
 @st.dialog("🔗 Importar Links", width="medium")
 def run_link_importer_dialog():
     st.info("Planilha simples com colunas: **CHAMADO** e **LINK**.")
@@ -861,6 +862,7 @@ else:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
+
 
 
 
