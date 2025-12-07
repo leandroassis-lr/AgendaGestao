@@ -657,7 +657,7 @@ else:
                     with c6: 
                         if sla_texto: st.markdown(f"<span style='color:{sla_cor}; font-size:0.9em; font-weight:bold;'>{sla_texto}</span>", unsafe_allow_html=True)
                         else: st.caption("-")
-                    with c7: st.caption(f"Gestor: {gestor}")
+                    with c7: st.caption(f"#### {gestor}")
                     with c8:
                         if str(acao_atual).lower() == "faturado": st.markdown("✔️ **FATURADO**")
                         elif acao_atual: st.markdown(f"👉 {acao_atual}")
@@ -675,7 +675,9 @@ else:
                             color: #555; 
                             font-size: 0.95em;">
                             🏠 <b>AG {cod_ag}</b> - {nome_ag}
-                            <span style="float:right; color:#999; font-size:0.8em;"", unsafe_allow_html=True)
+                            <span style="float:right; color:#999; font-size:0.8em;">ID: {ids_chamados[0]}</span>
+                        </div>
+                    """, unsafe_allow_html=True)
 
                     # EXPANDER DE EDIÇÃO
                     with st.expander("📝 Editar Detalhes"):
@@ -870,6 +872,7 @@ else:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
+
 
 
 
