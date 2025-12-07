@@ -83,9 +83,7 @@ def clean_val(val, default="N/A"):
 def run_importer_dialog():
     st.info("Arraste o Template Padrão.")
     st.markdown("""
-    **Comportamento Inteligente:**
-    1. **Novos Chamados:** Serão criados.
-    2. **Chamados Existentes:** O sistema atualizará a lista de equipamentos/descrição (ideal para correções de quantidade).
+    **Dica:** Certifique-se que os dados estão na **primeira aba** do Excel.
     """)
     
     uploaded_files = st.file_uploader("Selecione arquivos", type=["xlsx", "csv"], accept_multiple_files=True, key="up_imp_geral")
@@ -94,10 +92,21 @@ def run_importer_dialog():
         dfs = []
         for up in uploaded_files:
             try:
+                # --- TENTATIVA INTELIGENTE DE LEITURA ---
                 if up.name.endswith('.csv'): 
-                    df = pd.read_csv(up, sep=';', dtype=str, encoding='utf-8')
+                    # Tenta ponto e vírgula, se falhar tenta vírgula
+                    try:
+                        df = pd.read_csv(up, sep=';', dtype=str, encoding='utf-8')
+                        if len(df.columns) <= 1: # Se achou só 1 coluna, o separador deve ser virgula
+                            up.seek(0)
+                            df = pd.read_csv(up, sep=',', dtype=str, encoding='utf-8')
+                    except:
+                        up.seek(0)
+                        df = pd.read_csv(up, sep=',', dtype=str, encoding='latin1') # Tenta encoding windows
                 else: 
+                    # Lê Excel (sempre a primeira aba)
                     df = pd.read_excel(up, dtype=str)
+                
                 dfs.append(df)
             except Exception as e: st.error(f"Erro no arquivo {up.name}: {e}")
         
@@ -105,24 +114,38 @@ def run_importer_dialog():
             try:
                 df_raw = pd.concat(dfs, ignore_index=True)
                 
-                # --- 1. PADRONIZAÇÃO DE COLUNAS ---
-                df_raw.columns = [c.upper().strip() for c in df_raw.columns]
+                # --- DIAGNÓSTICO (MOSTRA O QUE O SISTEMA VÊ) ---
+                colunas_originais = df_raw.columns.tolist()
                 
-                # Mapeamento (Ajuste conforme seu Excel)
+                # --- 1. PADRONIZAÇÃO DE COLUNAS ---
+                # Remove espaços extras e converte para maiúsculo
+                df_raw.columns = [str(c).strip().upper() for c in df_raw.columns]
+                
+                # Mapeamento
                 mapa_colunas = {
                     'CHAMADO': 'Nº Chamado',
-                    'N° AGENCIA': 'Cód. Agência', 'AGENCIA': 'Cód. Agência',
+                    'N° AGENCIA': 'Cód. Agência', 'AGENCIA': 'Cód. Agência', 'Nº AGENCIA': 'Cód. Agência',
                     'ANALISTA': 'Analista', 'GESTOR': 'Gestor',
-                    'SERVIÇO': 'Serviço', 'SERVICO': 'Serviço',
+                    'SERVIÇO': 'Serviço', 'SERVICO': 'Serviço', 'TIPO DO SERVIÇO': 'Serviço',
                     'STATUS': 'Status',
-                    'DATA ABERTURA': 'Abertura', 'DATA AGENDAMENTO': 'Agendamento', 'DATA PRAZO': 'Prazo',
-                    'DESCRIÇÃO': 'Sistema', 'EQUIPAMENTO': 'Sistema',
+                    'DATA ABERTURA': 'Abertura', 'DATA AGENDAMENTO': 'Agendamento', 'DATA PRAZO': 'Prazo', 'AGENDAMENTO': 'Agendamento',
+                    'DESCRIÇÃO': 'Sistema', 'EQUIPAMENTO': 'Sistema', 'SISTEMA': 'Sistema',
                     'OBSERVAÇÃO': 'Observações e Pendencias', 'QUANTIDADE': 'Qtd'
                 }
                 
                 df_raw = df_raw.rename(columns=mapa_colunas)
+                
+                # --- VERIFICAÇÃO CRÍTICA ---
                 if 'Nº Chamado' not in df_raw.columns:
-                    st.error("Erro: Coluna 'CHAMADO' obrigatória não encontrada.")
+                    st.error("❌ ERRO: Coluna 'CHAMADO' não identificada.")
+                    
+                    # Exibe o diagnóstico para você ver o erro
+                    with st.expander("🕵️‍♂️ Ver Diagnóstico do Erro (Clique aqui)", expanded=True):
+                        st.write("O sistema esperava encontrar: **CHAMADO**")
+                        st.write("Mas encontrou estas colunas no seu arquivo:")
+                        st.code(colunas_originais) # Mostra o que veio do Excel
+                        st.write("---")
+                        st.warning("Verifique se os dados estão na **Planilha1** e se o cabeçalho está na **Linha 1**.")
                     return
 
                 # Tratamento de vazios
@@ -130,8 +153,7 @@ def run_importer_dialog():
                     if col not in df_raw.columns: df_raw[col] = ""
                 df_raw = df_raw.fillna("")
 
-                # --- 2. PRÉ-PROCESSAMENTO (CORREÇÃO DO ERRO) ---
-                # Criamos o texto formatado "3x Câmera" ANTES de agrupar
+                # --- 2. PRÉ-PROCESSAMENTO (FORMATAR ITEM) ---
                 def formatar_item(row):
                     qtd = str(row['Qtd']).strip()
                     desc = str(row['Sistema']).strip()
@@ -142,38 +164,26 @@ def run_importer_dialog():
 
                 df_raw['Item_Formatado'] = df_raw.apply(formatar_item, axis=1)
 
-                # --- 3. AGRUPAMENTO INTELIGENTE ---
-                # Função simples para juntar textos com pipe
+                # --- 3. AGRUPAMENTO ---
                 def juntar_textos(lista):
                     return " | ".join([str(s) for s in lista if str(s).strip()])
 
-                # Regras de agrupamento
-                # Para todas as colunas normais, pega o primeiro valor.
-                # Para as colunas de texto variável, aplica a junção.
                 regras = {c: 'first' for c in df_raw.columns if c not in ['Sistema', 'Qtd', 'Observações e Pendencias', 'Item_Formatado']}
-                
                 regras['Item_Formatado'] = juntar_textos
                 regras['Observações e Pendencias'] = juntar_textos
                 
-                # Removemos Sistema e Qtd da regra pois usaremos Item_Formatado
                 if 'Sistema' in regras: del regras['Sistema']
                 if 'Qtd' in regras: del regras['Qtd']
 
-                # Realiza o agrupamento
                 df_grouped = df_raw.groupby('Nº Chamado', as_index=False).agg(regras)
-                
-                # Renomeia a coluna temporária para o nome final do banco
                 df_grouped = df_grouped.rename(columns={'Item_Formatado': 'Sistema'})
                 
                 # --- 4. SEPARAÇÃO (NOVOS vs EXISTENTES) ---
                 df_banco = utils_chamados.carregar_chamados_db()
-                
-                lista_novos = []
-                lista_atualizar = []
+                lista_novos = []; lista_atualizar = []
                 
                 if not df_banco.empty:
                     mapa_ids = dict(zip(df_banco['Nº Chamado'].astype(str).str.strip(), df_banco['ID']))
-                    
                     for _, row in df_grouped.iterrows():
                         chamado_num = str(row['Nº Chamado']).strip()
                         if chamado_num in mapa_ids:
@@ -187,46 +197,44 @@ def run_importer_dialog():
                 df_insert = pd.DataFrame(lista_novos)
                 df_update = pd.DataFrame(lista_atualizar)
 
-                # --- 5. EXIBIÇÃO E CONFIRMAÇÃO ---
+                # --- 5. EXIBIÇÃO ---
                 c1, c2 = st.columns(2)
-                c1.metric("🆕 Novos Chamados", len(df_insert))
-                c2.metric("🔄 Chamados para Atualizar", len(df_update), help="Já existem no banco. Serão atualizados com a nova descrição.")
+                c1.metric("🆕 Novos", len(df_insert))
+                c2.metric("🔄 Atualizar", len(df_update))
                 
+                # Mostra prévia para garantir que leu certo
+                st.caption("Prévia dos dados lidos:")
+                st.dataframe(df_grouped.head(3), use_container_width=True)
+
                 if st.button("🚀 Processar Importação"):
                     bar = st.progress(0)
                     status_text = st.empty()
                     
-                    # A. INSERIR NOVOS
                     if not df_insert.empty:
-                        status_text.text("Inserindo novos registros...")
+                        status_text.text("Inserindo...")
                         utils_chamados.bulk_insert_chamados_db(df_insert)
                         bar.progress(50)
                     
-                    # B. ATUALIZAR EXISTENTES
                     if not df_update.empty:
-                        status_text.text("Atualizando descrições e quantidades...")
+                        status_text.text("Atualizando...")
                         total_up = len(df_update)
                         for i, row in enumerate(df_update.iterrows()):
                             idx, dados = row
                             updates = {
-                                'Sistema': dados['Sistema'], # Atualiza a lista de equipamentos
+                                'Sistema': dados['Sistema'],
                                 'Observações e Pendencias': dados['Observações e Pendencias'],
                                 'Status': dados['Status']
                             }
                             utils_chamados.atualizar_chamado_db(dados['ID_Banco'], updates)
-                            
-                            if total_up > 0:
-                                progresso = 50 + int((i / total_up) * 50)
-                                bar.progress(min(progresso, 100))
+                            if total_up > 0: bar.progress(50 + int((i / total_up) * 50))
                     
                     bar.progress(100)
-                    status_text.text("Concluído!")
-                    st.success("Operação finalizada com sucesso!")
+                    st.success("Sucesso!")
                     time.sleep(1.5)
                     st.cache_data.clear()
                     st.rerun()
 
-            except Exception as e: st.error(f"Erro ao processar dados: {e}")
+            except Exception as e: st.error(f"Erro crítico: {e}")
                 
 @st.dialog("🔗 Importar Links", width="medium")
 def run_link_importer_dialog():
@@ -854,4 +862,5 @@ else:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
+
 
