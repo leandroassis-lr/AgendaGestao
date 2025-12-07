@@ -641,7 +641,7 @@ else:
                     
                     # LINHA 1: Projeto | Agendamento | Analista | Status
                     # Usamos colunas proporcionais para alinhar bem
-                    c1, c2, c3, c4 = st.columns([3, 1.2, 1.5, 1.5])
+                    c1, c2, c3, c4 = st.columns([2, 1.2, 1.5, 1.5])
                     
                     with c1: st.markdown(f"#### {proj_nome}")
                     with c2: st.markdown(f"🗓️ {data_str}")
@@ -651,13 +651,13 @@ else:
                         st.markdown(f"""<div class="card-status-badge" style="background-color: {cor_status}; margin: 0;">{status_atual}</div>""", unsafe_allow_html=True)
 
                     # LINHA 2: Serviço | SLA | Gestor | Ação
-                    c5, c6, c7, c8 = st.columns([3, 1.2, 1.5, 1.5])
+                    c5, c6, c7, c8 = st.columns([2, 1.2, 1.5, 1.5])
                     
                     with c5: st.markdown(f"<span style='color:#1565C0; font-weight:600;'>{nome_servico}</span>", unsafe_allow_html=True)
                     with c6: 
                         if sla_texto: st.markdown(f"<span style='color:{sla_cor}; font-size:0.9em; font-weight:bold;'>{sla_texto}</span>", unsafe_allow_html=True)
                         else: st.caption("-")
-                    with c7: st.caption(f"#### {gestor}")
+                    with c7: st.caption(f"###### {gestor}")
                     with c8:
                         if str(acao_atual).lower() == "faturado": st.markdown("✔️ **FATURADO**")
                         elif acao_atual: st.markdown(f"👉 {acao_atual}")
@@ -872,6 +872,7 @@ else:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
+
 
 
 
