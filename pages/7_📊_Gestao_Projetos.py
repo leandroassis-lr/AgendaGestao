@@ -439,10 +439,13 @@ else:
                 """, unsafe_allow_html=True)
     else:
         st.info("Sem dados para exibir resumo de status.")
-
+        
     st.divider()
-    
-    # 4. LISTA DETALHADA + FORMULÁRIO INTELIGENTE
+
+    # --- 1. CRIAÇÃO DAS ABAS (ESSA LINHA É ESSENCIAL) ---
+    aba_lista, aba_calendario = st.tabs(["📋 Lista Detalhada", "📅 Linha do Tempo (Gantt)"])
+
+    # --- 2. ABA: LISTA DETALHADA ---
     with aba_lista:    
         st.markdown(f"### 📋 Detalhes ({len(df_view)} registros)")
         
@@ -510,8 +513,6 @@ else:
 
                                     # --- NOVA LÓGICA: CARREGAR USUÁRIOS DO SISTEMA ---
                                     df_users = utils.carregar_usuarios_db()
-                                    
-                                    # Garante que a coluna se chame 'Nome' (igual na tela de cadastro)
                                     if not df_users.empty:
                                         df_users.columns = [col.capitalize() for col in df_users.columns]
                                     
@@ -549,7 +550,7 @@ else:
                                 # Analistas (Usuários Cadastrados)
                                 val_ana_atual = safe_str(first_row.get('Analista', ''))
                                 lista_raw_ana = opts_ana_db + [val_ana_atual]
-                                lista_final_ana = sorted(list(set([a for a in lista_raw_ana if a]))) # Limpa vazios e ordena
+                                lista_final_ana = sorted(list(set([a for a in lista_raw_ana if a])))
                                 idx_ana = lista_final_ana.index(val_ana_atual) if val_ana_atual in lista_final_ana else 0
 
                                 # --- 3. CAMPOS DO FORMULÁRIO ---
@@ -566,10 +567,7 @@ else:
                                 nova_fim = c4.date_input("Finalização", value=fim_val, format="DD/MM/YYYY", key=f"fim_{form_key}")
 
                                 c5, c6, c7 = st.columns(3)
-                                
-                                # SELECTBOX DE ANALISTAS (USUÁRIOS)
                                 novo_analista = c5.selectbox("Analista (Usuário)", lista_final_ana, index=idx_ana, key=f"ana_{form_key}")
-                                
                                 novo_gestor = c6.text_input("Gestor", value=first_row.get('Gestor', ''), key=f"ges_{form_key}")
                                 novo_tec = c7.selectbox("Técnico Campo", lista_final_tec, index=idx_tec, key=f"tec_{form_key}")
 
@@ -640,3 +638,46 @@ else:
                                             time.sleep(0.5)
                                             st.rerun()
                                         else: st.error("Erro ao salvar.")
+
+    # --- 3. ABA: CALENDÁRIO / GANTT ---
+    with aba_calendario:
+        st.subheader("📅 Cronograma de Atividades")
+        
+        if df_view.empty:
+            st.warning("Sem dados filtrados para gerar calendário.")
+        else:
+            df_gantt = df_view.copy()
+            df_gantt['Start'] = pd.to_datetime(df_gantt['Agendamento'])
+            
+            # Define data de fim (Prazo ou +1 dia)
+            if 'Prazo' in df_gantt.columns:
+                 df_gantt['Finish'] = pd.to_datetime(df_gantt['Prazo'])
+                 df_gantt['Finish'] = df_gantt['Finish'].fillna(df_gantt['Start'] + pd.Timedelta(days=1))
+            else:
+                 df_gantt['Finish'] = df_gantt['Start'] + pd.Timedelta(days=1)
+            
+            df_gantt = df_gantt.dropna(subset=['Start'])
+            
+            if df_gantt.empty:
+                st.info("Os chamados filtrados não possuem data de agendamento.")
+            else:
+                fig_gantt = px.timeline(
+                    df_gantt, 
+                    x_start="Start", 
+                    x_end="Finish", 
+                    y="Analista",
+                    color="Status",
+                    hover_data=["Projeto", "Serviço", "Nome Agência"],
+                    title="Cronograma por Analista",
+                    height=400 + (len(df_gantt['Analista'].unique()) * 20)
+                )
+                
+                fig_gantt.update_yaxes(autorange="reversed")
+                fig_gantt.update_layout(
+                    xaxis_title="Período",
+                    yaxis_title="Responsável",
+                    showlegend=True,
+                    margin=dict(l=10, r=10, t=40, b=10)
+                )
+                st.plotly_chart(fig_gantt, use_container_width=True)
+                st.caption("💡 Dica: Duração baseada entre Agendamento e Prazo.")
