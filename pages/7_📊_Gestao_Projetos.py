@@ -84,6 +84,88 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# --- CSS ESTILO "PLANNER / TRELLO" ---
+st.markdown("""
+    <style>
+        /* Card estilo Planner */
+        .planner-card {
+            background-color: white;
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.08); /* Sombra suave */
+            border: 1px solid #e0e0e0;
+            margin-bottom: 15px;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        
+        /* Efeito ao passar o mouse */
+        .planner-card:hover {
+            box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+            transform: translateY(-3px);
+            border-color: #bdc3c7;
+        }
+
+        /* Título do Card */
+        .planner-title {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 8px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2; /* Limita a 2 linhas */
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        /* Barra de Progresso Customizada */
+        .progress-container {
+            width: 100%;
+            background-color: #f1f2f6;
+            border-radius: 4px;
+            height: 6px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.5s ease-in-out;
+        }
+
+        /* Etiquetas (Badges) */
+        .tag-status {
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            margin-right: 5px;
+        }
+        .tag-red { background: #FFEBEE; color: #C62828; }
+        .tag-green { background: #E8F5E9; color: #2E7D32; }
+        .tag-gray { background: #F5F5F5; color: #757575; }
+
+        /* Rodapé do Card */
+        .planner-footer {
+            margin-top: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.85rem;
+            color: #7f8c8d;
+            border-top: 1px solid #f5f5f5;
+            padding-top: 8px;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 # --- CONSTANTES ---
 SERVICOS_SEM_EQUIPAMENTO = [
    "vistoria", "adequação de gerador (recall)", "desinstalação total", "recolhimento de eqto",
@@ -377,8 +459,10 @@ if filtro_gestor != "Todos": df_filtrado = df_filtrado[df_filtrado['Gestor'] == 
 if "nav_radio" not in st.session_state: st.session_state["nav_radio"] = "Visão Geral (Cockpit)"
 escolha_visao = st.radio("Modo de Visualização:", ["Visão Geral (Cockpit)", "Detalhar um Projeto (Operacional)"], horizontal=True, key="nav_radio")
 
-if escolha_visao == "Visão Geral (Cockpit)":
-    st.title("📌 Cockpit de Projetos")
+if escolha_visao == "Visão Geral":
+    st.title("📌 Visão Geral dos Projetos")
+    
+    # Cálculos iniciais (mantidos)
     hoje = pd.Timestamp.today().normalize()
     df_filtrado['Agendamento'] = pd.to_datetime(df_filtrado['Agendamento'], errors='coerce')
     status_fim = ['concluído', 'finalizado', 'faturado', 'fechado']
@@ -387,36 +471,84 @@ if escolha_visao == "Visão Geral (Cockpit)":
     atrasados = pendentes[pendentes['Agendamento'] < hoje]
     prox = pendentes[(pendentes['Agendamento'] >= hoje) & (pendentes['Agendamento'] <= hoje + timedelta(days=5))]
     
-    k1, k2, k3 = st.columns(3)
-    k1.metric("Total Chamados", len(df_filtrado))
-    k2.metric("🚨 Atrasados", len(atrasados))
-    k3.metric("📅 Vencendo (5 dias)", len(prox))
-    st.divider()
+    # --- MÉTRICAS DE TOPO (Estilo Clean) ---
+    m1, m2, m3 = st.columns(3)
+    m1.metric("📦 Total de Chamados", len(df_filtrado))
+    m2.metric("🚨 Atrasados Geral", len(atrasados), delta_color="inverse")
+    m3.metric("📅 Vencendo na Semana", len(prox))
     
+    st.markdown("---")
+    st.subheader("Meus Quadros")
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # --- GRID DE CARDS TIPO PLANNER ---
     lista_projetos = sorted(df_filtrado['Projeto'].dropna().unique().tolist())
+    
+    # Define quantas colunas no Grid (3 fica bom em tela cheia)
     cols = st.columns(3)
+    
     for i, proj in enumerate(lista_projetos):
         df_p = df_filtrado[df_filtrado['Projeto'] == proj]
         total_p = len(df_p)
         concluidos = len(df_p[df_p['Status'].str.lower().isin(status_fim)])
         atrasados_p = len(df_p[(~df_p['Status'].str.lower().isin(status_fim)) & (df_p['Agendamento'] < hoje)])
+        
+        # Cálculo de Progresso
         perc = int((concluidos / total_p) * 100) if total_p > 0 else 0
         
+        # Cor da barra e saúde do projeto
+        if atrasados_p > 0:
+            cor_saude = "#e74c3c" # Vermelho
+            tag_html = f"<span class='tag-status tag-red'>⚠️ {atrasados_p} Atrasados</span>"
+        elif perc == 100:
+            cor_saude = "#2ecc71" # Verde
+            tag_html = "<span class='tag-status tag-green'>✨ Concluído</span>"
+        else:
+            cor_saude = "#3498db" # Azul
+            tag_html = "<span class='tag-status tag-gray'>Em dia</span>"
+
         with cols[i % 3]:
-            st.markdown(f"""
-            <div class="metric-card">
-                <h4 style="margin-bottom:0px;">{proj}</h4>
-                <p style="color:#666; font-size:0.9em;"><strong>{concluidos}/{total_p}</strong> prontos ({perc}%)</p>
-                <progress value="{perc}" max="100" style="width:100%; height:10px;"></progress>
-                <div style="margin-top:10px;">
-                    {'<div style="color:red; font-weight:bold;">⚠️ '+str(atrasados_p)+' Atrasados</div>' if atrasados_p > 0 else '<div style="color:green;">✅ Em dia</div>'}
+            # Container do Card
+            container = st.container()
+            
+            # HTML do Card
+            card_html = f"""
+            <div class="planner-card" style="border-left: 5px solid {cor_saude};">
+                <div>
+                    <div class="planner-title" title="{proj}">{proj}</div>
+                    
+                    <div style="display:flex; justify-content:space-between; font-size:0.8em; color:#666; margin-bottom:2px;">
+                        <span>Progresso</span>
+                        <span>{perc}%</span>
+                    </div>
+                    <div class="progress-container">
+                        <div class="progress-bar-fill" style="width: {perc}%; background-color: {cor_saude};"></div>
+                    </div>
+                </div>
+                
+                <div>
+                    <div style="margin-bottom:10px;">
+                        {tag_html}
+                    </div>
+                    
+                    <div class="planner-footer">
+                        <span>📋 {concluidos}/{total_p} tarefas</span>
+                        <span>📂 Abrir</span>
+                    </div>
                 </div>
             </div>
-            """, unsafe_allow_html=True)
-            if st.button(f"🔎 Ver Lista", key=f"btn_{i}"):
+            """
+            
+            # Renderiza o visual do Card
+            st.markdown(card_html, unsafe_allow_html=True)
+            
+            # Botão invisível sobre o card (truque do Streamlit)
+            # Como não dá pra clicar na div inteira, colocamos um botão logo abaixo que serve de ação
+            if st.button(f"Ver Detalhes", key=f"btn_plan_{i}", use_container_width=True):
                 st.session_state["sel_projeto"] = proj
                 st.session_state["nav_radio"] = "Detalhar um Projeto (Operacional)"
                 st.rerun()
+                
 else:
     # --- MODO OPERACIONAL (VISÃO DETALHADA) ---
     
@@ -711,6 +843,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
