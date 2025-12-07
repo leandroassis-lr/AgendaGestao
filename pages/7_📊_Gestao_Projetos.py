@@ -82,9 +82,6 @@ def clean_val(val, default="N/A"):
 @st.dialog("📥 Importar Chamados (Geral)", width="large")
 def run_importer_dialog():
     st.info("Arraste o Template Padrão.")
-    st.markdown("""
-    **Dica:** Certifique-se que os dados estão na **primeira aba** do Excel.
-    """)
     
     uploaded_files = st.file_uploader("Selecione arquivos", type=["xlsx", "csv"], accept_multiple_files=True, key="up_imp_geral")
     
@@ -92,19 +89,20 @@ def run_importer_dialog():
         dfs = []
         for up in uploaded_files:
             try:
-                # --- TENTATIVA INTELIGENTE DE LEITURA ---
+                # --- LEITURA ROBUSTA (CORREÇÃO DE ENCODING) ---
                 if up.name.endswith('.csv'): 
-                    # Tenta ponto e vírgula, se falhar tenta vírgula
+                    # 'utf-8-sig' é o segredo: ele remove o caractere invisível do Excel
                     try:
-                        df = pd.read_csv(up, sep=';', dtype=str, encoding='utf-8')
-                        if len(df.columns) <= 1: # Se achou só 1 coluna, o separador deve ser virgula
+                        df = pd.read_csv(up, sep=';', dtype=str, encoding='utf-8-sig')
+                        # Se falhar (ex: tudo em uma coluna só), tenta vírgula
+                        if len(df.columns) <= 1:
                             up.seek(0)
-                            df = pd.read_csv(up, sep=',', dtype=str, encoding='utf-8')
+                            df = pd.read_csv(up, sep=',', dtype=str, encoding='utf-8-sig')
                     except:
+                        # Última tentativa: encoding windows padrão Brasil
                         up.seek(0)
-                        df = pd.read_csv(up, sep=',', dtype=str, encoding='latin1') # Tenta encoding windows
+                        df = pd.read_csv(up, sep=';', dtype=str, encoding='latin1')
                 else: 
-                    # Lê Excel (sempre a primeira aba)
                     df = pd.read_excel(up, dtype=str)
                 
                 dfs.append(df)
@@ -114,38 +112,36 @@ def run_importer_dialog():
             try:
                 df_raw = pd.concat(dfs, ignore_index=True)
                 
-                # --- DIAGNÓSTICO (MOSTRA O QUE O SISTEMA VÊ) ---
-                colunas_originais = df_raw.columns.tolist()
+                # --- 1. LIMPEZA E PADRONIZAÇÃO DE COLUNAS ---
+                # Função para limpar caracteres estranhos (BOM, espaços, etc)
+                def limpar_header(col):
+                    col = str(col).strip().upper()
+                    # Remove caracteres não imprimíveis do começo (o erro fantasma)
+                    col = col.replace('\ufeff', '').replace('"', '').replace("'", "")
+                    return col
+
+                df_raw.columns = [limpar_header(c) for c in df_raw.columns]
                 
-                # --- 1. PADRONIZAÇÃO DE COLUNAS ---
-                # Remove espaços extras e converte para maiúsculo
-                df_raw.columns = [str(c).strip().upper() for c in df_raw.columns]
-                
-                # Mapeamento
+                # Mapeamento (Adicionei variações de Nº e N° para garantir)
                 mapa_colunas = {
                     'CHAMADO': 'Nº Chamado',
-                    'N° AGENCIA': 'Cód. Agência', 'AGENCIA': 'Cód. Agência', 'Nº AGENCIA': 'Cód. Agência',
+                    'N° AGENCIA': 'Cód. Agência', 'Nº AGENCIA': 'Cód. Agência', 'AGENCIA': 'Cód. Agência',
+                    'NÂº AGENCIA': 'Cód. Agência', # Corrige erro de acentuação comum
                     'ANALISTA': 'Analista', 'GESTOR': 'Gestor',
                     'SERVIÇO': 'Serviço', 'SERVICO': 'Serviço', 'TIPO DO SERVIÇO': 'Serviço',
                     'STATUS': 'Status',
-                    'DATA ABERTURA': 'Abertura', 'DATA AGENDAMENTO': 'Agendamento', 'DATA PRAZO': 'Prazo', 'AGENDAMENTO': 'Agendamento',
+                    'DATA ABERTURA': 'Abertura', 'DATA AGENDAMENTO': 'Agendamento', 'AGENDAMENTO': 'Agendamento',
+                    'DATA PRAZO': 'Prazo',
                     'DESCRIÇÃO': 'Sistema', 'EQUIPAMENTO': 'Sistema', 'SISTEMA': 'Sistema',
-                    'OBSERVAÇÃO': 'Observações e Pendencias', 'QUANTIDADE': 'Qtd'
+                    'OBSERVAÇÃO': 'Observações e Pendencias', 'QUANTIDADE': 'Qtd', 'QTD': 'Qtd'
                 }
                 
                 df_raw = df_raw.rename(columns=mapa_colunas)
                 
-                # --- VERIFICAÇÃO CRÍTICA ---
+                # Diagnóstico Rápido se falhar
                 if 'Nº Chamado' not in df_raw.columns:
-                    st.error("❌ ERRO: Coluna 'CHAMADO' não identificada.")
-                    
-                    # Exibe o diagnóstico para você ver o erro
-                    with st.expander("🕵️‍♂️ Ver Diagnóstico do Erro (Clique aqui)", expanded=True):
-                        st.write("O sistema esperava encontrar: **CHAMADO**")
-                        st.write("Mas encontrou estas colunas no seu arquivo:")
-                        st.code(colunas_originais) # Mostra o que veio do Excel
-                        st.write("---")
-                        st.warning("Verifique se os dados estão na **Planilha1** e se o cabeçalho está na **Linha 1**.")
+                    st.error("❌ Erro: Coluna 'CHAMADO' não encontrada.")
+                    st.write("Colunas identificadas no arquivo:", df_raw.columns.tolist())
                     return
 
                 # Tratamento de vazios
@@ -166,19 +162,21 @@ def run_importer_dialog():
 
                 # --- 3. AGRUPAMENTO ---
                 def juntar_textos(lista):
-                    return " | ".join([str(s) for s in lista if str(s).strip()])
+                    # Filtra vazios e duplicados exatos na string final
+                    textos = [str(s) for s in lista if str(s).strip()]
+                    return " | ".join(dict.fromkeys(textos)) # Remove duplicados mantendo ordem
 
-                regras = {c: 'first' for c in df_raw.columns if c not in ['Sistema', 'Qtd', 'Observações e Pendencias', 'Item_Formatado']}
+                # Removemos colunas que vamos agrupar da lista de 'first'
+                cols_agrupar = ['Sistema', 'Qtd', 'Observações e Pendencias', 'Item_Formatado']
+                regras = {c: 'first' for c in df_raw.columns if c not in cols_agrupar}
+                
                 regras['Item_Formatado'] = juntar_textos
                 regras['Observações e Pendencias'] = juntar_textos
-                
-                if 'Sistema' in regras: del regras['Sistema']
-                if 'Qtd' in regras: del regras['Qtd']
 
                 df_grouped = df_raw.groupby('Nº Chamado', as_index=False).agg(regras)
                 df_grouped = df_grouped.rename(columns={'Item_Formatado': 'Sistema'})
                 
-                # --- 4. SEPARAÇÃO (NOVOS vs EXISTENTES) ---
+                # --- 4. SEPARAÇÃO (NOVOS vs ATUALIZAR) ---
                 df_banco = utils_chamados.carregar_chamados_db()
                 lista_novos = []; lista_atualizar = []
                 
@@ -202,10 +200,6 @@ def run_importer_dialog():
                 c1.metric("🆕 Novos", len(df_insert))
                 c2.metric("🔄 Atualizar", len(df_update))
                 
-                # Mostra prévia para garantir que leu certo
-                st.caption("Prévia dos dados lidos:")
-                st.dataframe(df_grouped.head(3), use_container_width=True)
-
                 if st.button("🚀 Processar Importação"):
                     bar = st.progress(0)
                     status_text = st.empty()
@@ -862,5 +856,6 @@ else:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
+
 
 
