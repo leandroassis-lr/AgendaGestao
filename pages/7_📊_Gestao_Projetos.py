@@ -494,7 +494,11 @@ else:
                     # Linha 2: Serviço | SLA | Gestor | Ação
                     c5, c6, c7, c8 = st.columns([2.5, 1, 1.5, 1.5])
                     with c5: st.markdown(f"<span style='color:#1565C0; font-weight:600;'>{nome_servico}</span>", unsafe_allow_html=True)
-                    with c6: st.markdown(f"<span style='color:{sla_c}; font-size:0.9em; font-weight:bold;'>{sla_txt}</span>", unsafe_allow_html=True) if sla_txt else st.caption("-")
+                    with c6: 
+                        if sla_txt:
+                            st.markdown(f"<span style='color:{sla_c}; font-size:0.9em; font-weight:bold;'>{sla_txt}</span>", unsafe_allow_html=True) 
+                        else:
+                            st.caption("-")
                     with c7: st.caption(f"Gestor: {gestor}")
                     with c8: 
                         if str(acao).lower() == "faturado": st.markdown("✔️ **FATURADO**")
@@ -608,3 +612,4 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
