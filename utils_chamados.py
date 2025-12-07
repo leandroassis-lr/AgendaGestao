@@ -151,18 +151,17 @@ def carregar_chamados_db(agencia_id_filtro=None):
         st.error(f"Erro ao ler banco (tente recarregar a página): {e}")
         return pd.DataFrame()
         
-# --- 4. FUNÇÃO PARA IMPORTAR CHAMADOS ---
+        # --- 4. FUNÇÃO PARA IMPORTAR CHAMADOS ---
 
-df_insert = df_insert.rename(columns={
-    'Nº Chamado': 'CHAMADO',
-    'Cód. Agência': 'N° AGENCIA'
-})
-
-df_update = df_update.rename(columns={
-    'Nº Chamado': 'CHAMADO',
-    'Cód. Agência': 'N° AGENCIA'
-})
-
+        df_insert = df_insert.rename(columns={
+            'Nº Chamado': 'CHAMADO',
+            'Cód. Agência': 'N° AGENCIA'
+        })
+        
+        df_update = df_update.rename(columns={
+            'Nº Chamado': 'CHAMADO',
+            'Cód. Agência': 'N° AGENCIA'
+        })
 
 def bulk_insert_chamados_db(df: pd.DataFrame):
 
@@ -428,6 +427,7 @@ def resetar_tabela_chamados():
     except Exception as e:
         conn.rollback()
         return False, f"Erro ao limpar banco: {e}"
+
 
 
 
