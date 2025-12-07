@@ -641,7 +641,7 @@ else:
                     
                     # LINHA 1: Projeto | Agendamento | Analista | Status
                     # Usamos colunas proporcionais para alinhar bem
-                    c1, c2, c3, c4 = st.columns([2, 2, 2, 1.5])
+                    c1, c2, c3, c4 = st.columns([2, 1.5, 2, 1.5])
                     
                     with c1: st.markdown(f"#### {proj_nome}")
                     with c2: st.markdown(f"🗓️ {data_str}")
@@ -651,7 +651,7 @@ else:
                         st.markdown(f"""<div class="card-status-badge" style="background-color: {cor_status}; margin: 0;">{status_atual}</div>""", unsafe_allow_html=True)
 
                     # LINHA 2: Serviço | SLA | Gestor | Ação
-                    c5, c6, c7, c8 = st.columns([2, 2, 2, 1.5])
+                    c5, c6, c7, c8 = st.columns([2, 1.5, 2, 1.5])
                     
                     with c5: st.markdown(f"<span style='color:#1565C0; font-weight:600;'>{nome_servico}</span>", unsafe_allow_html=True)
                     with c6: 
@@ -872,6 +872,7 @@ else:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
+
 
 
 
