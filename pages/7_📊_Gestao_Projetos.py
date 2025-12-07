@@ -79,167 +79,100 @@ def clean_val(val, default="N/A"):
 
 # --- 2. FUNÇÕES DE IMPORTAÇÃO ---
 
-@st.dialog("Importar Chamados (Blindado)", width="large")
+@st.dialog("Importar Novos Chamados (Excel/CSV)")
 def run_importer_dialog():
-    st.info("Importação via Mapeamento de Colunas (Posição).")
+    st.info(f"""
+            Arraste seu arquivo Excel de chamados (formato `.xlsx` ou `.csv` com `;`) aqui.
+            O sistema espera que a **primeira linha** contenha os cabeçalhos.
+            As colunas necessárias (A, B, C, D, J, K, L, M, N, O, Q, T) serão lidas automaticamente.
+            Se um `Chamado` (Coluna A) já existir, ele será **atualizado**.
+    """)
     
     uploaded_files = st.file_uploader(
-        "Selecione arquivos (.xlsx ou .csv)", 
-        type=["xlsx", "csv"], 
-        accept_multiple_files=True,
-        key="up_imp_blindado"
+        "Selecione o(s) arquivo(s) Excel/CSV de chamados", 
+        type=["xlsx", "xls", "csv"], 
+        key="chamado_uploader_dialog",
+        accept_multiple_files=True
     )
 
     if uploaded_files:
         dfs_list = []
+        all_files_ok = True
         
-        # --- 1. LEITURA DOS ARQUIVOS ---
-        for uploaded_file in uploaded_files:
-            try:
-                if uploaded_file.name.endswith('.csv'):
-                    # Tenta ler com separadores comuns
-                    try:
-                        df = pd.read_csv(uploaded_file, sep=';', header=0, dtype=str, encoding='utf-8-sig')
-                        if len(df.columns) < 5: # Se leu errado, tenta vírgula
-                            uploaded_file.seek(0)
-                            df = pd.read_csv(uploaded_file, sep=',', header=0, dtype=str, encoding='utf-8-sig')
-                    except:
-                        uploaded_file.seek(0)
-                        df = pd.read_csv(uploaded_file, sep=None, engine='python', header=0, dtype=str)
-                else:
-                    df = pd.read_excel(uploaded_file, header=0, dtype=str)
-                
-                # Remove linhas vazias
-                df.dropna(how='all', inplace=True)
-                dfs_list.append(df)
-                
-            except Exception as e:
-                st.error(f"Erro ao ler '{uploaded_file.name}': {e}")
-                return
+        with st.spinner("Lendo e processando arquivos..."):
+            for uploaded_file in uploaded_files:
+                try:
+                    if uploaded_file.name.endswith('.csv'):
+                        df_individual = pd.read_csv(uploaded_file, sep=';', header=0, encoding='utf-8', keep_default_na=False, dtype=str) 
+                    else:
+                        df_individual = pd.read_excel(uploaded_file, header=0, keep_default_na=False, dtype=str) 
 
-        if dfs_list:
+                    df_individual.dropna(how='all', inplace=True)
+                    if not df_individual.empty:
+                        dfs_list.append(df_individual)
+                    else:
+                        st.warning(f"Arquivo '{uploaded_file.name}' está vazio e será ignorado.")
+                
+                except Exception as e:
+                    st.error(f"Erro ao ler o arquivo '{uploaded_file.name}': {e}")
+                    all_files_ok = False
+                    break 
+
+        if dfs_list and all_files_ok:
             try:
                 df_raw = pd.concat(dfs_list, ignore_index=True)
-                
-                # --- 2. MAPEAMENTO POR ÍNDICE (IGUAL AO CÓDIGO ANTIGO) ---
-               
-                if len(df_raw.columns) < 23:
-                    st.error("Arquivo inválido: faltam colunas obrigatórias.")
+                if df_raw.empty:
+                    st.error("Erro: Nenhum dado válido encontrado nos arquivos.")
                     return
+            except Exception as e:
+                st.error(f"Erro ao combinar arquivos: {e}")
+                return
 
-                    st.error(f"O arquivo tem apenas {len(df_raw.columns)} colunas. O sistema espera pelo menos 20.")
-                    st.write("Colunas encontradas:", df_raw.columns.tolist())
-                    return
+            col_map = {
+                0: 'chamado_id', 1: 'agencia_id', 2: 'agencia_nome', 3: 'agencia_uf',
+                9: 'servico', 10: 'projeto_nome', 11: 'data_agendamento', 12: 'sistema',
+                13: 'cod_equipamento', 14: 'nome_equipamento', 
+                16: 'quantidade', # Coluna Q (Quantidade_Solicitada)
+                19: 'gestor'
+            }
+            df_para_salvar = extrair_e_mapear_colunas(df_raw, col_map)
+            
+            if df_para_salvar is not None:
+                st.success(f"Sucesso! {len(df_raw)} linhas lidas de {len(uploaded_files)} arquivo(s). Pré-visualização:")
+                st.dataframe(df_para_salvar.head(), width='stretch') # CORRIGIDO
                 
-                # Prepara dicionário de dados vazio
-                dados_mapeados = {
-                    'Nº Chamado': df_raw.iloc[:, 0], 
-                    'Cód. Agência': df_raw.iloc[:, 1], 
-                    'Nome Agência': df_raw.iloc[:, 2],
-                    'agencia_uf': df_raw.iloc[:, 3],
-                    'Analista': df_raw.iloc[:, 22] if len(df_raw.columns) > 22 else "",
-                    'Gestor': df_raw.iloc[:, 20] if len(df_raw.columns) > 20 else "", 
-                    'Serviço': df_raw.iloc[:, 4],
-                    'Projeto': df_raw.iloc[:, 5],
-                    'Agendamento': df_raw.iloc[:, 6], 
-                    'Sistema': df_raw.iloc[:, 8],
-                    'Cod_equipamento': df_raw.iloc[:, 9],
-                    'Nome_equipamento': df_raw.iloc[:, 10],
-                    'Qtd': df_raw.iloc[:, 11]
-                }
-                
-                df_final = pd.DataFrame(dados_mapeados)
-                df_final = df_final.fillna("")
-
-                # --- 3. FORMATAR ITEM (QTD x DESCRIÇÃO) ---
-                def formatar_item(row):
-                    qtd = str(row['Qtd']).strip()
-                    desc = str(row['Sistema']).strip()
-                    if not desc: return ""
-                    if qtd and qtd not in ["0", "nan", ""]:
-                        return f"{qtd}x {desc}"
-                    return desc
-
-                df_final['Item_Formatado'] = df_final.apply(formatar_item, axis=1)
-
-                # --- 4. AGRUPAMENTO (JUNTAR DUPLICADOS) ---
-                def juntar_textos(lista):
-                    # Remove vazios e duplicatas exatas
-                    limpos = [str(x) for x in lista if str(x).strip() not in ["", "nan", "None"]]
-                    return " | ".join(dict.fromkeys(limpos))
-
-                regras = {c: 'first' for c in df_final.columns if c not in ['Sistema', 'Qtd', 'Item_Formatado']}
-                regras['Item_Formatado'] = juntar_textos
-                
-                # Agrupa
-                df_grouped = df_final.groupby('Nº Chamado', as_index=False).agg(regras)
-                
-                # Joga o texto agrupado na coluna Sistema
-                df_grouped = df_grouped.drop(columns=['Sistema'], errors='ignore')
-                df_grouped = df_grouped.rename(columns={'Item_Formatado': 'Sistema'})
-
-                # --- 5. SEPARAÇÃO (NOVOS vs ATUALIZAR) ---
-                df_banco = utils_chamados.carregar_chamados_db()
-                lista_novos = []; lista_atualizar = []
-                
-                if not df_banco.empty:
-                    mapa_ids = dict(zip(df_banco['Nº Chamado'].astype(str).str.strip(), df_banco['ID']))
-                    for row in df_grouped.to_dict('records'):
-                        chamado_num = str(row['Nº Chamado']).strip()
-                        if chamado_num in mapa_ids:
-                            row['ID_Banco'] = mapa_ids[chamado_num]
-                            lista_atualizar.append(row)
-                        else:
-                            lista_novos.append(row)
-                else:
-                    lista_novos = df_grouped.to_dict('records')
-                
-                # Salvando no session_state (ESSENCIAL)
-                st.session_state['df_insert'] = pd.DataFrame(lista_novos)
-                st.session_state['df_update'] = pd.DataFrame(lista_atualizar)
-                
-                df_insert = st.session_state['df_insert']
-                df_update = st.session_state['df_update']
-
-                # --- 6. EXIBIÇÃO ---
-                c1, c2 = st.columns(2)
-                c1.metric("🆕 Criar Novos", len(df_insert))
-                c2.metric("🔄 Atualizar Existentes", len(df_update))
-                
-                with st.expander("Ver dados lidos (Amostra)"):
-                    st.dataframe(df_grouped.head())
-
-                if st.button("🚀 Processar Importação"):
-
-                    bar = st.progress(0)
-                    status_txt = st.empty()
-                
-                    if not st.session_state['df_insert'].empty:
-                        status_txt.text("Inserindo novos...")
-                        utils_chamados.bulk_insert_chamados_db(st.session_state['df_insert'])
-                        bar.progress(50)
-                
-                    if not st.session_state['df_update'].empty:
-                        status_txt.text("Atualizando itens...")
-                        total = len(st.session_state['df_update'])
-                        for i, row in enumerate(st.session_state['df_update'].to_dict('records')):
-                            updates = {
-                                'Sistema': row['Sistema'],
-                                'Serviço': row['Serviço'],
-                                'Projeto': row['Projeto'],
-                                'Agendamento': row['Agendamento']
+                if st.button("▶️ Iniciar Importação de Chamados"):
+                    if df_para_salvar.empty: 
+                        st.error("Planilha vazia ou colunas não encontradas.")
+                    else:
+                        with st.spinner("Importando e atualizando chamados..."):
+                            reverse_map = {
+                                'chamado_id': 'Chamado', 'agencia_id': 'Codigo_Ponto', 'agencia_nome': 'Nome',
+                                'agencia_uf': 'UF', 'servico': 'Servico', 'projeto_nome': 'Projeto',
+                                'data_agendamento': 'Data_Agendamento', 'sistema': 'Tipo_De_Solicitacao',
+                                'cod_equipamento': 'Sistema', 'nome_equipamento': 'Codigo_Equipamento',
+                                'quantidade': 'Quantidade_Solicitada', 
+                                'gestor': 'Substitui_Outro_Equipamento_(Sim/Não)'
                             }
-                            utils_chamados.atualizar_chamado_db(row['ID_Banco'], updates)
-                            if total > 0: bar.progress(50 + int((i/total)*50))
-                
-                    bar.progress(100)
-                    status_txt.text("Concluído!")
-                    st.success("Importação finalizada!")
-                    time.sleep(1.5)
-                    st.cache_data.clear()
-                    st.rerun()
+                            df_final_para_salvar = df_para_salvar.rename(columns=reverse_map)
+                            sucesso, num_importados = utils_chamados.bulk_insert_chamados_db(df_final_para_salvar)
+                            if sucesso:
+                                st.success(f"🎉 {num_importados} chamados importados/atualizados com sucesso!")
+                                st.balloons()
+                                st.session_state.importer_done = True 
+                            else:
+                                st.error("A importação de chamados falhou.")
+        elif not all_files_ok:
+            st.error("Processamento interrompido devido a erro na leitura de um arquivo.")
+        elif not dfs_list:
+            st.info("Nenhum dado válido encontrado nos arquivos selecionados.")
 
-            except Exception as e: st.error(f"Erro no processamento: {e}")           
+    if st.session_state.get("importer_done", False):
+        st.session_state.importer_done = False 
+        st.rerun()
+
+    if st.button("Cancelar"):
+        st.rerun()
                 
 @st.dialog("🔗 Importar Links", width="medium")
 def run_link_importer_dialog():
@@ -867,6 +800,7 @@ else:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
+
 
 
 
