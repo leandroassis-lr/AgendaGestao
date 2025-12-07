@@ -639,45 +639,87 @@ else:
                                             st.rerun()
                                         else: st.error("Erro ao salvar.")
 
-    # --- 3. ABA: CALENDÁRIO / GANTT ---
+    # --- 3. ABA: AGENDA SEMANAL (CALENDÁRIO) ---
     with aba_calendario:
-        st.subheader("📅 Cronograma de Atividades")
+        st.subheader("🗓️ Agenda da Semana")
         
-        if df_view.empty:
-            st.warning("Sem dados filtrados para gerar calendário.")
-        else:
-            df_gantt = df_view.copy()
-            df_gantt['Start'] = pd.to_datetime(df_gantt['Agendamento'])
+        # 1. Seletor para navegar entre semanas
+        col_nav, col_vazia = st.columns([1, 4])
+        data_referencia = col_nav.date_input("Escolha um dia da semana que deseja visualizar:", value=date.today())
+        
+        # Calcula o início da semana (Segunda-feira) baseada na data escolhida
+        # .weekday(): 0=Segunda, 6=Domingo. Subtraímos para voltar à segunda.
+        inicio_semana = data_referencia - timedelta(days=data_referencia.weekday())
+        
+        st.markdown(f"**Visualizando semana de:** {inicio_semana.strftime('%d/%m')} a {(inicio_semana + timedelta(days=4)).strftime('%d/%m')}")
+        st.markdown("---")
+        
+        # 2. Cria as 5 colunas (Segunda a Sexta)
+        col_seg, col_ter, col_qua, col_qui, col_sex = st.columns(5)
+        cols_dias = [col_seg, col_ter, col_qua, col_qui, col_sex]
+        nomes_dias = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"]
+        
+        # 3. Loop para preencher cada dia
+        for i, col in enumerate(cols_dias):
+            dia_atual = inicio_semana + timedelta(days=i)
+            dia_str = dia_atual.strftime('%d/%m')
             
-            # Define data de fim (Prazo ou +1 dia)
-            if 'Prazo' in df_gantt.columns:
-                 df_gantt['Finish'] = pd.to_datetime(df_gantt['Prazo'])
-                 df_gantt['Finish'] = df_gantt['Finish'].fillna(df_gantt['Start'] + pd.Timedelta(days=1))
-            else:
-                 df_gantt['Finish'] = df_gantt['Start'] + pd.Timedelta(days=1)
-            
-            df_gantt = df_gantt.dropna(subset=['Start'])
-            
-            if df_gantt.empty:
-                st.info("Os chamados filtrados não possuem data de agendamento.")
-            else:
-                fig_gantt = px.timeline(
-                    df_gantt, 
-                    x_start="Start", 
-                    x_end="Finish", 
-                    y="Analista",
-                    color="Status",
-                    hover_data=["Projeto", "Serviço", "Nome Agência"],
-                    title="Cronograma por Analista",
-                    height=400 + (len(df_gantt['Analista'].unique()) * 20)
-                )
+            with col:
+                # Cabeçalho do dia
+                st.markdown(f"""
+                    <div style="text-align: center; border-bottom: 2px solid #eee; padding-bottom: 5px; margin-bottom: 10px;">
+                        <div style="font-weight: bold; color: #555;">{nomes_dias[i]}</div>
+                        <div style="font-size: 0.85em; color: #999;">{dia_str}</div>
+                    </div>
+                """, unsafe_allow_html=True)
                 
-                fig_gantt.update_yaxes(autorange="reversed")
-                fig_gantt.update_layout(
-                    xaxis_title="Período",
-                    yaxis_title="Responsável",
-                    showlegend=True,
-                    margin=dict(l=10, r=10, t=40, b=10)
-                )
-                st.plotly_chart(fig_gantt, use_container_width=True)
-                st.caption("💡 Dica: Duração baseada entre Agendamento e Prazo.")
+                # Filtra os chamados DESTE dia específico
+                # Importante: garantimos que ambos sejam date (sem hora) para comparar
+                if not df_view.empty:
+                    # Garante conversão segura para comparação
+                    df_dia = df_view[pd.to_datetime(df_view['Agendamento']).dt.date == dia_atual]
+                else:
+                    df_dia = pd.DataFrame()
+                
+                if df_dia.empty:
+                    st.markdown("<div style='text-align:center; color:#e0e0e0; font-size:2em; margin-top:20px;'>•</div>", unsafe_allow_html=True)
+                else:
+                    # Ordena por analista para ficar organizado
+                    df_dia = df_dia.sort_values(by='Analista')
+                    
+                    for _, row in df_dia.iterrows():
+                        # Dados para o card
+                        id_chamado = row['ID']
+                        servico = str(row.get('Serviço', 'Serviço')).strip()
+                        # Corta texto se for muito grande
+                        if len(servico) > 25: servico = servico[:22] + "..."
+                            
+                        analista = str(row.get('Analista', 'N/D')).split(' ')[0].upper() # Só o primeiro nome
+                        cod_ag = str(row.get('Cód. Agência', '')).split('.')[0]
+                        status = row.get('Status', '')
+                        
+                        # Pega a cor do status
+                        try: cor_borda = utils_chamados.get_status_color(status)
+                        except: cor_borda = "#ccc"
+                        
+                        # Card Visual (HTML/CSS)
+                        st.markdown(f"""
+                        <div style="
+                            background-color: white; 
+                            border-left: 5px solid {cor_borda}; 
+                            border-radius: 6px; 
+                            padding: 8px 10px; 
+                            margin-bottom: 8px; 
+                            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                            font-family: sans-serif;
+                        ">
+                            <div style="font-weight: bold; font-size: 0.85em; color: #333; margin-bottom: 2px;">{servico}</div>
+                            <div style="font-size: 0.8em; color: #666; display: flex; justify-content: space-between;">
+                                <span>🏠 AG {cod_ag}</span>
+                            </div>
+                            <div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed #eee; display: flex; justify-content: space-between; align-items: center;">
+                                <span style="font-size: 0.75em; font-weight: bold; color: #1565C0; background-color: #E3F2FD; padding: 2px 6px; border-radius: 4px;">{analista}</span>
+                                <span style="font-size: 0.7em; color: #999;">ID {id_chamado}</span>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
