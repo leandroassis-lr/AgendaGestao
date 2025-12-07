@@ -9,12 +9,34 @@ import math
 
 st.set_page_config(page_title="Gestão de Projetos", page_icon="📊", layout="wide")
 
-# --- CSS E ESTILOS ---
+# --- CSS E ESTILOS MODERNOS ---
 st.markdown("""
     <style>
-        .metric-card { background-color: white; padding: 15px; border-radius: 10px; border: 1px solid #ddd; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 10px; }
-        .card-status-badge { background-color: #B0BEC5; color: white !important; padding: 6px 12px; border-radius: 8px; font-weight: bold; font-size: 0.85em; display: flex; justify-content: center; align-items: center; width: 100%; text-transform: uppercase; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .status-mini-card { background-color: white; border: 1px solid #eee; border-radius: 8px; padding: 10px; margin-bottom: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; }
+        /* Remove padding padrão exagerado */
+        .block-container { padding-top: 2rem; padding-bottom: 2rem; }
+        
+        /* Estilo do Card Principal */
+        .project-card {
+            background-color: white;
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: 1px solid #f0f0f0;
+            margin-bottom: 16px;
+        }
+        .project-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 12px rgba(0,0,0,0.1);
+        }
+        
+        /* Badges e Etiquetas */
+        .badge-sla {
+            font-size: 0.75rem; font-weight: 700; padding: 4px 8px; border-radius: 6px; display: inline-block;
+        }
+        .text-label { font-size: 0.8rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
+        .text-value { font-size: 0.95rem; font-weight: 500; color: #333; }
+        .text-hero { font-size: 1.1rem; font-weight: 700; color: #1E3A8A; } /* Azul escuro */
     </style>
 """, unsafe_allow_html=True)
 
@@ -468,50 +490,69 @@ else:
                 row = df_grupo.iloc[0]
                 ids = df_grupo['ID'].tolist()
                 
-                # Dados
+                # --- PREPARAÇÃO DE DADOS (Mantida) ---
                 st_atual = clean_val(row.get('Status'), "Não Iniciado")
                 acao = clean_val(row.get('Sub-Status'), "")
-                cor = utils_chamados.get_status_color(st_atual)
-                analista = clean_val(row.get('Analista'), "N/D").upper()
-                gestor = clean_val(row.get('Gestor'), "N/D").upper()
+                cor_status = utils_chamados.get_status_color(st_atual)
+                analista = clean_val(row.get('Analista'), "N/D").split(' ')[0].upper() # Só o primeiro nome
+                gestor = clean_val(row.get('Gestor'), "N/D").split(' ')[0].title()
+                tecnico = clean_val(row.get('Técnico'), "Sem Técnico").split(' ')[0].title()
                 
-                sla_txt = ""; sla_c = "#333"
+                # Tratamento Agência
+                cod_ag = str(row.get('Cód. Agência', '')).split('.')[0]
+                nome_ag_limpo = str(nome_agencia).replace(cod_ag, '').strip(' -')
+
+                # Lógica de SLA (Mantida)
+                sla_html = ""
                 if _to_date_safe(row.get('Prazo')):
                     dias = (_to_date_safe(row.get('Prazo')) - date.today()).days
-                    if dias < 0: sla_txt = f"⚠️ {abs(dias)}d atrasado"; sla_c = "#D32F2F"
-                    else: sla_txt = f"🕒 {dias}d restantes"; sla_c = "#388E3C"
+                    if dias < 0: 
+                        sla_html = f"<span class='badge-sla' style='background:#FFEBEE; color:#C62828;'>🚨 {abs(dias)}d ATRASO</span>"
+                    else: 
+                        sla_html = f"<span class='badge-sla' style='background:#E8F5E9; color:#2E7D32;'>🕒 {dias}d restantes</span>"
 
-                # CARD VISUAL OTIMIZADO
-                with st.container(border=True):
-                    # Linha 1: Proj | Data | Analista | Status
-                    # Ajustei pesos para [2.5, 1, 1.5, 1.5] para caber melhor
-                    c1, c2, c3, c4 = st.columns([2.5, 1, 1.5, 1.5])
-                    with c1: st.markdown(f"**📂 {proj_nome}**")
-                    with c2: st.markdown(f"🗓️ {data_str}")
-                    with c3: st.markdown(f"👤 {analista}")
-                    with c4: st.markdown(f"""<div class="card-status-badge" style="background-color:{cor}; margin:0;">{st_atual}</div>""", unsafe_allow_html=True)
+                # --- RENDERIZAÇÃO DO CARD VISUAL ---
+                # Criamos um container com a borda colorida na esquerda para indicar status visualmente
+                with st.container():
+                    st.markdown(f"""
+                    <div class="project-card" style="border-left: 6px solid {cor_status};">
+                    """, unsafe_allow_html=True)
 
-                    # Linha 2: Serviço | SLA | Gestor | Ação
-                    c5, c6, c7, c8 = st.columns([2.5, 1, 1.5, 1.5])
-                    with c5: st.markdown(f"<span style='color:#1565C0; font-weight:600;'>{nome_servico}</span>", unsafe_allow_html=True)
-                    with c6: 
-                        if sla_txt:
-                            st.markdown(f"<span style='color:{sla_c}; font-size:0.9em; font-weight:bold;'>{sla_txt}</span>", unsafe_allow_html=True) 
-                        else:
-                            st.caption("-")
-                    with c7: st.caption(f"Gestor: {gestor}")
-                    with c8: 
-                        if str(acao).lower() == "faturado": st.markdown("✔️ **FATURADO**")
-                        elif acao: st.markdown(f"👉 {acao}")
-                        else: st.caption("-")
+                    # LINHA 1: CABEÇALHO (Serviço + Status)
+                    c_h1, c_h2 = st.columns([4, 1.5])
+                    with c_h1:
+                        st.markdown(f"<div class='text-label'>{proj_nome}</div>", unsafe_allow_html=True)
+                        st.markdown(f"<div class='text-hero'>{nome_servico}</div>", unsafe_allow_html=True)
+                    with c_h2:
+                        st.markdown(f"<div style='text-align:right; font-weight:bold; color:{cor_status}'>{st_atual.upper()}</div>", unsafe_allow_html=True)
+                        if acao:
+                            st.caption(f"👉 {acao}")
 
-                    # Linha 3: Agência
-                    cod = str(row.get('Cód. Agência', '')).split('.')[0]
-                    nome_ag = str(nome_agencia).replace(cod, '').strip(' -')
-                    st.markdown(f"""<div style="margin-top:8px; padding-top:8px; border-top:1px solid #f0f0f0; color:#555; font-size:0.9em;">🏠 <b>AG {cod}</b> - {nome_ag} <span style="float:right; color:#999;">ID: {ids[0]}</span></div>""", unsafe_allow_html=True)
+                    st.markdown("<hr style='margin: 10px 0; border-top: 1px solid #eee;'>", unsafe_allow_html=True)
 
-                    # FORMULÁRIO (Igual ao anterior funcional)
-                    with st.expander("📝 Editar / Detalhes"):
+                    # LINHA 2: GRID DE INFORMAÇÕES (3 Colunas Claras)
+                    g1, g2, g3 = st.columns([2, 1.5, 1.5])
+                    
+                    with g1: # ONDE
+                        st.markdown(f"**🏠 AG {cod_ag}**")
+                        st.markdown(f"<div style='color:#555; font-size:0.9em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;'>{nome_ag_limpo}</div>", unsafe_allow_html=True)
+                        if row.get('Link Externo'):
+                            st.markdown(f"[🔗 Abrir Link Externo]({row.get('Link Externo')})", unsafe_allow_html=True)
+                    
+                    with g2: # QUANDO
+                        st.markdown("**🗓️ Agendamento**")
+                        st.markdown(f"<div class='text-value'>{data_str}</div>", unsafe_allow_html=True)
+                        st.markdown(sla_html, unsafe_allow_html=True)
+
+                    with g3: # QUEM
+                        st.markdown("**👥 Equipe**")
+                        st.markdown(f"<span title='Analista'>👨‍💻 {analista}</span>", unsafe_allow_html=True)
+                        st.markdown(f"<span title='Técnico'>🔧 {tecnico}</span>", unsafe_allow_html=True)
+
+                    st.markdown("</div>", unsafe_allow_html=True) # Fecha Div do Card
+
+                    with st.expander(f"📝 Editar Detalhes (ID: {ids[0]})"):
+
                         form_key = f"form_{row['ID']}"
                         with st.form(key=form_key):
                             try:
@@ -612,4 +653,5 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
