@@ -193,9 +193,13 @@ def run_importer_dialog():
                             lista_novos.append(row)
                 else:
                     lista_novos = df_grouped.to_dict('records')
-
+                
+                # Salvando no session_state (ESSENCIAL)
                 st.session_state['df_insert'] = pd.DataFrame(lista_novos)
                 st.session_state['df_update'] = pd.DataFrame(lista_atualizar)
+                
+                df_insert = st.session_state['df_insert']
+                df_update = st.session_state['df_update']
 
                 # --- 6. EXIBIÇÃO ---
                 c1, c2 = st.columns(2)
@@ -206,18 +210,19 @@ def run_importer_dialog():
                     st.dataframe(df_grouped.head())
 
                 if st.button("🚀 Processar Importação"):
+
                     bar = st.progress(0)
                     status_txt = st.empty()
-                    
-                    if not df_insert.empty:
+                
+                    if not st.session_state['df_insert'].empty:
                         status_txt.text("Inserindo novos...")
                         utils_chamados.bulk_insert_chamados_db(st.session_state['df_insert'])
                         bar.progress(50)
-                    
-                    if not df_update.empty:
+                
+                    if not st.session_state['df_update'].empty:
                         status_txt.text("Atualizando itens...")
-                        total = len(df_update)
-                        for i, row in enumerate(df_update.to_dict('records')):
+                        total = len(st.session_state['df_update'])
+                        for i, row in enumerate(st.session_state['df_update'].to_dict('records')):
                             updates = {
                                 'Sistema': row['Sistema'],
                                 'Serviço': row['Serviço'],
@@ -226,7 +231,7 @@ def run_importer_dialog():
                             }
                             utils_chamados.atualizar_chamado_db(row['ID_Banco'], updates)
                             if total > 0: bar.progress(50 + int((i/total)*50))
-                    
+                
                     bar.progress(100)
                     status_txt.text("Concluído!")
                     st.success("Importação finalizada!")
@@ -862,6 +867,7 @@ else:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
+
 
 
 
