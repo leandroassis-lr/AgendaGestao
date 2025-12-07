@@ -261,7 +261,7 @@ filtro_gestor = "Todos"
 # SIDEBAR
 with st.sidebar:
     st.header("Ações")
-    if st.button("➕ Novo Projeto / Importar Chamados"):
+    if st.button("➕ Importar Chamados"):
         run_importer_dialog()
     
     if st.button("🔗 Importar Links"):
@@ -442,7 +442,11 @@ else:
 
     st.divider()
 
+    # --- CRIAÇÃO DAS ABAS ---
+    aba_lista, aba_calendario = st.tabs(["📋 Lista Detalhada", "📅 Linha do Tempo (Gantt)"])
+
     # 4. LISTA DETALHADA + FORMULÁRIO INTELIGENTE
+    with aba_lista:    
     st.markdown(f"### 📋 Detalhes ({len(df_view)} registros)")
     df_view['Agendamento_str'] = pd.to_datetime(df_view['Agendamento']).dt.strftime('%d/%m/%Y').fillna("Sem Data")
     
@@ -635,3 +639,60 @@ else:
                                     time.sleep(0.5)
                                     st.rerun()
                                 else: st.error("Erro ao salvar.")
+
+# =========================================================================
+    # ABA 2: CALENDÁRIO / GANTT (NOVO!)
+    # =========================================================================
+    with aba_calendario:
+        st.subheader("📅 Cronograma de Atividades")
+        
+        if df_view.empty:
+            st.warning("Sem dados filtrados para gerar calendário.")
+        else:
+            # Prepara dados para o Gantt
+            df_gantt = df_view.copy()
+            
+            # Precisamos garantir datas válidas
+            df_gantt['Start'] = pd.to_datetime(df_gantt['Agendamento'])
+            
+            # Se não tiver data de fim (Prazo), assumimos que dura 1 dia para visualizar
+            # Se você tiver uma coluna 'Previsão Fim', use ela aqui no lugar de 'Prazo'
+            if 'Prazo' in df_gantt.columns:
+                 df_gantt['Finish'] = pd.to_datetime(df_gantt['Prazo'])
+                 # Correção: Se Prazo for NaT (vazio), usa Start + 1 dia
+                 df_gantt['Finish'] = df_gantt['Finish'].fillna(df_gantt['Start'] + pd.Timedelta(days=1))
+            else:
+                 df_gantt['Finish'] = df_gantt['Start'] + pd.Timedelta(days=1)
+            
+            # Remove linhas sem data de início
+            df_gantt = df_gantt.dropna(subset=['Start'])
+            
+            if df_gantt.empty:
+                st.info("Os chamados filtrados não possuem data de agendamento.")
+            else:
+                # Cria o Gráfico de Gantt
+                fig_gantt = px.timeline(
+                    df_gantt, 
+                    x_start="Start", 
+                    x_end="Finish", 
+                    y="Analista", # Ou 'Projeto' se quiser ver por projeto
+                    color="Status",
+                    hover_data=["Projeto", "Serviço", "Nome Agência"],
+                    title="Cronograma por Analista",
+                    height=400 + (len(df_gantt['Analista'].unique()) * 20) # Altura dinâmica
+                )
+                
+                # Ajustes visuais do gráfico
+                fig_gantt.update_yaxes(autorange="reversed") # Para ficar de cima para baixo
+                fig_gantt.update_layout(
+                    xaxis_title="Período",
+                    yaxis_title="Responsável",
+                    showlegend=True,
+                    margin=dict(l=10, r=10, t=40, b=10)
+                )
+                
+                st.plotly_chart(fig_gantt, use_container_width=True)
+                
+                st.caption("💡 Dica: Este gráfico mostra a duração entre o 'Agendamento' e o 'Prazo'. Se não houver prazo, mostra como 1 dia.")
+                                
+
