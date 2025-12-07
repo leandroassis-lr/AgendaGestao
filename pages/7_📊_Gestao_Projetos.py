@@ -241,7 +241,8 @@ def run_importer_dialog():
                     st.cache_data.clear()
                     st.rerun()
 
-            except Exception as e: st.error(f"Erro no processamento: {e}")                
+            except Exception as e: st.error(f"Erro no processamento: {e}")
+
 @st.dialog("🔗 Importar Links", width="medium")
 def run_link_importer_dialog():
     st.info("Planilha simples com colunas: **CHAMADO** e **LINK**.")
@@ -868,6 +869,7 @@ else:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
+
 
 
 
