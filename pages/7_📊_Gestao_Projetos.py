@@ -9,37 +9,30 @@ import math
 
 st.set_page_config(page_title="Gestão de Projetos", page_icon="📊", layout="wide")
 
-# --- CSS ESTILO "LISTA TÉCNICA" (IGUAL À IMAGEM) ---
+# --- CSS ESTILO PERSONALIZADO (Cores Fixas e Layout) ---
 st.markdown("""
     <style>
-        /* Remove padding extra das colunas para ficar compacto */
         div[data-testid="column"] { padding: 0px; }
+        .gold-line { border-top: 3px solid #D4AF37; margin-top: 15px; margin-bottom: 5px; }
         
-        /* Linha Dourada do Topo */
-        .gold-line { border-top: 3px solid #D4AF37; margin-top: 10px; margin-bottom: 10px; }
+        /* Estilos Gerais */
+        .agencia-header { font-size: 1.1em; font-weight: 800; color: #333; margin-bottom: 4px; }
+        .meta-label { font-size: 0.8em; color: #666; font-weight: 600; text-transform: uppercase; }
         
-        /* Textos e Rótulos */
-        .label-meta { font-size: 0.75em; color: #555; font-weight: 600; }
-        .text-meta { font-size: 0.85em; color: #333; font-weight: normal; }
+        /* Cores Fixas de Analistas */
+        .ana-azul { color: #1565C0; font-weight: 800; background-color: #E3F2FD; padding: 2px 6px; border-radius: 4px; }
+        .ana-verde { color: #2E7D32; font-weight: 800; background-color: #E8F5E9; padding: 2px 6px; border-radius: 4px; }
+        .ana-rosa  { color: #C2185B; font-weight: 800; background-color: #FCE4EC; padding: 2px 6px; border-radius: 4px; }
+        .ana-default { color: #555; font-weight: 700; }
+
+        /* Gestores (Preto e Negrito) */
+        .gestor-bold { color: #000000; font-weight: 900; font-size: 0.9em; }
+
+        /* Status Badge */
+        .status-badge { padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 0.75em; text-transform: uppercase; color: white; display: inline-block;}
         
-        /* Estilos Específicos da Imagem */
-        .gestor-alert { color: #D32F2F; font-size: 0.8em; font-weight: bold; margin-top: 2px; }
-        .action-green { color: #004D40; font-weight: bold; font-size: 0.8em; text-transform: uppercase; text-align: right; }
-        .project-title { font-weight: 700; font-size: 1em; color: #2C3E50; }
-        .sla-green { color: #2E7D32; font-size: 0.85em; font-weight: 600; margin-left: 10px; }
-        .sla-red { color: #C62828; font-size: 0.85em; font-weight: 600; margin-left: 10px; }
-        
-        /* Badge Status (Igual ao cinza da imagem) */
-        .status-box {
-            background-color: #CFD8DC; 
-            color: #37474F; 
-            padding: 4px 12px; 
-            border-radius: 4px; 
-            font-weight: 700; 
-            font-size: 0.75em; 
-            text-transform: uppercase;
-            display: inline-block;
-        }
+        /* Ação */
+        .action-text { color: #004D40; font-weight: 700; font-size: 0.85em; text-transform: uppercase; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -496,57 +489,67 @@ else:
                 # --- PREPARAÇÃO DE DADOS ---
                 st_atual = clean_val(row.get('Status'), "Não Iniciado")
                 acao = clean_val(row.get('Sub-Status'), "")
-                analista = clean_val(row.get('Analista'), "N/D").split(' ')[0].upper()
-                gestor = clean_val(row.get('Gestor'), "").split(' ')[0].upper()
+                
+                # Lógica de Cores Analista
+                nome_ana_raw = clean_val(row.get('Analista'), "N/D").split(' ')[0].upper()
+                if "GIOVANA" in nome_ana_raw: css_ana = "ana-azul"
+                elif "MARCELA" in nome_ana_raw: css_ana = "ana-verde"
+                elif "MONIQUE" in nome_ana_raw: css_ana = "ana-rosa"
+                else: css_ana = "ana-default"
+                
+                gestor = clean_val(row.get('Gestor'), "N/D").split(' ')[0].title()
                 
                 # Tratamento Agência
                 cod_ag = str(row.get('Cód. Agência', '')).split('.')[0]
                 nome_ag_limpo = str(nome_agencia).replace(cod_ag, '').strip(' -')
+                
+                # Cor do Status
+                cor_st = utils_chamados.get_status_color(st_atual)
 
                 # SLA
                 sla_html = ""
                 if _to_date_safe(row.get('Prazo')):
                     dias = (_to_date_safe(row.get('Prazo')) - date.today()).days
-                    if dias < 0: sla_html = f"<span class='sla-red'>SLA: {abs(dias)}d atraso</span>"
-                    else: sla_html = f"<span class='sla-green'>SLA: {dias}d restantes</span>"
+                    if dias < 0: sla_html = f"<span style='color:#D32F2F; font-weight:bold;'>⚠️ {abs(dias)}d atraso</span>"
+                    else: sla_html = f"<span style='color:#388E3C; font-weight:bold;'>🕒 {dias}d restantes</span>"
 
-                # --- RENDERIZAÇÃO IGUAL À IMAGEM ---
+                # --- RENDERIZAÇÃO (NOVO LAYOUT 3 LINHAS) ---
                 
-                # 1. A Linha Dourada Superior
                 st.markdown('<div class="gold-line"></div>', unsafe_allow_html=True)
                 
-                # 2. Primeira Linha de Informações (Grid: Data | Analista | Agência | Status)
-                c1, c2, c3, c4 = st.columns([1.5, 2, 4, 2.5])
+                # LINHA 1: Nº e Nome da Agência
+                st.markdown(f"<div class='agencia-header'>🏢 {cod_ag} - {nome_ag_limpo}</div>", unsafe_allow_html=True)
                 
-                with c1: # DATA
-                    st.markdown(f"🗓️ **{data_str}**", unsafe_allow_html=True)
+                # LINHA 2: Projeto - Agendamento - Analista - Status
+                # Dividido em 4 colunas proporcionais
+                l2_c1, l2_c2, l2_c3, l2_c4 = st.columns([2, 1.5, 1.5, 2])
                 
-                with c2: # ANALISTA
-                    st.markdown(f"<span class='label-meta'>Analista:</span> <span class='text-meta'>{analista}</span>", unsafe_allow_html=True)
-                    
-                with c3: # AGÊNCIA + GESTOR (Vermelho)
-                    st.markdown(f"<span class='label-meta'>Agência:</span> <span class='text-meta'>AG {cod_ag} {nome_ag_limpo}</span>", unsafe_allow_html=True)
-                    if gestor:
-                        st.markdown(f"<div class='gestor-alert'>Gestor: {gestor}</div>", unsafe_allow_html=True)
-                
-                with c4: # STATUS (Badge Cinza) + SUB-STATUS (Verde)
-                    # Alinhamento à direita usando HTML wrapper
-                    html_status = f"""
-                    <div style="text-align: right;">
-                        <span class="status-box">{st_atual}</span>
-                        <div class="action-green" style="margin-top:5px;">{acao}</div>
-                    </div>
-                    """
-                    st.markdown(html_status, unsafe_allow_html=True)
+                with l2_c1: 
+                    st.markdown(f"<span class='meta-label'>PROJETO</span><br><b>{proj_nome}</b>", unsafe_allow_html=True)
+                with l2_c2:
+                    st.markdown(f"<span class='meta-label'>DATA</span><br>{data_str}", unsafe_allow_html=True)
+                with l2_c3:
+                    st.markdown(f"<span class='meta-label'>ANALISTA</span><br><span class='{css_ana}'>{nome_ana_raw}</span>", unsafe_allow_html=True)
+                with l2_c4:
+                    st.markdown(f"<span class='meta-label'>STATUS</span><br><span class='status-badge' style='background-color:{cor_st};'>{st_atual}</span>", unsafe_allow_html=True)
 
-                # 3. Segunda Linha: Nome do Projeto/Serviço + SLA
-                # Usamos columns de novo para manter alinhamento
-                l2_c1, l2_c2 = st.columns([6, 4])
-                with l2_c1:
-                    
-                    st.markdown(f"<span class='project-title'>{nome_servico}</span> {sla_html}", unsafe_allow_html=True)
-                    with st.expander(f"📝 Editar Detalhes (ID: {ids[0]})"):
+                # LINHA 3: Serviço - SLA - Gestor - Ação
+                st.markdown("<div style='margin-top: 6px;'></div>", unsafe_allow_html=True) # Espacinho
+                l3_c1, l3_c2, l3_c3, l3_c4 = st.columns([2.5, 1.5, 1.5, 1.5])
+                
+                with l3_c1:
+                    st.markdown(f"<span style='color:#1565C0; font-weight:600;'>{nome_servico}</span>", unsafe_allow_html=True)
+                with l3_c2:
+                    st.markdown(sla_html if sla_html else "-", unsafe_allow_html=True)
+                with l3_c3:
+                    st.markdown(f"<span class='gestor-bold'>👤 {gestor.upper()}</span>", unsafe_allow_html=True)
+                with l3_c4:
+                    if acao: st.markdown(f"<span class='action-text'>👉 {acao}</span>", unsafe_allow_html=True)
+                    else: st.caption("-")
 
+                # Expander
+                with st.expander(f"📝 Editar Detalhes"):
+                   
                         form_key = f"form_{row['ID']}"
                         with st.form(key=form_key):
                             try:
@@ -647,6 +650,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
