@@ -9,34 +9,37 @@ import math
 
 st.set_page_config(page_title="Gestão de Projetos", page_icon="📊", layout="wide")
 
-# --- CSS E ESTILOS MODERNOS ---
+# --- CSS ESTILO "LISTA TÉCNICA" (IGUAL À IMAGEM) ---
 st.markdown("""
     <style>
-        /* Remove padding padrão exagerado */
-        .block-container { padding-top: 2rem; padding-bottom: 2rem; }
+        /* Remove padding extra das colunas para ficar compacto */
+        div[data-testid="column"] { padding: 0px; }
         
-        /* Estilo do Card Principal */
-        .project-card {
-            background-color: white;
-            border-radius: 12px;
-            padding: 16px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            transition: transform 0.2s, box-shadow 0.2s;
-            border: 1px solid #f0f0f0;
-            margin-bottom: 16px;
-        }
-        .project-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 12px rgba(0,0,0,0.1);
-        }
+        /* Linha Dourada do Topo */
+        .gold-line { border-top: 3px solid #D4AF37; margin-top: 10px; margin-bottom: 10px; }
         
-        /* Badges e Etiquetas */
-        .badge-sla {
-            font-size: 0.75rem; font-weight: 700; padding: 4px 8px; border-radius: 6px; display: inline-block;
+        /* Textos e Rótulos */
+        .label-meta { font-size: 0.75em; color: #555; font-weight: 600; }
+        .text-meta { font-size: 0.85em; color: #333; font-weight: normal; }
+        
+        /* Estilos Específicos da Imagem */
+        .gestor-alert { color: #D32F2F; font-size: 0.8em; font-weight: bold; margin-top: 2px; }
+        .action-green { color: #004D40; font-weight: bold; font-size: 0.8em; text-transform: uppercase; text-align: right; }
+        .project-title { font-weight: 700; font-size: 1em; color: #2C3E50; }
+        .sla-green { color: #2E7D32; font-size: 0.85em; font-weight: 600; margin-left: 10px; }
+        .sla-red { color: #C62828; font-size: 0.85em; font-weight: 600; margin-left: 10px; }
+        
+        /* Badge Status (Igual ao cinza da imagem) */
+        .status-box {
+            background-color: #CFD8DC; 
+            color: #37474F; 
+            padding: 4px 12px; 
+            border-radius: 4px; 
+            font-weight: 700; 
+            font-size: 0.75em; 
+            text-transform: uppercase;
+            display: inline-block;
         }
-        .text-label { font-size: 0.8rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
-        .text-value { font-size: 0.95rem; font-weight: 500; color: #333; }
-        .text-hero { font-size: 1.1rem; font-weight: 700; color: #1E3A8A; } /* Azul escuro */
     </style>
 """, unsafe_allow_html=True)
 
@@ -485,72 +488,63 @@ else:
             
             inicio = (pag - 1) * ITENS_POR_PAG
             fim = inicio + ITENS_POR_PAG
-            
+                        
             for (proj_nome, nome_agencia, nome_servico, data_str), df_grupo in grupos[inicio:fim]:
                 row = df_grupo.iloc[0]
                 ids = df_grupo['ID'].tolist()
                 
-                # --- PREPARAÇÃO DE DADOS (Mantida) ---
+                # --- PREPARAÇÃO DE DADOS ---
                 st_atual = clean_val(row.get('Status'), "Não Iniciado")
                 acao = clean_val(row.get('Sub-Status'), "")
-                cor_status = utils_chamados.get_status_color(st_atual)
-                analista = clean_val(row.get('Analista'), "N/D").split(' ')[0].upper() # Só o primeiro nome
-                gestor = clean_val(row.get('Gestor'), "N/D").split(' ')[0].title()
-                tecnico = clean_val(row.get('Técnico'), "Sem Técnico").split(' ')[0].title()
+                analista = clean_val(row.get('Analista'), "N/D").split(' ')[0].upper()
+                gestor = clean_val(row.get('Gestor'), "").split(' ')[0].upper()
                 
                 # Tratamento Agência
                 cod_ag = str(row.get('Cód. Agência', '')).split('.')[0]
                 nome_ag_limpo = str(nome_agencia).replace(cod_ag, '').strip(' -')
 
-                # Lógica de SLA (Mantida)
+                # SLA
                 sla_html = ""
                 if _to_date_safe(row.get('Prazo')):
                     dias = (_to_date_safe(row.get('Prazo')) - date.today()).days
-                    if dias < 0: 
-                        sla_html = f"<span class='badge-sla' style='background:#FFEBEE; color:#C62828;'>🚨 {abs(dias)}d ATRASO</span>"
-                    else: 
-                        sla_html = f"<span class='badge-sla' style='background:#E8F5E9; color:#2E7D32;'>🕒 {dias}d restantes</span>"
+                    if dias < 0: sla_html = f"<span class='sla-red'>SLA: {abs(dias)}d atraso</span>"
+                    else: sla_html = f"<span class='sla-green'>SLA: {dias}d restantes</span>"
 
-                # --- RENDERIZAÇÃO DO CARD VISUAL ---
-                # Criamos um container com a borda colorida na esquerda para indicar status visualmente
-                with st.container():
-                    st.markdown(f"""
-                    <div class="project-card" style="border-left: 6px solid {cor_status};">
-                    """, unsafe_allow_html=True)
-
-                    # LINHA 1: CABEÇALHO (Serviço + Status)
-                    c_h1, c_h2 = st.columns([4, 1.5])
-                    with c_h1:
-                        st.markdown(f"<div class='text-label'>{proj_nome}</div>", unsafe_allow_html=True)
-                        st.markdown(f"<div class='text-hero'>{nome_servico}</div>", unsafe_allow_html=True)
-                    with c_h2:
-                        st.markdown(f"<div style='text-align:right; font-weight:bold; color:{cor_status}'>{st_atual.upper()}</div>", unsafe_allow_html=True)
-                        if acao:
-                            st.caption(f"👉 {acao}")
-
-                    st.markdown("<hr style='margin: 10px 0; border-top: 1px solid #eee;'>", unsafe_allow_html=True)
-
-                    # LINHA 2: GRID DE INFORMAÇÕES (3 Colunas Claras)
-                    g1, g2, g3 = st.columns([2, 1.5, 1.5])
+                # --- RENDERIZAÇÃO IGUAL À IMAGEM ---
+                
+                # 1. A Linha Dourada Superior
+                st.markdown('<div class="gold-line"></div>', unsafe_allow_html=True)
+                
+                # 2. Primeira Linha de Informações (Grid: Data | Analista | Agência | Status)
+                c1, c2, c3, c4 = st.columns([1.5, 2, 4, 2.5])
+                
+                with c1: # DATA
+                    st.markdown(f"🗓️ **{data_str}**", unsafe_allow_html=True)
+                
+                with c2: # ANALISTA
+                    st.markdown(f"<span class='label-meta'>Analista:</span> <span class='text-meta'>{analista}</span>", unsafe_allow_html=True)
                     
-                    with g1: # ONDE
-                        st.markdown(f"**🏠 AG {cod_ag}**")
-                        st.markdown(f"<div style='color:#555; font-size:0.9em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;'>{nome_ag_limpo}</div>", unsafe_allow_html=True)
-                        if row.get('Link Externo'):
-                            st.markdown(f"[🔗 Abrir Link Externo]({row.get('Link Externo')})", unsafe_allow_html=True)
+                with c3: # AGÊNCIA + GESTOR (Vermelho)
+                    st.markdown(f"<span class='label-meta'>Agência:</span> <span class='text-meta'>AG {cod_ag} {nome_ag_limpo}</span>", unsafe_allow_html=True)
+                    if gestor:
+                        st.markdown(f"<div class='gestor-alert'>Gestor: {gestor}</div>", unsafe_allow_html=True)
+                
+                with c4: # STATUS (Badge Cinza) + SUB-STATUS (Verde)
+                    # Alinhamento à direita usando HTML wrapper
+                    html_status = f"""
+                    <div style="text-align: right;">
+                        <span class="status-box">{st_atual}</span>
+                        <div class="action-green" style="margin-top:5px;">{acao}</div>
+                    </div>
+                    """
+                    st.markdown(html_status, unsafe_allow_html=True)
+
+                # 3. Segunda Linha: Nome do Projeto/Serviço + SLA
+                # Usamos columns de novo para manter alinhamento
+                l2_c1, l2_c2 = st.columns([6, 4])
+                with l2_c1:
                     
-                    with g2: # QUANDO
-                        st.markdown("**🗓️ Agendamento**")
-                        st.markdown(f"<div class='text-value'>{data_str}</div>", unsafe_allow_html=True)
-                        st.markdown(sla_html, unsafe_allow_html=True)
-
-                    with g3: # QUEM
-                        st.markdown("**👥 Equipe**")
-                        st.markdown(f"<span title='Analista'>👨‍💻 {analista}</span>", unsafe_allow_html=True)
-                        st.markdown(f"<span title='Técnico'>🔧 {tecnico}</span>", unsafe_allow_html=True)
-
-                    st.markdown("</div>", unsafe_allow_html=True) # Fecha Div do Card
-
+                    st.markdown(f"<span class='project-title'>{nome_servico}</span> {sla_html}", unsafe_allow_html=True)
                     with st.expander(f"📝 Editar Detalhes (ID: {ids[0]})"):
 
                         form_key = f"form_{row['ID']}"
@@ -653,5 +647,6 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
