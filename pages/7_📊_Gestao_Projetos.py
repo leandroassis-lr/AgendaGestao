@@ -475,37 +475,29 @@ else:
     # --- MODO OPERACIONAL COM FILTROS AVANÇADOS ---
     st.markdown("### 🔍 Filtros Detalhados")
     
-    # 1. Filtros
+    # 1. FILTROS
     col_busca, col_proj, col_status, col_data = st.columns(4)
     
-    # A. Buscador Geral
+    # A. Buscador
     busca_geral = col_busca.text_input("Buscador Geral (Texto)")
     
-    # B. Filtro por Projeto (Carrega lista do banco ou do DF atual)
+    # B. Filtro por Projeto
     try:
         df_proj_cfg = utils.carregar_config_db("projetos_nomes")
         opcoes_projeto_db = df_proj_cfg.iloc[:, 0].tolist() if not df_proj_cfg.empty else []
     except: opcoes_projeto_db = []
     
-    # Se a lista do banco estiver vazia, usa a do dataframe atual
     if not opcoes_projeto_db:
         opcoes_projeto_db = sorted(df_filtrado['Projeto'].dropna().unique().tolist())
     
-    # --- LÓGICA DE REDIRECIONAMENTO (SEGURA) ---
+    # Lógica de Redirecionamento (Botão da Home)
     padrao_projetos = []
-    
-    # Verifica se veio algum projeto selecionado lá da Visão Geral
     if "sel_projeto" in st.session_state:
         proj_selecionado = st.session_state["sel_projeto"]
-        
-        # Verifica se o projeto existe na lista para evitar erros
         if proj_selecionado in opcoes_projeto_db:
             padrao_projetos = [proj_selecionado]
-        
-        # Remove da sessão de forma segura (sem dar erro se não existir)
-        st.session_state.pop("sel_projeto", None)
+        st.session_state.pop("sel_projeto", None) # Limpa sessão
     
-    # Cria o multiselect com o padrão definido
     filtro_projeto_multi = col_proj.multiselect("Projetos", options=opcoes_projeto_db, default=padrao_projetos)
     
     # C. Filtro por Status
@@ -516,15 +508,10 @@ else:
     df_filtrado['Agendamento'] = pd.to_datetime(df_filtrado['Agendamento'], errors='coerce')
     data_min = df_filtrado['Agendamento'].min()
     data_max = df_filtrado['Agendamento'].max()
-    
     if pd.isna(data_min): data_min = date.today()
     if pd.isna(data_max): data_max = date.today()
     
-    filtro_data_range = col_data.date_input(
-        "Período (Agendamento)", 
-        value=(data_min, data_max), 
-        format="DD/MM/YYYY"
-    )
+    filtro_data_range = col_data.date_input("Período (Agendamento)", value=(data_min, data_max), format="DD/MM/YYYY")
 
     # --- APLICAR FILTROS ---
     df_view = df_filtrado.copy()
@@ -542,7 +529,7 @@ else:
 
     st.divider()
 
-    # 2. KPIs SUPERIORES
+    # 2. KPIS SUPERIORES
     status_conclusao = ['concluído', 'finalizado', 'faturado', 'fechado']
     kpi_qtd_chamados = len(df_view)
     kpi_chamados_fin = len(df_view[df_view['Status'].str.lower().isin(status_conclusao)])
@@ -568,15 +555,12 @@ else:
 
     # 3. RESUMO POR STATUS
     st.subheader("Resumo por Status")
-    
     if not df_view.empty:
         counts = df_view['Status'].value_counts()
         cols_status = st.columns(4)
-        
         for index, (status, count) in enumerate(counts.items()):
             try: cor = utils_chamados.get_status_color(status)
             except: cor = "#90A4AE"
-            
             with cols_status[index % 4]:
                 st.markdown(f"""
                 <div class="status-mini-card" style="border-left: 5px solid {cor};">
@@ -589,10 +573,10 @@ else:
 
     st.divider()
 
-    # --- 1. CRIAÇÃO DAS ABAS ---
+    # --- 4. ABAS DE VISUALIZAÇÃO ---
     aba_lista, aba_calendario = st.tabs(["📋 Lista Detalhada", "📅 Agenda Semanal"])
 
-    # --- 2. ABA: LISTA DETALHADA ---
+    # --- ABA 1: LISTA DETALHADA ---
     with aba_lista:    
         st.markdown(f"### 📋 Detalhes ({len(df_view)} registros)")
         
@@ -645,8 +629,7 @@ else:
                         with st.expander(f" >  Ver/Editar Detalhes - ID: {first_row['ID']}"):
                             form_key = f"form_{first_row['ID']}"
                             with st.form(key=form_key):
-                                
-                                # --- 1. CARREGAR LISTAS ---
+                                # --- CARREGAMENTO DE LISTAS ---
                                 try:
                                     df_status_cfg = utils.carregar_config_db("status")
                                     opts_status_db = [str(x) for x in df_status_cfg.iloc[:, 0].dropna().tolist()] if not df_status_cfg.empty else []
@@ -658,43 +641,31 @@ else:
                                     opts_tec_db = [str(x) for x in df_tec_cfg.iloc[:, 0].dropna().tolist()] if not df_tec_cfg.empty else []
 
                                     df_users = utils.carregar_usuarios_db()
-                                    if not df_users.empty:
-                                        df_users.columns = [col.capitalize() for col in df_users.columns]
-                                    
-                                    if not df_users.empty and "Nome" in df_users.columns:
-                                        opts_ana_db = [str(x) for x in df_users["Nome"].dropna().tolist()]
-                                    else:
-                                        opts_ana_db = []
-                                        
+                                    if not df_users.empty: df_users.columns = [col.capitalize() for col in df_users.columns]
+                                    opts_ana_db = [str(x) for x in df_users["Nome"].dropna().tolist()] if not df_users.empty and "Nome" in df_users.columns else []
                                 except:
                                     opts_status_db = []; opts_proj_db = []; opts_tec_db = []; opts_ana_db = []
 
-                                # --- 2. PREPARAR LISTAS ---
-                                def safe_str(val):
-                                    if pd.isna(val) or str(val).lower() in ['nan', 'none', '']: return ""
-                                    return str(val)
+                                def safe_str(val): return str(val) if pd.notna(val) and str(val).lower() not in ['nan', 'none', ''] else ""
 
+                                # PREPARA LISTAS
                                 status_atual = safe_str(first_row.get('Status', '(Automático)'))
-                                lista_raw_st = opts_status_db + [status_atual] + ["(Automático)", "Finalizado", "Cancelado"]
-                                lista_final_status = sorted(list(set([s for s in lista_raw_st if s])))
+                                lista_final_status = sorted(list(set(opts_status_db + [status_atual] + ["(Automático)", "Finalizado", "Cancelado"])))
                                 idx_st = lista_final_status.index(status_atual) if status_atual in lista_final_status else 0
                                 
                                 val_proj_atual = safe_str(first_row.get('Projeto', ''))
-                                lista_raw_proj = opts_proj_db + [val_proj_atual]
-                                lista_final_proj = sorted(list(set([p for p in lista_raw_proj if p])))
+                                lista_final_proj = sorted(list(set(opts_proj_db + [val_proj_atual])))
                                 idx_proj = lista_final_proj.index(val_proj_atual) if val_proj_atual in lista_final_proj else 0
 
                                 val_tec_atual = safe_str(first_row.get('Técnico', ''))
-                                lista_raw_tec = opts_tec_db + [val_tec_atual]
-                                lista_final_tec = sorted(list(set([t for t in lista_raw_tec if t])))
+                                lista_final_tec = sorted(list(set(opts_tec_db + [val_tec_atual])))
                                 idx_tec = lista_final_tec.index(val_tec_atual) if val_tec_atual in lista_final_tec else 0
 
                                 val_ana_atual = safe_str(first_row.get('Analista', ''))
-                                lista_raw_ana = opts_ana_db + [val_ana_atual]
-                                lista_final_ana = sorted(list(set([a for a in lista_raw_ana if a]))) 
+                                lista_final_ana = sorted(list(set(opts_ana_db + [val_ana_atual])))
                                 idx_ana = lista_final_ana.index(val_ana_atual) if val_ana_atual in lista_final_ana else 0
 
-                                # --- 3. CAMPOS DO FORMULÁRIO ---
+                                # CAMPOS DO FORMULÁRIO (CRIAÇÃO DAS VARIÁVEIS)
                                 c1, c2, c3, c4 = st.columns(4)
                                 novo_status = c1.selectbox("Status", lista_final_status, index=idx_st, key=f"st_{form_key}")
                                 
@@ -705,7 +676,7 @@ else:
                                 novo_agend = c3.date_input("Agendamento", value=agend_val, format="DD/MM/YYYY", key=f"ag_{form_key}")
                                 
                                 fim_val = _to_date_safe(first_row.get('Fechamento'))
-                                nova_fim = c4.date_input("Finalização", value=fim_val, format="DD/MM/YYYY", key=f"fim_{form_key}")
+                                novo_fim = c4.date_input("Finalização", value=fim_val, format="DD/MM/YYYY", key=f"fim_{form_key}")
 
                                 c5, c6, c7 = st.columns(3)
                                 novo_analista = c5.selectbox("Analista (Usuário)", lista_final_ana, index=idx_ana, key=f"ana_{form_key}")
@@ -748,13 +719,23 @@ else:
                                 st.markdown(f"<div style='background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 5px; padding: 10px; font-size: 0.9rem; max-height: 200px; overflow-y: auto;'>{desc_texto_final}</div>", unsafe_allow_html=True)
                                 st.markdown("<br>", unsafe_allow_html=True)
                                 
+                                # BOTÃO SALVAR
                                 btn_salvar = st.form_submit_button("💾 Salvar Alterações", use_container_width=True)
                                 if btn_salvar:
+                                    # Criação do dicionário de updates
                                     updates = {
-                                        "Data Abertura": nova_abertura, "Data Agendamento": novo_agend, "Data Finalização": novo_fim,
-                                        "Analista": novo_analista, "Gestor": novo_gestor, "Técnico": novo_tec,
-                                        "Projeto": novo_projeto, "Serviço": novo_servico, "Sistema": novo_sistema,
-                                        "Observações e Pendencias": nova_obs, "Link Externo": novo_link, "Nº Protocolo": novo_proto
+                                        "Data Abertura": nova_abertura, 
+                                        "Data Agendamento": novo_agend, # Variável correta: novo_agend
+                                        "Data Finalização": novo_fim,   # Variável correta: novo_fim
+                                        "Analista": novo_analista, 
+                                        "Gestor": novo_gestor, 
+                                        "Técnico": novo_tec,
+                                        "Projeto": novo_projeto, 
+                                        "Serviço": novo_servico, 
+                                        "Sistema": novo_sistema,
+                                        "Observações e Pendencias": nova_obs, 
+                                        "Link Externo": novo_link, 
+                                        "Nº Protocolo": novo_proto
                                     }
                                     recalcular = False
                                     if novo_status != "(Automático)":
@@ -850,5 +831,3 @@ else:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
-
-
