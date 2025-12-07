@@ -36,6 +36,54 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# --- CSS PARA DASHBOARD E KPIS ---
+st.markdown("""
+    <style>
+        /* ... Mantenha os estilos anteriores (gold-line, analistas, etc) ... */
+
+        /* Estilo da Área de Filtros */
+        .filter-container {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid #e9ecef;
+            margin-bottom: 20px;
+        }
+
+        /* Estilo dos Cards de KPI (Topo) */
+        .kpi-card {
+            background-color: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            border: 1px solid #eee;
+            text-align: center;
+            height: 100%;
+        }
+        .kpi-title { font-size: 0.85em; color: #666; font-weight: 600; text-transform: uppercase; margin-bottom: 5px; }
+        .kpi-value { font-size: 1.8em; font-weight: 800; color: #2c3e50; }
+        
+        /* Cores de Borda para KPIs */
+        .kpi-blue   { border-bottom: 4px solid #1565C0; }
+        .kpi-orange { border-bottom: 4px solid #F57C00; }
+        .kpi-green  { border-bottom: 4px solid #2E7D32; }
+        .kpi-purple { border-bottom: 4px solid #7B1FA2; }
+
+        /* Estilo da Barra de Resumo de Status */
+        .status-summary-box {
+            background-color: white;
+            border: 1px solid #eee;
+            border-radius: 6px;
+            padding: 8px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .status-label { font-size: 0.75em; font-weight: bold; color: #555; text-transform: uppercase; }
+        .status-val { font-size: 1.1em; font-weight: 800; color: #333; }
+    </style>
+""", unsafe_allow_html=True)
+
 # --- CONSTANTES ---
 SERVICOS_SEM_EQUIPAMENTO = [
    "vistoria", "adequação de gerador (recall)", "desinstalação total", "recolhimento de eqto",
@@ -372,44 +420,46 @@ if escolha_visao == "Visão Geral (Cockpit)":
 else:
     # --- MODO OPERACIONAL (VISÃO DETALHADA) ---
     
-    # 1. ÁREA DE FILTROS (FIXA E ORGANIZADA)
-    with st.container(border=True):
-        st.markdown("### 🔍 Filtros & Pesquisa")
+    # 1. ÁREA DE FILTROS (Novo Design com Fundo)
+    with st.container():
+        st.markdown('<div class="filter-container">', unsafe_allow_html=True)
         
-        # Linha 1: Busca e Data
-        c_top1, c_top2 = st.columns([3, 1])
-        with c_top1:
-            busca_geral = st.text_input("Buscador Geral", placeholder="Digite ID, Nome, Serviço...", label_visibility="collapsed")
-        with c_top2:
+        c_tit, c_date = st.columns([4, 1.5])
+        with c_tit: st.markdown("### 🔍 Filtros & Pesquisa")
+        with c_date: 
+             # Lógica de Datas (Mantida)
             df_filtrado['Agendamento'] = pd.to_datetime(df_filtrado['Agendamento'], errors='coerce')
             d_min = df_filtrado['Agendamento'].min() if not pd.isna(df_filtrado['Agendamento'].min()) else date.today()
             d_max = df_filtrado['Agendamento'].max() if not pd.isna(df_filtrado['Agendamento'].max()) else date.today()
             filtro_data_range = st.date_input("Período", value=(d_min, d_max), format="DD/MM/YYYY", label_visibility="collapsed")
 
-        # Linha 2: Projetos e Status
-        c_bot1, c_bot2 = st.columns(2)
-        with c_bot1:
+        c1, c2, c3 = st.columns([2, 1.5, 1.5])
+        with c1:
+            busca_geral = st.text_input("Busca", placeholder="🔎 Digite ID, Nome, Serviço...", label_visibility="collapsed")
+        
+        with c2:
+            # Carregamento de Projetos (Mantido)
             try:
                 df_proj_cfg = utils.carregar_config_db("projetos_nomes")
                 opcoes_projeto_db = df_proj_cfg.iloc[:, 0].tolist() if not df_proj_cfg.empty else []
             except: opcoes_projeto_db = []
-            
-            if not opcoes_projeto_db:
-                opcoes_projeto_db = sorted(df_filtrado['Projeto'].dropna().unique().tolist())
+            if not opcoes_projeto_db: opcoes_projeto_db = sorted(df_filtrado['Projeto'].dropna().unique().tolist())
             
             padrao_projetos = []
             if "sel_projeto" in st.session_state:
                 proj_sel = st.session_state["sel_projeto"]
                 if proj_sel in opcoes_projeto_db: padrao_projetos = [proj_sel]
                 st.session_state.pop("sel_projeto", None)
-            
-            filtro_projeto_multi = st.multiselect("Projetos", options=opcoes_projeto_db, default=padrao_projetos, placeholder="Filtrar por Projeto", label_visibility="collapsed")
 
-        with c_bot2:
+            filtro_projeto_multi = st.multiselect("Projetos", options=opcoes_projeto_db, default=padrao_projetos, placeholder="Filtrar Projeto", label_visibility="collapsed")
+        
+        with c3:
             opcoes_status = sorted(df_filtrado['Status'].dropna().unique().tolist())
-            filtro_status_multi = st.multiselect("Status", options=opcoes_status, default=[], placeholder="Filtrar por Status", label_visibility="collapsed")
+            filtro_status_multi = st.multiselect("Status", options=opcoes_status, default=[], placeholder="Filtrar Status", label_visibility="collapsed")
 
-    # --- APLICAÇÃO DOS FILTROS ---
+        st.markdown('</div>', unsafe_allow_html=True) # Fecha container CSS
+
+    # --- APLICAÇÃO DOS FILTROS (Lógica Mantida) ---
     df_view = df_filtrado.copy()
     if busca_geral:
         termo = busca_geral.lower()
@@ -420,9 +470,7 @@ else:
         d_inicio, d_fim = filtro_data_range
         df_view = df_view[(df_view['Agendamento'] >= pd.to_datetime(d_inicio)) & (df_view['Agendamento'] <= pd.to_datetime(d_fim))]
 
-    st.markdown("<br>", unsafe_allow_html=True) 
-
-    # 2. KPIs
+    # 2. KPIs COM DESIGN NOVO
     status_fim = ['concluído', 'finalizado', 'faturado', 'fechado']
     qtd_total = len(df_view)
     qtd_fim = len(df_view[df_view['Status'].str.lower().isin(status_fim)])
@@ -434,25 +482,38 @@ else:
         proj_abertos = proj_total - proj_concluidos
     else: proj_total=0; proj_concluidos=0; proj_abertos=0
 
+    # Renderiza os 4 Cards Coloridos
     k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Chamados (Filtro)", qtd_total, border=True)
-    k2.metric("Projetos Abertos", proj_abertos, border=True)
-    k3.metric("Projetos Finalizados", proj_concluidos, border=True)
-    k4.metric("Tarefas Concluídas", qtd_fim, border=True)
+    with k1:
+        st.markdown(f"""<div class="kpi-card kpi-blue"><div class="kpi-title">Chamados (Filtro)</div><div class="kpi-value">{qtd_total}</div></div>""", unsafe_allow_html=True)
+    with k2:
+        st.markdown(f"""<div class="kpi-card kpi-orange"><div class="kpi-title">Projetos Abertos</div><div class="kpi-value">{proj_abertos}</div></div>""", unsafe_allow_html=True)
+    with k3:
+        st.markdown(f"""<div class="kpi-card kpi-green"><div class="kpi-title">Projetos Finalizados</div><div class="kpi-value">{proj_concluidos}</div></div>""", unsafe_allow_html=True)
+    with k4:
+        st.markdown(f"""<div class="kpi-card kpi-purple"><div class="kpi-title">Tarefas Concluídas</div><div class="kpi-value">{qtd_fim}</div></div>""", unsafe_allow_html=True)
     
-    st.divider()
+    st.markdown("<br>", unsafe_allow_html=True)
 
-    # 3. RESUMO STATUS
+    # 3. BARRA DE RESUMO DE STATUS (Melhorada)
     if not df_view.empty:
         counts = df_view['Status'].value_counts()
-        cols = st.columns(6)
-        i = 0
-        for status, count in counts.items():
+        # Mostra apenas os top 5 status para não quebrar o layout, ou todos se couber
+        top_status = counts.head(5) 
+        
+        cols = st.columns(len(top_status))
+        for i, (status, count) in enumerate(top_status.items()):
             try: cor = utils_chamados.get_status_color(status)
             except: cor = "#ccc"
-            with cols[i % 6]:
-                st.markdown(f"""<div style="border-left:4px solid {cor}; background:white; padding:5px 10px; border-radius:4px; border:1px solid #eee; margin-bottom:5px;"><small style="color:#666;">{status.upper()}</small><br><b>{count}</b></div>""", unsafe_allow_html=True)
-            i += 1
+            
+            with cols[i]:
+                # Cardzinho com borda esquerda na cor do status
+                st.markdown(f"""
+                <div class="status-summary-box" style="border-left: 5px solid {cor};">
+                    <span class="status-label">{status}</span>
+                    <span class="status-val">{count}</span>
+                </div>
+                """, unsafe_allow_html=True)
     
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -650,6 +711,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
