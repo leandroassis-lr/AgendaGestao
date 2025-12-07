@@ -81,7 +81,13 @@ def clean_val(val, default="N/A"):
 
 @st.dialog("📥 Importar Chamados (Geral)", width="large")
 def run_importer_dialog():
-    st.info("Arraste o Template Padrão (.xlsx ou .csv). Colunas obrigatórias: **CHAMADO** e **N° AGENCIA**.")
+    st.info("Arraste o Template Padrão.")
+    st.markdown("""
+    **Comportamento Inteligente:**
+    1. **Novos Chamados:** Serão criados.
+    2. **Chamados Existentes:** O sistema atualizará a lista de equipamentos/descrição (ideal para correções de quantidade).
+    """)
+    
     uploaded_files = st.file_uploader("Selecione arquivos", type=["xlsx", "csv"], accept_multiple_files=True, key="up_imp_geral")
     
     if uploaded_files:
@@ -98,20 +104,123 @@ def run_importer_dialog():
         if dfs:
             try:
                 df_raw = pd.concat(dfs, ignore_index=True)
-                st.write(f"✅ {len(df_raw)} linhas lidas.")
                 
-                if st.button("🚀 Confirmar Importação"):
-                    with st.spinner("Processando importação..."):
-                        suc, qtd = utils_chamados.bulk_insert_chamados_db(df_raw)
-                        if suc:
-                           st.success(f"Sucesso! {qtd} chamados processados.")
-                           st.cache_data.clear()
-                           time.sleep(1.5)
-                           st.rerun()
-                        else:
-                            st.error("Falha na importação.")
-            except Exception as e: st.error(f"Erro ao consolidar arquivos: {e}")
+                # --- 1. PADRONIZAÇÃO DE COLUNAS ---
+                df_raw.columns = [c.upper().strip() for c in df_raw.columns]
+                
+                # Mapeamento (Ajuste conforme seu Excel)
+                mapa_colunas = {
+                    'CHAMADO': 'Nº Chamado',
+                    'N° AGENCIA': 'Cód. Agência', 'AGENCIA': 'Cód. Agência',
+                    'ANALISTA': 'Analista', 'GESTOR': 'Gestor',
+                    'SERVIÇO': 'Serviço', 'SERVICO': 'Serviço',
+                    'STATUS': 'Status',
+                    'DATA ABERTURA': 'Abertura', 'DATA AGENDAMENTO': 'Agendamento', 'DATA PRAZO': 'Prazo',
+                    'DESCRIÇÃO': 'Sistema', 'EQUIPAMENTO': 'Sistema', # O segredo dos equipamentos está aqui
+                    'OBSERVAÇÃO': 'Observações e Pendencias', 'QUANTIDADE': 'Qtd'
+                }
+                
+                df_raw = df_raw.rename(columns=mapa_colunas)
+                if 'Nº Chamado' not in df_raw.columns:
+                    st.error("Erro: Coluna 'CHAMADO' obrigatória não encontrada.")
+                    return
 
+                # Tratamento de vazios
+                for col in ['Sistema', 'Observações e Pendencias', 'Qtd']:
+                    if col not in df_raw.columns: df_raw[col] = ""
+                df_raw = df_raw.fillna("")
+
+                # --- 2. AGRUPAMENTO INTELIGENTE (RESOLVE AS 10 LINHAS) ---
+                # Essa função cria um texto bonito: "3x Câmera Dome | 5x Sensor IVP"
+                def agrupar_equipamentos(grupo):
+                    itens = []
+                    for _, row in grupo.iterrows():
+                        qtd = str(row.get('Qtd', '')).strip()
+                        desc = str(row.get('Sistema', '')).strip()
+                        if desc:
+                            item_str = f"{qtd}x {desc}" if qtd and qtd != "0" else desc
+                            itens.append(item_str)
+                    return " | ".join(itens)
+
+                # Regras para as outras colunas (pega sempre o primeiro valor encontrado)
+                regras = {c: 'first' for c in df_raw.columns if c not in ['Sistema', 'Qtd', 'Observações e Pendencias']}
+                # Regras especiais
+                regras['Sistema'] = agrupar_equipamentos # Aplica a função acima
+                regras['Observações e Pendencias'] = lambda x: " | ".join([s for s in x if s]) # Junta obs
+                
+                # Agrupa
+                df_grouped = df_raw.groupby('Nº Chamado', as_index=False).agg(regras)
+                
+                # --- 3. SEPARAÇÃO (NOVOS vs EXISTENTES) ---
+                df_banco = utils_chamados.carregar_chamados_db()
+                
+                lista_novos = []
+                lista_atualizar = []
+                
+                if not df_banco.empty:
+                    # Cria um dicionário {Numero_Chamado: ID_Banco} para saber quem atualizar
+                    mapa_ids = dict(zip(df_banco['Nº Chamado'].astype(str).str.strip(), df_banco['ID']))
+                    
+                    for _, row in df_grouped.iterrows():
+                        chamado_num = str(row['Nº Chamado']).strip()
+                        if chamado_num in mapa_ids:
+                            # Adiciona o ID do banco na linha para podermos atualizar
+                            row['ID_Banco'] = mapa_ids[chamado_num]
+                            lista_atualizar.append(row)
+                        else:
+                            lista_novos.append(row)
+                else:
+                    # Banco vazio, tudo é novo
+                    for _, row in df_grouped.iterrows(): lista_novos.append(row)
+
+                df_insert = pd.DataFrame(lista_novos)
+                df_update = pd.DataFrame(lista_atualizar)
+
+                # --- 4. EXIBIÇÃO E CONFIRMAÇÃO ---
+                c1, c2 = st.columns(2)
+                c1.metric("🆕 Novos Chamados", len(df_insert))
+                c2.metric("🔄 Chamados para Atualizar", len(df_update), help="Já existem no banco. Serão atualizados com a nova descrição/equipamentos.")
+                
+                if st.button("🚀 Processar Importação"):
+                    bar = st.progress(0)
+                    status_text = st.empty()
+                    
+                    # A. INSERIR NOVOS
+                    if not df_insert.empty:
+                        status_text.text("Inserindo novos registros...")
+                        utils_chamados.bulk_insert_chamados_db(df_insert)
+                        bar.progress(50)
+                    
+                    # B. ATUALIZAR EXISTENTES
+                    if not df_update.empty:
+                        status_text.text("Atualizando descrições e quantidades...")
+                        total_up = len(df_update)
+                        for i, row in enumerate(df_update.iterrows()):
+                            idx, dados = row
+                            # Monta o dicionário com o que queremos atualizar
+                            # Focamos em atualizar DESCRIÇÃO, STATUS e OBSERVAÇÕES
+                            updates = {
+                                'Sistema': dados['Sistema'], # Aqui vai a nova quantidade (ex: 8x Câmera)
+                                'Observações e Pendencias': dados['Observações e Pendencias'],
+                                'Status': dados['Status'] # Opcional: Atualiza o status também
+                            }
+                            # Chama função de update usando o ID real do banco
+                            utils_chamados.atualizar_chamado_db(dados['ID_Banco'], updates)
+                            
+                            # Atualiza barra de progresso (de 50% a 100%)
+                            if total_up > 0:
+                                progresso = 50 + int((i / total_up) * 50)
+                                bar.progress(min(progresso, 100))
+                    
+                    bar.progress(100)
+                    status_text.text("Concluído!")
+                    st.success("Operação finalizada com sucesso!")
+                    time.sleep(1.5)
+                    st.cache_data.clear()
+                    st.rerun()
+
+            except Exception as e: st.error(f"Erro ao processar dados: {e}")
+                
 @st.dialog("🔗 Importar Links", width="medium")
 def run_link_importer_dialog():
     st.info("Planilha simples com colunas: **CHAMADO** e **LINK**.")
@@ -738,8 +847,3 @@ else:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
-
-
-
-
-
