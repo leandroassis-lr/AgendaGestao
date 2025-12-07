@@ -340,7 +340,6 @@ if escolha_visao == "Visão Geral (Cockpit)":
             """, unsafe_allow_html=True)
             if st.button(f"🔎 Ver Lista", key=f"btn_{i}"):
                 mostrar_detalhes_projeto(proj, df_filtrado)
-
 else:
     # --- MODO OPERACIONAL COM FILTROS AVANÇADOS ---
     st.markdown("### 🔍 Filtros Detalhados")
@@ -348,36 +347,39 @@ else:
     # 1. Filtros
     col_busca, col_proj, col_status, col_data = st.columns(4)
     
+    # A. Buscador Geral
     busca_geral = col_busca.text_input("Buscador Geral (Texto)")
     
-    # Tenta carregar lista de projetos do banco de configurações, se não der, usa do DF
+    # B. Filtro por Projeto
     try:
         df_proj_cfg = utils.carregar_config_db("projetos_nomes")
         opcoes_projeto_db = df_proj_cfg.iloc[:, 0].tolist() if not df_proj_cfg.empty else []
     except: opcoes_projeto_db = []
     
-    # Se a lista do banco estiver vazia, usa a do dataframe atual
     if not opcoes_projeto_db:
         opcoes_projeto_db = sorted(df_filtrado['Projeto'].dropna().unique().tolist())
     
-    # Lógica para manter seleção
-    sel_padrao = st.session_state.get("sel_projeto", opcoes_projeto_db)
-    if not isinstance(sel_padrao, list): sel_padrao = [sel_padrao] 
-    # Filtra apenas o que é válido
-    sel_padrao = [x for x in sel_padrao if x in opcoes_projeto_db]
-    if not sel_padrao: sel_padrao = opcoes_projeto_db
+    # ALTERAÇÃO 1: default=[] para iniciar vazio (sem tags pré-selecionadas)
+    filtro_projeto_multi = col_proj.multiselect("Projetos", options=opcoes_projeto_db, default=[])
     
-    filtro_projeto_multi = col_proj.multiselect("Projetos", options=opcoes_projeto_db, default=sel_padrao)
-    
+    # C. Filtro por Status
     opcoes_status = sorted(df_filtrado['Status'].dropna().unique().tolist())
-    filtro_status_multi = col_status.multiselect("Status", options=opcoes_status, default=opcoes_status)
+    # ALTERAÇÃO 1: default=[] para iniciar vazio
+    filtro_status_multi = col_status.multiselect("Status", options=opcoes_status, default=[])
     
+    # D. Filtro por Data
     df_filtrado['Agendamento'] = pd.to_datetime(df_filtrado['Agendamento'], errors='coerce')
     data_min = df_filtrado['Agendamento'].min()
     data_max = df_filtrado['Agendamento'].max()
     if pd.isna(data_min): data_min = date.today()
     if pd.isna(data_max): data_max = date.today()
-    filtro_data_range = col_data.date_input("Período (Agendamento)", value=(data_min, data_max))
+    
+    # ALTERAÇÃO 2: format="DD/MM/YYYY" para padronizar a exibição
+    filtro_data_range = col_data.date_input(
+        "Período (Agendamento)", 
+        value=(data_min, data_max), 
+        format="DD/MM/YYYY"
+    )
 
     # --- APLICAR FILTROS ---
     df_view = df_filtrado.copy()
@@ -387,14 +389,20 @@ else:
         df_view = df_view[
             df_view.astype(str).apply(lambda x: x.str.lower()).apply(lambda x: x.str.contains(termo)).any(axis=1)
         ]
-    if filtro_projeto_multi: df_view = df_view[df_view['Projeto'].isin(filtro_projeto_multi)]
-    if filtro_status_multi: df_view = df_view[df_view['Status'].isin(filtro_status_multi)]
+    
+    # A lógica continua: se o filtro estiver vazio (ninguém selecionado), ele ignora e mostra tudo
+    if filtro_projeto_multi: 
+        df_view = df_view[df_view['Projeto'].isin(filtro_projeto_multi)]
+        
+    if filtro_status_multi: 
+        df_view = df_view[df_view['Status'].isin(filtro_status_multi)]
+        
     if len(filtro_data_range) == 2:
         d_inicio, d_fim = filtro_data_range
         df_view = df_view[(df_view['Agendamento'] >= pd.to_datetime(d_inicio)) & (df_view['Agendamento'] <= pd.to_datetime(d_fim))]
 
     st.divider()
-
+    
     # 2. KPIs SUPERIORES
     status_conclusao = ['concluído', 'finalizado', 'faturado', 'fechado']
     kpi_qtd_chamados = len(df_view)
@@ -730,6 +738,7 @@ else:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
+
 
 
 
