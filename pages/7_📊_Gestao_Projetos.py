@@ -29,7 +29,7 @@ st.markdown("""
         .gestor-bold { color: #000000; font-weight: 900; font-size: 0.9em; }
 
         /* Status Badge */
-        .status-badge { padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 0.75em; text-transform: uppercase; color: white; display: inline-block;}
+        .status-badge { padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 0.95em; text-transform: uppercase; color: white; display: inline-block;}
         
         /* Ação */
         .action-text { color: #004D40; font-weight: 700; font-size: 0.85em; text-transform: uppercase; }
@@ -650,6 +650,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
