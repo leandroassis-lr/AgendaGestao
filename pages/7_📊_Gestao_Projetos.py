@@ -81,7 +81,7 @@ def clean_val(val, default="N/A"):
 
 @st.dialog("📥 Importar Chamados (Geral)", width="large")
 def run_importer_dialog():
-    st.info("Arraste o Template Padrão.")
+    st.info("Arraste o Template Padrão (CSV ou Excel).")
     
     uploaded_files = st.file_uploader("Selecione arquivos", type=["xlsx", "csv"], accept_multiple_files=True, key="up_imp_geral")
     
@@ -89,44 +89,62 @@ def run_importer_dialog():
         dfs = []
         for up in uploaded_files:
             try:
-                # --- LEITURA ROBUSTA (CORREÇÃO DE ENCODING) ---
+                # --- LEITURA BLINDADA (AUTO-DETECT) ---
                 if up.name.endswith('.csv'): 
-                    # 'utf-8-sig' é o segredo: ele remove o caractere invisível do Excel
+                    # Tenta ler detectando o separador automaticamente
                     try:
-                        df = pd.read_csv(up, sep=';', dtype=str, encoding='utf-8-sig')
-                        # Se falhar (ex: tudo em uma coluna só), tenta vírgula
-                        if len(df.columns) <= 1:
-                            up.seek(0)
-                            df = pd.read_csv(up, sep=',', dtype=str, encoding='utf-8-sig')
+                        df = pd.read_csv(up, sep=None, engine='python', dtype=str, encoding='utf-8-sig')
                     except:
-                        # Última tentativa: encoding windows padrão Brasil
+                        # Se falhar, tenta encoding brasileiro (latin1)
                         up.seek(0)
-                        df = pd.read_csv(up, sep=';', dtype=str, encoding='latin1')
+                        df = pd.read_csv(up, sep=None, engine='python', dtype=str, encoding='latin1')
                 else: 
                     df = pd.read_excel(up, dtype=str)
                 
+                # --- CAÇA-CABEÇALHO (HEADER HUNTING) ---
+                # Procura em qual linha está a palavra "CHAMADO"
+                header_row_idx = None
+                
+                # Verifica as primeiras 10 linhas
+                for i, row in df.head(10).iterrows():
+                    # Converte a linha para texto maiúsculo e procura "CHAMADO"
+                    row_str = row.astype(str).str.upper().str.strip().tolist()
+                    if "CHAMADO" in row_str:
+                        header_row_idx = i
+                        break
+                    # Verifica também nas colunas (caso a linha 0 já seja o header)
+                    if "CHAMADO" in [str(c).upper().strip() for c in df.columns]:
+                        header_row_idx = -1 # Já está certo
+                        break
+                
+                # Se achou o cabeçalho em uma linha para baixo, ajusta o DataFrame
+                if header_row_idx is not None and header_row_idx >= 0:
+                    # Recarrega o arquivo pulando as linhas inúteis
+                    if up.name.endswith('.csv'):
+                        up.seek(0)
+                        df = pd.read_csv(up, sep=None, engine='python', dtype=str, encoding='utf-8-sig', header=header_row_idx+1)
+                    else:
+                        df = pd.read_excel(up, dtype=str, header=header_row_idx+1)
+
                 dfs.append(df)
-            except Exception as e: st.error(f"Erro no arquivo {up.name}: {e}")
+            except Exception as e: st.error(f"Erro ao ler arquivo {up.name}: {e}")
         
         if dfs:
             try:
                 df_raw = pd.concat(dfs, ignore_index=True)
                 
-                # --- 1. LIMPEZA E PADRONIZAÇÃO DE COLUNAS ---
-                # Função para limpar caracteres estranhos (BOM, espaços, etc)
-                def limpar_header(col):
-                    col = str(col).strip().upper()
-                    # Remove caracteres não imprimíveis do começo (o erro fantasma)
-                    col = col.replace('\ufeff', '').replace('"', '').replace("'", "")
-                    return col
+                # --- 1. LIMPEZA DE COLUNAS ---
+                def limpar_coluna(col):
+                    c = str(col).strip().upper()
+                    c = c.replace('\ufeff', '').replace('"', '').replace("'", "") # Remove lixo invisível
+                    return c
 
-                df_raw.columns = [limpar_header(c) for c in df_raw.columns]
+                df_raw.columns = [limpar_coluna(c) for c in df_raw.columns]
                 
-                # Mapeamento (Adicionei variações de Nº e N° para garantir)
+                # Mapeamento Completo
                 mapa_colunas = {
                     'CHAMADO': 'Nº Chamado',
-                    'N° AGENCIA': 'Cód. Agência', 'Nº AGENCIA': 'Cód. Agência', 'AGENCIA': 'Cód. Agência',
-                    'NÂº AGENCIA': 'Cód. Agência', # Corrige erro de acentuação comum
+                    'N° AGENCIA': 'Cód. Agência', 'Nº AGENCIA': 'Cód. Agência', 'AGENCIA': 'Cód. Agência', 'NÂº AGENCIA': 'Cód. Agência',
                     'ANALISTA': 'Analista', 'GESTOR': 'Gestor',
                     'SERVIÇO': 'Serviço', 'SERVICO': 'Serviço', 'TIPO DO SERVIÇO': 'Serviço',
                     'STATUS': 'Status',
@@ -138,10 +156,13 @@ def run_importer_dialog():
                 
                 df_raw = df_raw.rename(columns=mapa_colunas)
                 
-                # Diagnóstico Rápido se falhar
+                # --- DIAGNÓSTICO VISUAL DE ERRO ---
                 if 'Nº Chamado' not in df_raw.columns:
-                    st.error("❌ Erro: Coluna 'CHAMADO' não encontrada.")
-                    st.write("Colunas identificadas no arquivo:", df_raw.columns.tolist())
+                    st.error("❌ O sistema não encontrou a coluna **CHAMADO**.")
+                    st.markdown("### O que o sistema leu do seu arquivo:")
+                    st.write(df_raw.head(3)) # Mostra as 3 primeiras linhas lidas
+                    st.markdown("**Colunas detectadas:**")
+                    st.code(df_raw.columns.tolist())
                     return
 
                 # Tratamento de vazios
@@ -149,31 +170,35 @@ def run_importer_dialog():
                     if col not in df_raw.columns: df_raw[col] = ""
                 df_raw = df_raw.fillna("")
 
-                # --- 2. PRÉ-PROCESSAMENTO (FORMATAR ITEM) ---
+                # --- 2. FORMATAR ITEM (QTD x DESC) ---
                 def formatar_item(row):
                     qtd = str(row['Qtd']).strip()
                     desc = str(row['Sistema']).strip()
                     if not desc: return ""
-                    if qtd and qtd != "0" and qtd.lower() != "nan":
+                    if qtd and qtd not in ["0", "nan", "None", ""]:
                         return f"{qtd}x {desc}"
                     return desc
 
                 df_raw['Item_Formatado'] = df_raw.apply(formatar_item, axis=1)
 
-                # --- 3. AGRUPAMENTO ---
+                # --- 3. AGRUPAMENTO (SEM ITERROWS) ---
+                # Agrupa linhas do mesmo chamado em um texto só
                 def juntar_textos(lista):
-                    # Filtra vazios e duplicados exatos na string final
-                    textos = [str(s) for s in lista if str(s).strip()]
-                    return " | ".join(dict.fromkeys(textos)) # Remove duplicados mantendo ordem
+                    # Remove vazios e duplicatas exatas
+                    limpos = [str(x) for x in lista if str(x).strip() not in ["", "nan", "None"]]
+                    return " | ".join(dict.fromkeys(limpos)) # dict.fromkeys remove duplicatas mantendo ordem
 
-                # Removemos colunas que vamos agrupar da lista de 'first'
-                cols_agrupar = ['Sistema', 'Qtd', 'Observações e Pendencias', 'Item_Formatado']
-                regras = {c: 'first' for c in df_raw.columns if c not in cols_agrupar}
+                # Identifica colunas para agrupar e quais pegar o primeiro valor
+                cols_para_juntar = ['Sistema', 'Qtd', 'Observações e Pendencias', 'Item_Formatado']
+                regras = {c: 'first' for c in df_raw.columns if c not in cols_para_juntar}
                 
                 regras['Item_Formatado'] = juntar_textos
                 regras['Observações e Pendencias'] = juntar_textos
 
+                # Agrupa pelo Nº Chamado
                 df_grouped = df_raw.groupby('Nº Chamado', as_index=False).agg(regras)
+                
+                # Joga o Item Formatado para a coluna Sistema final
                 df_grouped = df_grouped.rename(columns={'Item_Formatado': 'Sistema'})
                 
                 # --- 4. SEPARAÇÃO (NOVOS vs ATUALIZAR) ---
@@ -181,8 +206,10 @@ def run_importer_dialog():
                 lista_novos = []; lista_atualizar = []
                 
                 if not df_banco.empty:
+                    # Mapa para busca rápida
                     mapa_ids = dict(zip(df_banco['Nº Chamado'].astype(str).str.strip(), df_banco['ID']))
-                    for _, row in df_grouped.iterrows():
+                    
+                    for row in df_grouped.to_dict('records'):
                         chamado_num = str(row['Nº Chamado']).strip()
                         if chamado_num in mapa_ids:
                             row['ID_Banco'] = mapa_ids[chamado_num]
@@ -190,45 +217,49 @@ def run_importer_dialog():
                         else:
                             lista_novos.append(row)
                 else:
-                    for _, row in df_grouped.iterrows(): lista_novos.append(row)
+                    lista_novos = df_grouped.to_dict('records')
 
                 df_insert = pd.DataFrame(lista_novos)
                 df_update = pd.DataFrame(lista_atualizar)
 
                 # --- 5. EXIBIÇÃO ---
                 c1, c2 = st.columns(2)
-                c1.metric("🆕 Novos", len(df_insert))
-                c2.metric("🔄 Atualizar", len(df_update))
+                c1.metric("🆕 Criar Novos", len(df_insert))
+                c2.metric("🔄 Atualizar Existentes", len(df_update))
                 
                 if st.button("🚀 Processar Importação"):
                     bar = st.progress(0)
-                    status_text = st.empty()
+                    status_txt = st.empty()
                     
+                    # Inserir Novos
                     if not df_insert.empty:
-                        status_text.text("Inserindo...")
+                        status_txt.text("Inserindo novos...")
                         utils_chamados.bulk_insert_chamados_db(df_insert)
                         bar.progress(50)
                     
+                    # Atualizar Existentes
                     if not df_update.empty:
-                        status_text.text("Atualizando...")
-                        total_up = len(df_update)
-                        for i, row in enumerate(df_update.iterrows()):
-                            idx, dados = row
+                        status_txt.text("Atualizando itens...")
+                        total = len(df_update)
+                        for i, row in enumerate(df_update.to_dict('records')):
                             updates = {
-                                'Sistema': dados['Sistema'],
-                                'Observações e Pendencias': dados['Observações e Pendencias'],
-                                'Status': dados['Status']
+                                'Sistema': row['Sistema'],
+                                'Observações e Pendencias': row['Observações e Pendencias'],
+                                'Status': row['Status'] # Atualiza status se vier na planilha
                             }
-                            utils_chamados.atualizar_chamado_db(dados['ID_Banco'], updates)
-                            if total_up > 0: bar.progress(50 + int((i / total_up) * 50))
+                            utils_chamados.atualizar_chamado_db(row['ID_Banco'], updates)
+                            if total > 0: bar.progress(50 + int((i/total)*50))
                     
                     bar.progress(100)
-                    st.success("Sucesso!")
+                    status_txt.text("Concluído!")
+                    st.success("Importação finalizada!")
                     time.sleep(1.5)
                     st.cache_data.clear()
                     st.rerun()
 
-            except Exception as e: st.error(f"Erro crítico: {e}")
+            except Exception as e: 
+                st.error(f"Erro crítico no processamento: {e}")
+                st.write("Detalhes do erro:", str(e))
                 
 @st.dialog("🔗 Importar Links", width="medium")
 def run_link_importer_dialog():
@@ -856,6 +887,7 @@ else:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
+
 
 
 
