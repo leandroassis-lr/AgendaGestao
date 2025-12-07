@@ -8,7 +8,7 @@ from psycopg2 import sql
 import numpy as np 
 import sqlite3
 
-# --- 1. GERENCIAMENTO DE CONEXÃO ROBUSTO ---
+# --- 1. GERENCIAMENTO DE CONEXÃO ROBUSTO (POSTGRESQL) ---
 
 @st.cache_resource
 def _get_cached_connection():
@@ -151,127 +151,101 @@ def carregar_chamados_db(agencia_id_filtro=None):
         st.cache_resource.clear()
         st.error(f"Erro ao ler banco (tente recarregar a página): {e}")
         return pd.DataFrame()
-        
-        # --- 4. FUNÇÃO PARA IMPORTAR CHAMADOS ---
 
-        df_insert = df_insert.rename(columns={
-            'Nº Chamado': 'CHAMADO',
-            'Cód. Agência': 'N° AGENCIA'
-        })
-        
-        df_update = df_update.rename(columns={
-            'Nº Chamado': 'CHAMADO',
-            'Cód. Agência': 'N° AGENCIA'
-        })
-
-DB_PATH = "dados_projeto.db" 
+# --- 4. FUNÇÃO PARA IMPORTAR CHAMADOS (CORRIGIDA) ---
 
 def bulk_insert_chamados_db(df: pd.DataFrame):
     """
-    Recebe um DataFrame tratado pelo importador e salva no Banco de Dados SQLite.
-    VERSÃO DEBUG: Mostra erro detalhado e para a execução.
+    Recebe um DataFrame tratado pelo importador e salva no Banco PostgreSQL.
     """
-    if df.empty:
+    conn = get_valid_conn()
+    if not conn:
         return False, 0
 
-    conn = None
-    cols_finais = [] # Inicializa vazio para evitar erro no bloco 'except'
+    # MAPEAMENTO DE IMPORTAÇÃO (Excel -> Banco Postgres)
+    # Lado Esquerdo: Nome que vem do Excel (pós-tratamento do importador)
+    # Lado Direito: Nome da coluna na tabela 'chamados' do Postgres
+    MAP_IMPORT = {
+        "Nº Chamado": "chamado_id",
+        "Cód. Agência": "agencia_id",
+        "Nome Agência": "agencia_nome",
+        "Analista": "analista",
+        "Gestor": "gestor",
+        "Serviço": "servico",
+        "Projeto": "projeto_nome",
+        "Agendamento": "data_agendamento",
+        "Sistema": "sistema",
+        "Qtd": "quantidade",
+        "Status": "status_chamado",
+        "Observações e Pendencias": "observacao_pendencias",
+        "Abertura": "data_abertura",
+        "Prazo": "prazo"
+    }
 
+    # 1. Renomeia colunas do DF para os nomes do Postgres
+    df_to_insert = df.copy()
+    
+    # Filtra o mapa para usar apenas colunas que existem no DF
+    mapa_valido = {k: v for k, v in MAP_IMPORT.items() if k in df_to_insert.columns}
+    df_to_insert = df_to_insert.rename(columns=mapa_valido)
+
+    # 2. VALIDAÇÕES BÁSICAS
+    if 'chamado_id' not in df_to_insert.columns:
+        st.error("Erro interno: Coluna 'Nº Chamado' se perdeu no mapeamento.")
+        return False, 0
+
+    # 3. TRATA DATAS (Para formato SQL YYYY-MM-DD)
+    cols_data_banco = ['data_abertura', 'data_fechamento', 'data_agendamento']
+    for col in cols_data_banco:
+        if col in df_to_insert.columns:
+            df_to_insert[col] = pd.to_datetime(df_to_insert[col], errors='coerce').dt.date
+            # Converte NaT em None para o SQL
+            df_to_insert[col] = df_to_insert[col].where(pd.notnull(df_to_insert[col]), None)
+
+    # 4. SELECIONA APENAS COLUNAS QUE EXISTEM NO BANCO
+    # Pega apenas as colunas que renomeamos e que sabemos que existem na tabela
+    colunas_finais = [c for c in df_to_insert.columns if c in colunas_necessarias.keys() or c == 'chamado_id']
+    df_final = df_to_insert[colunas_finais]
+
+    # 5. MONTA A QUERY (UPSERT)
+    # INSERT ... ON CONFLICT (chamado_id) DO UPDATE SET ...
+    
+    cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns))
+    placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
+
+    # Monta a cláusula de atualização (para atualizar se já existir)
+    update_clause = sql.SQL(", ").join(
+        sql.SQL("{} = EXCLUDED.{}").format(sql.Identifier(col), sql.Identifier(col))
+        for col in df_final.columns if col != 'chamado_id'
+    )
+
+    query = sql.SQL(
+        "INSERT INTO chamados ({}) VALUES ({}) "
+        "ON CONFLICT (chamado_id) DO UPDATE SET {}"
+    ).format(cols_sql, placeholders, update_clause)
+
+    # 6. EXECUTA
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
+        # Converte para lista de tuplas (formato exigido pelo psycopg2)
+        # Substitui NaN por None explicitamente para evitar erro de float no SQL
+        values = [tuple(x if pd.notna(x) else None for x in row) for row in df_final.values]
         
-        # 1. MAPEAMENTO DE NOMES
-        # Lado Esquerdo: DataFrame | Lado Direito: Banco de Dados
-        map_db = {
-            'Nº Chamado': 'CHAMADO',
-            'Cód. Agência': 'N° AGENCIA',
-            'Nome Agência': 'NOME DA AGÊNCIA',
-            'Analista': 'RESPONSÁVEL',
-            'Gestor': 'GESTOR ITAU',
-            'Serviço': 'TIPO DO SERVIÇO',
-            'Projeto': 'NOME DO PROJETO',
-            'Agendamento': 'AGENDAMENTO',
-            'Sistema': 'SISTEMA',
-            'Qtd': 'QTD',
-            'Status': 'STATUS',
-            'Observações e Pendencias': 'OBSERVAÇÃO',
-            'Abertura': 'DATA_ABERTURA',
-            'Prazo': 'DATA_FECHAMENTO'
-        }
+        with conn.cursor() as cur:
+            cur.executemany(query, values)
         
-        # 2. PREPARAÇÃO DOS DADOS
-        df_save = df.copy()
-        
-        cols_data = ['Agendamento', 'Abertura', 'Prazo']
-        for col in cols_data:
-            if col in df_save.columns:
-                df_save[col] = pd.to_datetime(df_save[col], errors='coerce').dt.date
-                df_save[col] = df_save[col].astype(object).where(df_save[col].notnull(), None)
-
-        cols_to_rename = {k: v for k, v in map_db.items() if k in df_save.columns}
-        df_save = df_save.rename(columns=cols_to_rename)
-        
-        cols_finais = list(cols_to_rename.values())
-        df_save = df_save[cols_finais]
-
-        if 'CHAMADO' not in df_save.columns:
-            st.error("Erro interno: Coluna CHAMADO se perdeu no mapeamento.")
-            st.stop()
-
-        # 3. CONSTRUÇÃO DO SQL
-        colunas_str = ", ".join([f'"{c}"' for c in cols_finais]) 
-        placeholders = ", ".join(["?"] * len(cols_finais))
-        
-        update_clause = ", ".join([f'"{col}" = excluded."{col}"' for col in cols_finais if col != 'CHAMADO'])
-
-        sql = f"""
-            INSERT INTO Chamados ({colunas_str}) 
-            VALUES ({placeholders})
-            ON CONFLICT(CHAMADO) DO UPDATE SET {update_clause}
-        """
-        
-        dados = df_save.values.tolist()
-        
-        # Executa
-        cursor.executemany(sql, dados)
         conn.commit()
-        
-        return True, len(dados)
+        st.cache_data.clear()
+        return True, len(values)
 
     except Exception as e:
-        if conn: conn.rollback()
-        
-        st.error("🚨 ERRO CRÍTICO AO SALVAR NO BANCO")
-        st.exception(e) # Mostra o erro técnico
-        
-        with st.expander("🔍 Ver Detalhes para Correção", expanded=True):
-            st.markdown("### 1. Colunas identificadas:")
-            if cols_finais:
-                st.code(str(cols_finais))
-            else:
-                st.warning("Falha antes de definir as colunas.")
-            
-            st.markdown("### 2. Verificar Nomes no Banco:")
-            try:
-                if conn:
-                    df_real = pd.read_sql("PRAGMA table_info(Chamados)", conn)
-                    st.dataframe(df_real[['name', 'type']], use_container_width=True)
-                else:
-                    st.warning("Sem conexão com o banco.")
-            except:
-                st.write("Não foi possível ler a estrutura da tabela.")
-
-        st.stop() # Congela a tela para você ler o erro
+        conn.rollback()
+        st.error(f"Erro ao salvar no banco: {e}")
         return False, 0
-        
-    finally:
-        if conn: conn.close()
-            
+
 # --- 5. FUNÇÃO PARA ATUALIZAR CHAMADO (CORRIGIDA) ---
 
 def atualizar_chamado_db(chamado_id_interno, updates: dict):
-   
+    
     conn = get_valid_conn()
     if not conn: return False
     
@@ -282,7 +256,7 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
             # 1. Busca dados atuais para comparar (Log)
             cur.execute("""
                 SELECT 
-                    data_agendamento, data_fechamento, log_chamado,
+                    data_agendamento, data_fechamento, log_chamado, 
                     status_chamado, sub_status, data_envio
                 FROM chamados WHERE id = %s
             """, (chamado_id_interno,))
@@ -296,41 +270,20 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
             db_updates = {}
 
             # 2. Mapeamento EXATO (Chave do Form -> Coluna do Banco)
-            # Este mapa resolve o erro "column does not exist"
             mapa_exato = {
                 # Datas
-                'data finalização': 'data_fechamento',
-                'data finalizacao': 'data_fechamento',
-                'finalização': 'data_fechamento',
-                'fechamento': 'data_fechamento',
-                'data fechamento': 'data_fechamento',
-                'data faturamento': 'data_faturamento',
-                'faturamento': 'data_faturamento',
-                
-                'data abertura': 'data_abertura',
-                'abertura': 'data_abertura',
-                
-                'data agendamento': 'data_agendamento',
-                'agendamento': 'data_agendamento',
-                
+                'data finalização': 'data_fechamento', 'finalização': 'data_fechamento', 'fechamento': 'data_fechamento',
+                'data abertura': 'data_abertura', 'abertura': 'data_abertura',
+                'data agendamento': 'data_agendamento', 'agendamento': 'data_agendamento',
                 'data envio': 'data_envio',
                 
                 # Campos Texto
-                'status': 'status_chamado',
-                'sub-status': 'sub_status',
-                'sistema': 'sistema',
-                'serviço': 'servico',
-                'analista': 'analista',
-                'técnico': 'tecnico',
-                'agência': 'agencia_id',
-                'projeto': 'projeto_nome',
-                'gestor': 'gestor',
-                'prazo': 'prazo',
-                'prioridade': 'prioridade',
-                
-                # Links e Observações
-                'link externo': 'link_externo',
-                'nº protocolo': 'protocolo',
+                'status': 'status_chamado', 'sub-status': 'sub_status',
+                'sistema': 'sistema', 'serviço': 'servico',
+                'analista': 'analista', 'técnico': 'tecnico',
+                'agência': 'agencia_id', 'projeto': 'projeto_nome',
+                'gestor': 'gestor', 'prazo': 'prazo',
+                'link externo': 'link_externo', 'nº protocolo': 'protocolo',
                 'nº pedido': 'numero_pedido',
                 'obs. equipamento': 'observacao_equipamento',
                 'observações e pendencias': 'observacao_pendencias',
@@ -340,7 +293,6 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
             for k_orig, v in updates.items():
                 k_lower = str(k_orig).strip().lower()
                 
-                # CORREÇÃO 2: Só adiciona se existir no mapa. Chega de adivinhar nomes!
                 if k_lower in mapa_exato:
                     db_k = mapa_exato[k_lower]
                     
@@ -352,7 +304,7 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
                     else: 
                         db_updates[db_k] = str(v)
 
-            # 3. Geração de Log Simplificada
+            # 3. Geração de Log
             log_entries = []
             hoje = date.today().strftime('%d/%m/%Y')
             
@@ -370,6 +322,7 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
 
             if not db_updates: return True
 
+            # 4. Executa Update
             set_c = sql.SQL(', ').join(sql.SQL("{} = {}").format(sql.Identifier(k), sql.Placeholder()) for k in db_updates.keys())
             query = sql.SQL("UPDATE chamados SET {} WHERE id = {}").format(set_c, sql.Placeholder())
             vals = list(db_updates.values()) + [chamado_id_interno]
@@ -386,26 +339,19 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
         
 # --- 6. Funções de Cor ---
 def get_color_for_name(nome):
-    """
-    Gera uma cor consistente baseada no nome da pessoa.
-    """
+    """ Gera uma cor consistente baseada no nome. """
     if pd.isna(nome) or str(nome).strip() == "" or str(nome).lower() in ["nan", "none", "n/d", "sem analista"]:
         return "#9E9E9E"
 
-    cores = [
-        "#1976D2", "#388E3C", "#D32F2F", "#7B1FA2", "#F57C00", 
-        "#0097A7", "#C2185B", "#512DA8", "#0288D1", "#689F38"
-    ]
+    cores = ["#1976D2", "#388E3C", "#D32F2F", "#7B1FA2", "#F57C00", "#0097A7", "#C2185B", "#512DA8", "#0288D1", "#689F38"]
     idx = hash(str(nome)) % len(cores)
     return cores[idx]
 
 def get_status_color(status):
-    """
-    Retorna a cor HEX baseada no texto do status.
-    """
+    """ Retorna a cor HEX baseada no texto do status. """
     st_lower = str(status).lower().strip()
     
-    if st_lower in ['concluído', 'finalizado', 'fechado', 'resolvido', 'equipamento entregue', 'equipamento entregue - concluído']:
+    if st_lower in ['concluído', 'finalizado', 'fechado', 'resolvido', 'equipamento entregue']:
         return "#2E7D32" # Verde Escuro
     elif 'cancelado' in st_lower:
         return "#C62828" # Vermelho Forte
@@ -425,18 +371,9 @@ def resetar_tabela_chamados():
     
     try:
         with conn.cursor() as cur:
-            # TRUNCATE apaga tudo instantaneamente e reseta o ID para 1
             cur.execute("TRUNCATE TABLE chamados RESTART IDENTITY CASCADE;")
         conn.commit()
         return True, "Base de chamados zerada com sucesso!"
     except Exception as e:
         conn.rollback()
         return False, f"Erro ao limpar banco: {e}"
-
-
-
-
-
-
-
-
