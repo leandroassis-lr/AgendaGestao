@@ -474,34 +474,18 @@ if escolha_visao == "Visão Geral (Cockpit)":
 else:
     # --- MODO OPERACIONAL (VISÃO DETALHADA) ---
     
-    # 1. ÁREA DE FILTROS (ORGANIZADA EM EXPANDER)
-    with st.expander("🎛️ Filtros & Pesquisa", expanded=True):
+    # 1. CABEÇALHO DE FILTROS (ESTILO PAINEL)
+    with st.container(border=True):
+        st.markdown("### 🔍 Filtros Detalhados")
         
-        # Linha Superior: Busca (Esquerda) e Data (Direita)
-        c_top1, c_top2 = st.columns([3, 1]) 
+        # Cria 4 colunas alinhadas: Busca | Projetos | Status | Data
+        c_busca, c_proj, c_status, c_data = st.columns([1.5, 2, 1.5, 1])
         
-        with c_top1:
-            busca_geral = st.text_input("🔎 Buscador Geral", placeholder="Digite ID, Nome, Serviço, Agência...", label_visibility="collapsed")
-        
-        with c_top2:
-            # Lógica de Data
-            df_filtrado['Agendamento'] = pd.to_datetime(df_filtrado['Agendamento'], errors='coerce')
-            data_min = df_filtrado['Agendamento'].min()
-            data_max = df_filtrado['Agendamento'].max()
-            if pd.isna(data_min): data_min = date.today()
-            if pd.isna(data_max): data_max = date.today()
-            
-            filtro_data_range = st.date_input(
-                "Período", 
-                value=(data_min, data_max), 
-                format="DD/MM/YYYY",
-                label_visibility="collapsed"
-            )
+        with c_busca:
+            busca_geral = st.text_input("Buscador Geral", placeholder="Pesquisar...", label_visibility="collapsed")
+            st.caption("Texto: ID, Nome, Serviço...")
 
-        # Linha Inferior: Projetos e Status
-        c_bot1, c_bot2 = st.columns(2)
-        
-        with c_bot1:
+        with c_proj:
             # Carrega Projetos
             try:
                 df_proj_cfg = utils.carregar_config_db("projetos_nomes")
@@ -511,7 +495,7 @@ else:
             if not opcoes_projeto_db:
                 opcoes_projeto_db = sorted(df_filtrado['Projeto'].dropna().unique().tolist())
             
-            # Lógica de Redirecionamento
+            # Lógica de Redirecionamento (Vindo do Botão)
             padrao_projetos = []
             if "sel_projeto" in st.session_state:
                 proj_selecionado = st.session_state["sel_projeto"]
@@ -519,12 +503,23 @@ else:
                     padrao_projetos = [proj_selecionado]
                 st.session_state.pop("sel_projeto", None)
             
-            filtro_projeto_multi = st.multiselect("📁 Projetos", options=opcoes_projeto_db, default=padrao_projetos, placeholder="Todos os Projetos")
+            filtro_projeto_multi = st.multiselect("Projetos", options=opcoes_projeto_db, default=padrao_projetos, placeholder="Selecione Projetos", label_visibility="collapsed")
+            st.caption("Filtrar por Projeto")
 
-        with c_bot2:
-            # Carrega Status
+        with c_status:
             opcoes_status = sorted(df_filtrado['Status'].dropna().unique().tolist())
-            filtro_status_multi = st.multiselect("📊 Status", options=opcoes_status, default=[], placeholder="Todos os Status")
+            filtro_status_multi = st.multiselect("Status", options=opcoes_status, default=[], placeholder="Selecione Status", label_visibility="collapsed")
+            st.caption("Filtrar por Status")
+
+        with c_data:
+            df_filtrado['Agendamento'] = pd.to_datetime(df_filtrado['Agendamento'], errors='coerce')
+            data_min = df_filtrado['Agendamento'].min()
+            data_max = df_filtrado['Agendamento'].max()
+            if pd.isna(data_min): data_min = date.today()
+            if pd.isna(data_max): data_max = date.today()
+            
+            filtro_data_range = st.date_input("Período", value=(data_min, data_max), format="DD/MM/YYYY", label_visibility="collapsed")
+            st.caption("Período")
 
     # --- MOTOR DE FILTRAGEM ---
     df_view = df_filtrado.copy()
@@ -540,9 +535,10 @@ else:
         d_inicio, d_fim = filtro_data_range
         df_view = df_view[(df_view['Agendamento'] >= pd.to_datetime(d_inicio)) & (df_view['Agendamento'] <= pd.to_datetime(d_fim))]
 
-    st.markdown("---") 
-
-    # 2. PAINEL DE KPIs (TOPO)
+    # 2. PAINEL DE KPIs (LOGO ABAIXO DOS FILTROS)
+    # Espaçamento visual
+    st.markdown("<br>", unsafe_allow_html=True) 
+    
     status_conclusao = ['concluído', 'finalizado', 'faturado', 'fechado']
     kpi_qtd_chamados = len(df_view)
     kpi_chamados_fin = len(df_view[df_view['Status'].str.lower().isin(status_conclusao)])
@@ -558,42 +554,46 @@ else:
     else:
         kpi_proj_total_view = 0; kpi_proj_abertos = 0; proj_fin_count = 0
 
-    # Layout de KPIs mais limpo
+    # Layout de KPIs (Sem divisórias verticais, estilo clean)
     k1, k2, k3, k4 = st.columns(4)
-    k1.metric("📌 Total Chamados", kpi_qtd_chamados)
-    k2.metric("📂 Projetos Abertos", kpi_proj_abertos)
-    k3.metric("🏁 Projetos Concluídos", proj_fin_count)
-    k4.metric("✅ Tarefas Finalizadas", kpi_chamados_fin)
+    k1.metric("Chamados (Filtro)", kpi_qtd_chamados, border=True)
+    k2.metric("Projetos Abertos", kpi_proj_abertos, border=True)
+    k3.metric("Projetos Finalizados", proj_fin_count, border=True)
+    k4.metric("Tarefas Concluídas", kpi_chamados_fin, border=True)
     
-    st.markdown("---")
+    st.divider()
 
-    # 3. RESUMO POR STATUS (MINI CARDS)
+    # 3. RESUMO POR STATUS (HORIZONTAL)
     if not df_view.empty:
-        st.caption("Resumo Rápido por Status")
         counts = df_view['Status'].value_counts()
-        cols_status = st.columns(4)
-        for index, (status, count) in enumerate(counts.items()):
+        cols_status = st.columns(6) # Mais colunas para ficar menores
+        
+        # Loop seguro para distribuir os cards
+        idx_col = 0
+        for status, count in counts.items():
             try: cor = utils_chamados.get_status_color(status)
             except: cor = "#90A4AE"
-            with cols_status[index % 4]:
+            
+            with cols_status[idx_col % 6]:
                 st.markdown(f"""
                 <div style="
                     border-left: 4px solid {cor}; 
                     background-color: white; 
-                    padding: 8px 12px; 
+                    padding: 5px 10px; 
                     border-radius: 4px; 
-                    border: 1px solid #eee;
-                    border-left-width: 4px;
-                    margin-bottom: 8px;
-                    display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-weight: 600; font-size: 0.85em; color: #555;">{status}</span>
+                    border: 1px solid #f0f0f0;
+                    margin-bottom: 5px;
+                    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+                    display: flex; flex-direction: column; align-items: flex-start;">
+                    <span style="font-size: 0.75em; color: #777; text-transform: uppercase;">{status}</span>
                     <span style="font-weight: bold; font-size: 1.1em; color: #333;">{count}</span>
                 </div>
                 """, unsafe_allow_html=True)
+            idx_col += 1
     else:
         st.info("Sem dados para exibir resumo de status.")
 
-    st.markdown("---")
+    st.markdown("<br>", unsafe_allow_html=True)
 
     # --- 4. ABAS DE CONTEÚDO ---
     aba_lista, aba_calendario = st.tabs(["📋 Lista Detalhada", "📅 Agenda Semanal"])
@@ -601,16 +601,17 @@ else:
     # --- ABA 1: LISTA DETALHADA ---
     with aba_lista:    
         if df_view.empty:
-            st.warning("Nenhum chamado encontrado com os filtros atuais.")
+            st.warning("Nenhum chamado encontrado.")
         else:
+            # Contador discreto no topo da lista
+            st.markdown(f"<div style='text-align: right; color: #666; font-size: 0.8em; margin-bottom: 10px;'>Mostrando {len(df_view)} registros</div>", unsafe_allow_html=True)
+            
             df_view['Agendamento_str'] = pd.to_datetime(df_view['Agendamento']).dt.strftime('%d/%m/%Y').fillna("Sem Data")
             
             chave_agrupamento = ['Projeto', 'Nome Agência', 'Serviço', 'Agendamento_str']
             grupos = df_view.groupby(chave_agrupamento)
             grupos_lista = list(grupos)
-            
-            st.markdown(f"**Exibindo {len(df_view)} registros**") # Contador discreto
-            
+        
             for (proj_nome, nome_agencia, nome_servico, data_str), df_grupo in grupos_lista:
                 first_row = df_grupo.iloc[0]
                 ids_chamados = df_grupo['ID'].tolist()
@@ -848,3 +849,4 @@ else:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
+
