@@ -153,21 +153,20 @@ def carregar_chamados_db(agencia_id_filtro=None):
         
 # --- 4. FUNÇÃO PARA IMPORTAR CHAMADOS ---
 
-df_insert = df_insert.rename(columns={
-    'Nº Chamado': 'CHAMADO',
-    'Cód. Agência': 'N° AGENCIA'
-})
-
-df_update = df_update.rename(columns={
-    'Nº Chamado': 'CHAMADO',
-    'Cód. Agência': 'N° AGENCIA'
-})
-
-# Padroniza para maiúsculas (backend exige)
-df_insert.columns = [c.strip().upper() for c in df_insert.columns]
-df_update.columns = [c.strip().upper() for c in df_update.columns]
+        df_insert = df_insert.rename(columns={
+            'Nº Chamado': 'CHAMADO',
+            'Cód. Agência': 'N° AGENCIA'
+        })
         
-
+        df_update = df_update.rename(columns={
+            'Nº Chamado': 'CHAMADO',
+            'Cód. Agência': 'N° AGENCIA'
+        })
+        
+        # Padroniza para maiúsculas (backend exige)
+        df_insert.columns = [c.strip().upper() for c in df_insert.columns]
+        df_update.columns = [c.strip().upper() for c in df_update.columns]
+        
 def bulk_insert_chamados_db(df: pd.DataFrame):
   
     conn = get_valid_conn()
@@ -444,5 +443,6 @@ def resetar_tabela_chamados():
     except Exception as e:
         conn.rollback()
         return False, f"Erro ao limpar banco: {e}"
+
 
 
