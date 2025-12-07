@@ -153,26 +153,33 @@ def carregar_chamados_db(agencia_id_filtro=None):
 
 # --- 4. FUNÇÃO PARA IMPORTAR CHAMADOS ---
 
+df_insert = df_insert.rename(columns={
+    'Nº Chamado': 'CHAMADO',
+    'Cód. Agência': 'N° AGENCIA'
+})
+
+df_update = df_update.rename(columns={
+    'Nº Chamado': 'CHAMADO',
+    'Cód. Agência': 'N° AGENCIA'
+})
+
 def bulk_insert_chamados_db(df: pd.DataFrame):
-    """ Importa um DataFrame (UPSERT) lendo pelos Nomes de Cabeçalho. """
+  
     conn = get_valid_conn()
     if not conn: return False, 0
     
-    NEW_COLUMN_MAP = {
-        'CHAMADO': 'chamado_id',
-        'N° AGENCIA': 'agencia_id',
-        'NOME AGÊNCIA': 'agencia_nome',
-        'UF': 'agencia_uf',
-        'TIPO DO SERVIÇO': 'servico',
-        'NOME DO PROJETO': 'projeto_nome',
-        'AGENDAMENTO': 'data_agendamento',
-        'SISTEMA': 'sistema',           
-        'CODIGO': 'cod_equipamento',                 
-        'DESCRIÇÃO EQUIPAMENTO': 'nome_equipamento', 
-        'QTD': 'quantidade',
-        'GESTOR ITAU': 'gestor',
-        'RESPONSÁVEL': 'analista'            
-    }
+    MAP_IMPORT = {
+    "Nº Chamado": "CHAMADO",
+    "Cód. Agência": "N° AGENCIA",
+    "Analista": "RESPONSÁVEL",
+    "Gestor": "GESTOR ITAU",
+    "Serviço": "TIPO DO SERVIÇO",
+    "Projeto": "NOME DO PROJETO",
+    "Agendamento": "AGENDAMENTO",
+    "Sistema": "SISTEMA",
+    "Qtd": "QTD"
+}
+df_grouped = df_grouped.rename(columns=MAP_IMPORT)
 
     df_renamed = df.copy()
     df_renamed.columns = [str(col).strip().upper() for col in df_renamed.columns]
@@ -407,3 +414,4 @@ def resetar_tabela_chamados():
     except Exception as e:
         conn.rollback()
         return False, f"Erro ao limpar banco: {e}"
+
