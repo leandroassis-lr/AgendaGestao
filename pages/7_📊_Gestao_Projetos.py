@@ -643,7 +643,7 @@ else:
                     # Usamos colunas proporcionais para alinhar bem
                     c1, c2, c3, c4 = st.columns([3, 1.2, 1.5, 1.5])
                     
-                    with c1: st.markdown(f"**📂 {proj_nome}**")
+                    with c1: st.markdown(f"#### {proj_nome}")
                     with c2: st.markdown(f"🗓️ {data_str}")
                     with c3: st.markdown(f"👤 {analista}")
                     with c4: 
@@ -667,7 +667,7 @@ else:
                     cod_ag = str(first_row.get('Cód. Agência', '')).split('.')[0]
                     nome_ag = str(nome_agencia).replace(cod_ag, '').strip(' -')
                     
-                    st.markdown(f"""
+                    st.markdown(f####
                         <div style="
                             margin-top: 8px; 
                             padding-top: 8px; 
@@ -675,9 +675,7 @@ else:
                             color: #555; 
                             font-size: 0.95em;">
                             🏠 <b>AG {cod_ag}</b> - {nome_ag}
-                            <span style="float:right; color:#999; font-size:0.8em;">ID: {ids_chamados[0]}</span>
-                        </div>
-                    """, unsafe_allow_html=True)
+                            <span style="float:right; color:#999; font-size:0.8em;"""", unsafe_allow_html=True)
 
                     # EXPANDER DE EDIÇÃO
                     with st.expander("📝 Editar Detalhes"):
@@ -872,5 +870,6 @@ else:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
+
 
 
