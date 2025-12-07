@@ -610,48 +610,74 @@ else:
             grupos_lista = list(grupos)
             
             st.markdown(f"**Exibindo {len(df_view)} registros**") # Contador discreto
-            
+                        
             for (proj_nome, nome_agencia, nome_servico, data_str), df_grupo in grupos_lista:
                 first_row = df_grupo.iloc[0]
+                ids_chamados = df_grupo['ID'].tolist()
+                
+                # Tratamento de dados para exibição
                 status_atual = clean_val(first_row.get('Status'), "Não Iniciado")
                 acao_atual = clean_val(first_row.get('Sub-Status'), "")
                 cor_status = utils_chamados.get_status_color(status_atual)
                 analista = clean_val(first_row.get('Analista'), "N/D").upper()
                 gestor = clean_val(first_row.get('Gestor'), "N/D").upper()
                 
-                sla_texto = ""; sla_cor = "#333"
+                # Lógica de SLA
+                sla_texto = ""
+                sla_cor = "#333"
                 prazo_val = _to_date_safe(first_row.get('Prazo'))
                 if prazo_val:
-                    hoje_date = date.today(); dias_restantes = (prazo_val - hoje_date).days
-                    if dias_restantes < 0: sla_texto = f"SLA: {abs(dias_restantes)}d atrasado"; sla_cor = "#D32F2F"
-                    else: sla_texto = f"SLA: {dias_restantes}d restantes"; sla_cor = "#388E3C"
+                    hoje_date = date.today()
+                    dias_restantes = (prazo_val - hoje_date).days
+                    if dias_restantes < 0: 
+                        sla_texto = f"⚠️ {abs(dias_restantes)}d atrasado"
+                        sla_cor = "#D32F2F"
+                    else: 
+                        sla_texto = f"🕒 {dias_restantes}d restantes"
+                        sla_cor = "#388E3C"
                 
-                # CARD PRINCIPAL (Visual melhorado)
+                # --- INÍCIO DO CARD VISUAL ---
                 with st.container(border=True):
-                    # Linha de Título
-                    c_tit, c_date = st.columns([3, 1])
-                    c_tit.markdown(f"**{proj_nome}**")
-                    c_date.markdown(f"🗓️ **{data_str}**")
                     
-                    # Linha de Detalhes
-                    c1, c2, c3, c4 = st.columns([1.5, 2, 3, 2])
-                    with c2: st.markdown(f"👤 **{analista}**")
-                    with c3: 
-                        cod_ag = str(first_row.get('Cód. Agência', '')).split('.')[0]
-                        nome_ag = str(nome_agencia).replace(cod_ag, '').strip(' -')
-                        st.markdown(f"🏠 **{cod_ag}** {nome_ag}")
+                    # LINHA 1: Projeto | Agendamento | Analista | Status
+                    # Usamos colunas proporcionais para alinhar bem
+                    c1, c2, c3, c4 = st.columns([3, 1.2, 1.5, 1.5])
+                    
+                    with c1: st.markdown(f"**📂 {proj_nome}**")
+                    with c2: st.markdown(f"🗓️ {data_str}")
+                    with c3: st.markdown(f"👤 {analista}")
                     with c4: 
-                        st.markdown(f"<span style='color:{cor_status}; font-weight:bold;'>● {status_atual}</span>", unsafe_allow_html=True)
+                        # Badge de Status
+                        st.markdown(f"""<div class="card-status-badge" style="background-color: {cor_status}; margin: 0;">{status_atual}</div>""", unsafe_allow_html=True)
 
-                    # Linha de Serviço e Ação
-                    c5, c6, c7, c8 = st.columns([2.5, 1.5, 2, 2])
+                    # LINHA 2: Serviço | SLA | Gestor | Ação
+                    c5, c6, c7, c8 = st.columns([3, 1.2, 1.5, 1.5])
+                    
                     with c5: st.markdown(f"<span style='color:#1565C0; font-weight:600;'>{nome_servico}</span>", unsafe_allow_html=True)
                     with c6: 
-                        if sla_texto: st.markdown(f"<span style='color:{sla_cor}; font-size:0.9em;'>{sla_texto}</span>", unsafe_allow_html=True)
-                    with c7: st.caption(f"#### {gestor}")
+                        if sla_texto: st.markdown(f"<span style='color:{sla_cor}; font-size:0.9em; font-weight:bold;'>{sla_texto}</span>", unsafe_allow_html=True)
+                        else: st.caption("-")
+                    with c7: st.caption(f"Gestor: {gestor}")
                     with c8:
                         if str(acao_atual).lower() == "faturado": st.markdown("✔️ **FATURADO**")
                         elif acao_atual: st.markdown(f"👉 {acao_atual}")
+                        else: st.caption("-")
+
+                    # LINHA 3: Agência (Destaque inferior)
+                    cod_ag = str(first_row.get('Cód. Agência', '')).split('.')[0]
+                    nome_ag = str(nome_agencia).replace(cod_ag, '').strip(' -')
+                    
+                    st.markdown(f"""
+                        <div style="
+                            margin-top: 8px; 
+                            padding-top: 8px; 
+                            border-top: 1px solid #f0f0f0; 
+                            color: #555; 
+                            font-size: 0.95em;">
+                            🏠 <b>AG {cod_ag}</b> - {nome_ag}
+                            <span style="float:right; color:#999; font-size:0.8em;">ID: {ids_chamados[0]}</span>
+                        </div>
+                    """, unsafe_allow_html=True)
 
                     # EXPANDER DE EDIÇÃO
                     with st.expander("📝 Editar Detalhes"):
@@ -846,4 +872,5 @@ else:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
+
 
