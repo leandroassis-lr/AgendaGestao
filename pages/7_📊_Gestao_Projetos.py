@@ -571,11 +571,11 @@ else:
     if not df_view.empty:
         st.caption("Resumo Rápido por Status")
         counts = df_view['Status'].value_counts()
-        cols_status = st.columns(4)
+        cols_status = st.columns(7)
         for index, (status, count) in enumerate(counts.items()):
             try: cor = utils_chamados.get_status_color(status)
             except: cor = "#90A4AE"
-            with cols_status[index % 4]:
+            with cols_status[index % 7]:
                 st.markdown(f"""
                 <div style="
                     border-left: 4px solid {cor}; 
@@ -613,7 +613,6 @@ else:
             
             for (proj_nome, nome_agencia, nome_servico, data_str), df_grupo in grupos_lista:
                 first_row = df_grupo.iloc[0]
-                ids_chamados = df_grupo['ID'].tolist()
                 status_atual = clean_val(first_row.get('Status'), "Não Iniciado")
                 acao_atual = clean_val(first_row.get('Sub-Status'), "")
                 cor_status = utils_chamados.get_status_color(status_atual)
@@ -636,7 +635,6 @@ else:
                     
                     # Linha de Detalhes
                     c1, c2, c3, c4 = st.columns([1.5, 2, 3, 2])
-                    with c1: st.caption(f"ID(s): {ids_chamados}")
                     with c2: st.markdown(f"👤 **{analista}**")
                     with c3: 
                         cod_ag = str(first_row.get('Cód. Agência', '')).split('.')[0]
@@ -650,7 +648,7 @@ else:
                     with c5: st.markdown(f"<span style='color:#1565C0; font-weight:600;'>{nome_servico}</span>", unsafe_allow_html=True)
                     with c6: 
                         if sla_texto: st.markdown(f"<span style='color:{sla_cor}; font-size:0.9em;'>{sla_texto}</span>", unsafe_allow_html=True)
-                    with c7: st.caption(f"Gestor: {gestor}")
+                    with c7: st.caption(f"#### {gestor}")
                     with c8:
                         if str(acao_atual).lower() == "faturado": st.markdown("✔️ **FATURADO**")
                         elif acao_atual: st.markdown(f"👉 {acao_atual}")
@@ -848,3 +846,4 @@ else:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
+
