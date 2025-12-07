@@ -442,257 +442,201 @@ else:
 
     st.divider()
 
-    # --- CRIAÇÃO DAS ABAS ---
-    aba_lista, aba_calendario = st.tabs(["📋 Lista Detalhada", "📅 Linha do Tempo (Gantt)"])
-
     # 4. LISTA DETALHADA + FORMULÁRIO INTELIGENTE
     with aba_lista:    
-    st.markdown(f"### 📋 Detalhes ({len(df_view)} registros)")
-    df_view['Agendamento_str'] = pd.to_datetime(df_view['Agendamento']).dt.strftime('%d/%m/%Y').fillna("Sem Data")
-    
-    chave_agrupamento = ['Projeto', 'Nome Agência', 'Serviço', 'Agendamento_str']
-    grupos = df_view.groupby(chave_agrupamento)
-    grupos_lista = list(grupos)
-    
-    if not grupos_lista: st.info("Nenhum chamado encontrado com esses filtros.")
-    else:
-        for (proj_nome, nome_agencia, nome_servico, data_str), df_grupo in grupos_lista:
-            first_row = df_grupo.iloc[0]
-            ids_chamados = df_grupo['ID'].tolist()
-            status_atual = clean_val(first_row.get('Status'), "Não Iniciado")
-            acao_atual = clean_val(first_row.get('Sub-Status'), "")
-            cor_status = utils_chamados.get_status_color(status_atual)
-            analista = clean_val(first_row.get('Analista'), "N/D").upper()
-            gestor = clean_val(first_row.get('Gestor'), "N/D").upper()
-            
-            sla_texto = ""; sla_cor = "#333"
-            prazo_val = _to_date_safe(first_row.get('Prazo'))
-            if prazo_val:
-                hoje_date = date.today(); dias_restantes = (prazo_val - hoje_date).days
-                if dias_restantes < 0: sla_texto = f"SLA: {abs(dias_restantes)}d atrasado"; sla_cor = "#D32F2F"
-                else: sla_texto = f"SLA: {dias_restantes}d restantes"; sla_cor = "#388E3C"
-            
-            with st.container(border=True):
-                st.markdown(f"**{proj_nome}** | 🗓️ **{data_str}**")
-                c1, c2, c3, c4 = st.columns([1.2, 2, 3, 2])
-                with c2: st.markdown(f"<span style='color:#555; font-size:0.9em;'>Analista:</span> <span style='color:#1565C0; font-weight:500;'>{analista}</span>", unsafe_allow_html=True)
-                with c3:
-                    cod_ag = str(first_row.get('Cód. Agência', '')).split('.')[0]
-                    nome_ag = str(nome_agencia).replace(cod_ag, '').strip(' -')
-                    st.markdown(f"<span style='color:#555; font-size:0.9em;'>Agência:</span> **AG {cod_ag} {nome_ag}**", unsafe_allow_html=True)
-                with c4: st.markdown(f"""<div class="card-status-badge" style="background-color: {cor_status}; margin-bottom: 5px;">{status_atual}</div>""", unsafe_allow_html=True)
-
-                c5, c6, c7, c8 = st.columns([2.5, 1.5, 2, 2])
-                with c5: st.markdown(f"<div style='color:#0D47A1; font-weight:bold; font-size:1.1em; text-transform:uppercase;'>{nome_servico}</div>", unsafe_allow_html=True)
-                with c6:
-                    if sla_texto: st.markdown(f"<span style='color:{sla_cor}; font-weight:bold; font-size:0.9em;'>{sla_texto}</span>", unsafe_allow_html=True)
-                with c7: st.markdown(f"<span style='color:#555; font-size:0.9em;'>Gestor:</span> <span style='color:#C2185B; font-weight:bold;'>{gestor}</span>", unsafe_allow_html=True)
-                with c8:
-                    if str(acao_atual).lower() == "faturado": st.markdown("<div style='text-align:center; color:#2E7D32; font-weight:bold;'>✔️ FATURADO</div>", unsafe_allow_html=True)
-                    elif acao_atual: st.markdown(f"<div style='text-align:center; color:#004D40; font-weight:bold; font-size:0.85em; text-transform:uppercase;'>{acao_atual}</div>", unsafe_allow_html=True)
-
-                with st.expander(f" >  Ver/Editar Detalhes - ID: {first_row['ID']}"):
-                    form_key = f"form_{first_row['ID']}"
-                    with st.form(key=form_key):
-                        
-                        # --- 1. CARREGAR LISTAS (AGORA USANDO USUÁRIOS REAIS) ---
-                        try:
-                            # Carrega Status e Projetos (Configurações)
-                            df_status_cfg = utils.carregar_config_db("status")
-                            opts_status_db = [str(x) for x in df_status_cfg.iloc[:, 0].dropna().tolist()] if not df_status_cfg.empty else []
-                            
-                            df_proj_cfg = utils.carregar_config_db("projetos_nomes")
-                            opts_proj_db = [str(x) for x in df_proj_cfg.iloc[:, 0].dropna().tolist()] if not df_proj_cfg.empty else []
-                            
-                            df_tec_cfg = utils.carregar_config_db("tecnicos")
-                            opts_tec_db = [str(x) for x in df_tec_cfg.iloc[:, 0].dropna().tolist()] if not df_tec_cfg.empty else []
-
-                            # --- NOVA LÓGICA: CARREGAR USUÁRIOS DO SISTEMA ---
-                            df_users = utils.carregar_usuarios_db()
-                            
-                            # Garante que a coluna se chame 'Nome' (igual na tela de cadastro)
-                            if not df_users.empty:
-                                df_users.columns = [col.capitalize() for col in df_users.columns]
-                            
-                            if not df_users.empty and "Nome" in df_users.columns:
-                                opts_ana_db = [str(x) for x in df_users["Nome"].dropna().tolist()]
-                            else:
-                                opts_ana_db = []
-                                
-                        except:
-                            opts_status_db = []; opts_proj_db = []; opts_tec_db = []; opts_ana_db = []
-
-                        # --- 2. PREPARAR LISTAS (Safe String e Sort) ---
-                        def safe_str(val):
-                            if pd.isna(val) or str(val).lower() in ['nan', 'none', '']: return ""
-                            return str(val)
-
-                        # Status
-                        status_atual = safe_str(first_row.get('Status', '(Automático)'))
-                        lista_raw_st = opts_status_db + [status_atual] + ["(Automático)", "Finalizado", "Cancelado"]
-                        lista_final_status = sorted(list(set([s for s in lista_raw_st if s])))
-                        idx_st = lista_final_status.index(status_atual) if status_atual in lista_final_status else 0
-                        
-                        # Projetos
-                        val_proj_atual = safe_str(first_row.get('Projeto', ''))
-                        lista_raw_proj = opts_proj_db + [val_proj_atual]
-                        lista_final_proj = sorted(list(set([p for p in lista_raw_proj if p])))
-                        idx_proj = lista_final_proj.index(val_proj_atual) if val_proj_atual in lista_final_proj else 0
-
-                        # Técnico de Campo (Configuração)
-                        val_tec_atual = safe_str(first_row.get('Técnico', ''))
-                        lista_raw_tec = opts_tec_db + [val_tec_atual]
-                        lista_final_tec = sorted(list(set([t for t in lista_raw_tec if t])))
-                        idx_tec = lista_final_tec.index(val_tec_atual) if val_tec_atual in lista_final_tec else 0
-
-                        # Analistas (Usuários Cadastrados)
-                        val_ana_atual = safe_str(first_row.get('Analista', ''))
-                        lista_raw_ana = opts_ana_db + [val_ana_atual]
-                        lista_final_ana = sorted(list(set([a for a in lista_raw_ana if a]))) # Limpa vazios e ordena
-                        idx_ana = lista_final_ana.index(val_ana_atual) if val_ana_atual in lista_final_ana else 0
-
-                        # --- 3. CAMPOS DO FORMULÁRIO ---
-                        c1, c2, c3, c4 = st.columns(4)
-                        novo_status = c1.selectbox("Status", lista_final_status, index=idx_st, key=f"st_{form_key}")
-                        
-                        abert_val = _to_date_safe(first_row.get('Abertura')) or date.today()
-                        nova_abertura = c2.date_input("Abertura", value=abert_val, format="DD/MM/YYYY", key=f"ab_{form_key}")
-                        
-                        agend_val = _to_date_safe(first_row.get('Agendamento'))
-                        novo_agend = c3.date_input("Agendamento", value=agend_val, format="DD/MM/YYYY", key=f"ag_{form_key}")
-                        
-                        fim_val = _to_date_safe(first_row.get('Fechamento'))
-                        novo_fim = c4.date_input("Finalização", value=fim_val, format="DD/MM/YYYY", key=f"fim_{form_key}")
-
-                        c5, c6, c7 = st.columns(3)
-                        
-                        # SELECTBOX DE ANALISTAS (USUÁRIOS)
-                        novo_analista = c5.selectbox("Analista (Usuário)", lista_final_ana, index=idx_ana, key=f"ana_{form_key}")
-                        
-                        novo_gestor = c6.text_input("Gestor", value=first_row.get('Gestor', ''), key=f"ges_{form_key}")
-                        novo_tec = c7.selectbox("Técnico Campo", lista_final_tec, index=idx_tec, key=f"tec_{form_key}")
-
-                        c8, c9, c10 = st.columns(3)
-                        novo_projeto = c8.selectbox("Nome do Projeto", lista_final_proj, index=idx_proj, key=f"proj_{form_key}")
-                        novo_servico = c9.text_input("Serviço", value=first_row.get('Serviço', ''), key=f"serv_{form_key}")
-                        novo_sistema = c10.text_input("Sistema", value=first_row.get('Sistema', ''), key=f"sis_{form_key}")
-
-                        obs_val = first_row.get('Observações e Pendencias', '')
-                        nova_obs = st.text_area("Observações e Pendências", value=obs_val, height=100, key=f"obs_{form_key}")
-
-                        st.markdown("##### 🔗 Links e Protocolos")
-                        c11, c12, c13 = st.columns([1, 2, 1])
-                        chamado_num = str(first_row.get('Nº Chamado', ''))
-                        link_atual = first_row.get('Link Externo', '')
-                        with c11:
-                            st.caption("Nº Chamado (Acesso)")
-                            if pd.notna(link_atual) and str(link_atual).startswith('http'): st.link_button(f"🔗 {chamado_num}", link_atual, use_container_width=True)
-                            else: st.text_input("Chamado", value=chamado_num, disabled=True, label_visibility="collapsed", key=f"dis_ch_{form_key}")
-                        if pd.isna(link_atual): link_atual = ""
-                        novo_link = c12.text_input("Link Externo (Cole aqui)", value=link_atual, key=f"lnk_{form_key}")
-                        proto_val = first_row.get('Nº Protocolo', ''); novo_proto = c13.text_input("Nº Protocolo", value=proto_val if pd.notna(proto_val) else "", key=f"prot_{form_key}")
-                        st.markdown("---")
-                        
-                        st.markdown("##### 📦 Descrição (Equipamentos do Projeto)")
-                        desc_texto_final = ""
-                        nome_serv_lower = str(nome_servico).lower().strip()
-                        if nome_serv_lower in SERVICOS_SEM_EQUIPAMENTO: desc_texto_final = f"Realizar {nome_servico}"
-                        else:
-                            itens_desc = []
-                            for sys, df_sys in df_grupo.groupby('Sistema'):
-                                sys_clean = clean_val(sys, "Sistema Geral"); itens_desc.append(f"**{sys_clean}**")
-                                for _, row_eq in df_sys.iterrows():
-                                    qtd = row_eq.get('Qtd.', 0); equip = row_eq.get('Equipamento', 'Indefinido')
-                                    itens_desc.append(f"- {qtd}x {equip}"); itens_desc.append("")
-                            desc_texto_final = "<br>".join(itens_desc)
-                        st.markdown(f"<div style='background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 5px; padding: 10px; font-size: 0.9rem; max-height: 200px; overflow-y: auto;'>{desc_texto_final}</div>", unsafe_allow_html=True)
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        
-                        btn_salvar = st.form_submit_button("💾 Salvar Alterações", use_container_width=True)
-                        if btn_salvar:
-                            updates = {
-                                "Data Abertura": nova_abertura, "Data Agendamento": novo_agend, "Data Finalização": novo_fim,
-                                "Analista": novo_analista, "Gestor": novo_gestor, "Técnico": novo_tec,
-                                "Projeto": novo_projeto, "Serviço": novo_servico, "Sistema": novo_sistema,
-                                "Observações e Pendencias": nova_obs, "Link Externo": novo_link, "Nº Protocolo": novo_proto
-                            }
-                            recalcular = False
-                            if novo_status != "(Automático)":
-                                updates["Status"] = novo_status
-                                if novo_status in ["Cancelado", "Pausado"]: updates["Sub-Status"] = ""
-                                recalcular = False
-                                if novo_status == "Finalizado" and novo_fim is None: st.error("Data Finalização obrigatória!"); st.stop()
-                            else: recalcular = True
-                            
-                            with st.spinner("Salvando..."):
-                                count = 0
-                                for cid in ids_chamados:
-                                    if utils_chamados.atualizar_chamado_db(cid, updates): count += 1
-                                if count > 0:
-                                    st.success("Salvo!")
-                                    st.cache_data.clear()
-                                    if recalcular:
-                                        df_all = utils_chamados.carregar_chamados_db()
-                                        df_target = df_all[df_all['ID'].isin(ids_chamados)]
-                                        calcular_e_atualizar_status_projeto(df_target, ids_chamados)
-                                        st.cache_data.clear()
-                                    time.sleep(0.5)
-                                    st.rerun()
-                                else: st.error("Erro ao salvar.")
-
-# =========================================================================
-    # ABA 2: CALENDÁRIO / GANTT (NOVO!)
-    # =========================================================================
-    with aba_calendario:
-        st.subheader("📅 Cronograma de Atividades")
+        st.markdown(f"### 📋 Detalhes ({len(df_view)} registros)")
         
         if df_view.empty:
-            st.warning("Sem dados filtrados para gerar calendário.")
+            st.info("Sem dados para exibir.")
         else:
-            # Prepara dados para o Gantt
-            df_gantt = df_view.copy()
+            df_view['Agendamento_str'] = pd.to_datetime(df_view['Agendamento']).dt.strftime('%d/%m/%Y').fillna("Sem Data")
             
-            # Precisamos garantir datas válidas
-            df_gantt['Start'] = pd.to_datetime(df_gantt['Agendamento'])
+            chave_agrupamento = ['Projeto', 'Nome Agência', 'Serviço', 'Agendamento_str']
+            grupos = df_view.groupby(chave_agrupamento)
+            grupos_lista = list(grupos)
             
-            # Se não tiver data de fim (Prazo), assumimos que dura 1 dia para visualizar
-            # Se você tiver uma coluna 'Previsão Fim', use ela aqui no lugar de 'Prazo'
-            if 'Prazo' in df_gantt.columns:
-                 df_gantt['Finish'] = pd.to_datetime(df_gantt['Prazo'])
-                 # Correção: Se Prazo for NaT (vazio), usa Start + 1 dia
-                 df_gantt['Finish'] = df_gantt['Finish'].fillna(df_gantt['Start'] + pd.Timedelta(days=1))
+            if not grupos_lista: st.info("Nenhum chamado encontrado com esses filtros.")
             else:
-                 df_gantt['Finish'] = df_gantt['Start'] + pd.Timedelta(days=1)
-            
-            # Remove linhas sem data de início
-            df_gantt = df_gantt.dropna(subset=['Start'])
-            
-            if df_gantt.empty:
-                st.info("Os chamados filtrados não possuem data de agendamento.")
-            else:
-                # Cria o Gráfico de Gantt
-                fig_gantt = px.timeline(
-                    df_gantt, 
-                    x_start="Start", 
-                    x_end="Finish", 
-                    y="Analista", # Ou 'Projeto' se quiser ver por projeto
-                    color="Status",
-                    hover_data=["Projeto", "Serviço", "Nome Agência"],
-                    title="Cronograma por Analista",
-                    height=400 + (len(df_gantt['Analista'].unique()) * 20) # Altura dinâmica
-                )
-                
-                # Ajustes visuais do gráfico
-                fig_gantt.update_yaxes(autorange="reversed") # Para ficar de cima para baixo
-                fig_gantt.update_layout(
-                    xaxis_title="Período",
-                    yaxis_title="Responsável",
-                    showlegend=True,
-                    margin=dict(l=10, r=10, t=40, b=10)
-                )
-                
-                st.plotly_chart(fig_gantt, use_container_width=True)
-                
-                st.caption("💡 Dica: Este gráfico mostra a duração entre o 'Agendamento' e o 'Prazo'. Se não houver prazo, mostra como 1 dia.")
-                                
+                for (proj_nome, nome_agencia, nome_servico, data_str), df_grupo in grupos_lista:
+                    first_row = df_grupo.iloc[0]
+                    ids_chamados = df_grupo['ID'].tolist()
+                    status_atual = clean_val(first_row.get('Status'), "Não Iniciado")
+                    acao_atual = clean_val(first_row.get('Sub-Status'), "")
+                    cor_status = utils_chamados.get_status_color(status_atual)
+                    analista = clean_val(first_row.get('Analista'), "N/D").upper()
+                    gestor = clean_val(first_row.get('Gestor'), "N/D").upper()
+                    
+                    sla_texto = ""; sla_cor = "#333"
+                    prazo_val = _to_date_safe(first_row.get('Prazo'))
+                    if prazo_val:
+                        hoje_date = date.today(); dias_restantes = (prazo_val - hoje_date).days
+                        if dias_restantes < 0: sla_texto = f"SLA: {abs(dias_restantes)}d atrasado"; sla_cor = "#D32F2F"
+                        else: sla_texto = f"SLA: {dias_restantes}d restantes"; sla_cor = "#388E3C"
+                    
+                    with st.container(border=True):
+                        st.markdown(f"**{proj_nome}** | 🗓️ **{data_str}**")
+                        c1, c2, c3, c4 = st.columns([1.2, 2, 3, 2])
+                        with c2: st.markdown(f"<span style='color:#555; font-size:0.9em;'>Analista:</span> <span style='color:#1565C0; font-weight:500;'>{analista}</span>", unsafe_allow_html=True)
+                        with c3:
+                            cod_ag = str(first_row.get('Cód. Agência', '')).split('.')[0]
+                            nome_ag = str(nome_agencia).replace(cod_ag, '').strip(' -')
+                            st.markdown(f"<span style='color:#555; font-size:0.9em;'>Agência:</span> **AG {cod_ag} {nome_ag}**", unsafe_allow_html=True)
+                        with c4: st.markdown(f"""<div class="card-status-badge" style="background-color: {cor_status}; margin-bottom: 5px;">{status_atual}</div>""", unsafe_allow_html=True)
 
+                        c5, c6, c7, c8 = st.columns([2.5, 1.5, 2, 2])
+                        with c5: st.markdown(f"<div style='color:#0D47A1; font-weight:bold; font-size:1.1em; text-transform:uppercase;'>{nome_servico}</div>", unsafe_allow_html=True)
+                        with c6:
+                            if sla_texto: st.markdown(f"<span style='color:{sla_cor}; font-weight:bold; font-size:0.9em;'>{sla_texto}</span>", unsafe_allow_html=True)
+                        with c7: st.markdown(f"<span style='color:#555; font-size:0.9em;'>Gestor:</span> <span style='color:#C2185B; font-weight:bold;'>{gestor}</span>", unsafe_allow_html=True)
+                        with c8:
+                            if str(acao_atual).lower() == "faturado": st.markdown("<div style='text-align:center; color:#2E7D32; font-weight:bold;'>✔️ FATURADO</div>", unsafe_allow_html=True)
+                            elif acao_atual: st.markdown(f"<div style='text-align:center; color:#004D40; font-weight:bold; font-size:0.85em; text-transform:uppercase;'>{acao_atual}</div>", unsafe_allow_html=True)
+
+                        with st.expander(f" >  Ver/Editar Detalhes - ID: {first_row['ID']}"):
+                            form_key = f"form_{first_row['ID']}"
+                            with st.form(key=form_key):
+                                
+                                # --- 1. CARREGAR LISTAS (AGORA USANDO USUÁRIOS REAIS) ---
+                                try:
+                                    # Carrega Status e Projetos (Configurações)
+                                    df_status_cfg = utils.carregar_config_db("status")
+                                    opts_status_db = [str(x) for x in df_status_cfg.iloc[:, 0].dropna().tolist()] if not df_status_cfg.empty else []
+                                    
+                                    df_proj_cfg = utils.carregar_config_db("projetos_nomes")
+                                    opts_proj_db = [str(x) for x in df_proj_cfg.iloc[:, 0].dropna().tolist()] if not df_proj_cfg.empty else []
+                                    
+                                    df_tec_cfg = utils.carregar_config_db("tecnicos")
+                                    opts_tec_db = [str(x) for x in df_tec_cfg.iloc[:, 0].dropna().tolist()] if not df_tec_cfg.empty else []
+
+                                    # --- NOVA LÓGICA: CARREGAR USUÁRIOS DO SISTEMA ---
+                                    df_users = utils.carregar_usuarios_db()
+                                    
+                                    # Garante que a coluna se chame 'Nome' (igual na tela de cadastro)
+                                    if not df_users.empty:
+                                        df_users.columns = [col.capitalize() for col in df_users.columns]
+                                    
+                                    if not df_users.empty and "Nome" in df_users.columns:
+                                        opts_ana_db = [str(x) for x in df_users["Nome"].dropna().tolist()]
+                                    else:
+                                        opts_ana_db = []
+                                        
+                                except:
+                                    opts_status_db = []; opts_proj_db = []; opts_tec_db = []; opts_ana_db = []
+
+                                # --- 2. PREPARAR LISTAS (Safe String e Sort) ---
+                                def safe_str(val):
+                                    if pd.isna(val) or str(val).lower() in ['nan', 'none', '']: return ""
+                                    return str(val)
+
+                                # Status
+                                status_atual = safe_str(first_row.get('Status', '(Automático)'))
+                                lista_raw_st = opts_status_db + [status_atual] + ["(Automático)", "Finalizado", "Cancelado"]
+                                lista_final_status = sorted(list(set([s for s in lista_raw_st if s])))
+                                idx_st = lista_final_status.index(status_atual) if status_atual in lista_final_status else 0
+                                
+                                # Projetos
+                                val_proj_atual = safe_str(first_row.get('Projeto', ''))
+                                lista_raw_proj = opts_proj_db + [val_proj_atual]
+                                lista_final_proj = sorted(list(set([p for p in lista_raw_proj if p])))
+                                idx_proj = lista_final_proj.index(val_proj_atual) if val_proj_atual in lista_final_proj else 0
+
+                                # Técnico de Campo (Configuração)
+                                val_tec_atual = safe_str(first_row.get('Técnico', ''))
+                                lista_raw_tec = opts_tec_db + [val_tec_atual]
+                                lista_final_tec = sorted(list(set([t for t in lista_raw_tec if t])))
+                                idx_tec = lista_final_tec.index(val_tec_atual) if val_tec_atual in lista_final_tec else 0
+
+                                # Analistas (Usuários Cadastrados)
+                                val_ana_atual = safe_str(first_row.get('Analista', ''))
+                                lista_raw_ana = opts_ana_db + [val_ana_atual]
+                                lista_final_ana = sorted(list(set([a for a in lista_raw_ana if a]))) # Limpa vazios e ordena
+                                idx_ana = lista_final_ana.index(val_ana_atual) if val_ana_atual in lista_final_ana else 0
+
+                                # --- 3. CAMPOS DO FORMULÁRIO ---
+                                c1, c2, c3, c4 = st.columns(4)
+                                novo_status = c1.selectbox("Status", lista_final_status, index=idx_st, key=f"st_{form_key}")
+                                
+                                abert_val = _to_date_safe(first_row.get('Abertura')) or date.today()
+                                nova_abertura = c2.date_input("Abertura", value=abert_val, format="DD/MM/YYYY", key=f"ab_{form_key}")
+                                
+                                agend_val = _to_date_safe(first_row.get('Agendamento'))
+                                nova_agend = c3.date_input("Agendamento", value=agend_val, format="DD/MM/YYYY", key=f"ag_{form_key}")
+                                
+                                fim_val = _to_date_safe(first_row.get('Fechamento'))
+                                nova_fim = c4.date_input("Finalização", value=fim_val, format="DD/MM/YYYY", key=f"fim_{form_key}")
+
+                                c5, c6, c7 = st.columns(3)
+                                
+                                # SELECTBOX DE ANALISTAS (USUÁRIOS)
+                                novo_analista = c5.selectbox("Analista (Usuário)", lista_final_ana, index=idx_ana, key=f"ana_{form_key}")
+                                
+                                novo_gestor = c6.text_input("Gestor", value=first_row.get('Gestor', ''), key=f"ges_{form_key}")
+                                novo_tec = c7.selectbox("Técnico Campo", lista_final_tec, index=idx_tec, key=f"tec_{form_key}")
+
+                                c8, c9, c10 = st.columns(3)
+                                novo_projeto = c8.selectbox("Nome do Projeto", lista_final_proj, index=idx_proj, key=f"proj_{form_key}")
+                                novo_servico = c9.text_input("Serviço", value=first_row.get('Serviço', ''), key=f"serv_{form_key}")
+                                novo_sistema = c10.text_input("Sistema", value=first_row.get('Sistema', ''), key=f"sis_{form_key}")
+
+                                obs_val = first_row.get('Observações e Pendencias', '')
+                                nova_obs = st.text_area("Observações e Pendências", value=obs_val, height=100, key=f"obs_{form_key}")
+
+                                st.markdown("##### 🔗 Links e Protocolos")
+                                c11, c12, c13 = st.columns([1, 2, 1])
+                                chamado_num = str(first_row.get('Nº Chamado', ''))
+                                link_atual = first_row.get('Link Externo', '')
+                                with c11:
+                                    st.caption("Nº Chamado (Acesso)")
+                                    if pd.notna(link_atual) and str(link_atual).startswith('http'): st.link_button(f"🔗 {chamado_num}", link_atual, use_container_width=True)
+                                    else: st.text_input("Chamado", value=chamado_num, disabled=True, label_visibility="collapsed", key=f"dis_ch_{form_key}")
+                                if pd.isna(link_atual): link_atual = ""
+                                novo_link = c12.text_input("Link Externo (Cole aqui)", value=link_atual, key=f"lnk_{form_key}")
+                                proto_val = first_row.get('Nº Protocolo', ''); novo_proto = c13.text_input("Nº Protocolo", value=proto_val if pd.notna(proto_val) else "", key=f"prot_{form_key}")
+                                st.markdown("---")
+                                
+                                st.markdown("##### 📦 Descrição (Equipamentos do Projeto)")
+                                desc_texto_final = ""
+                                nome_serv_lower = str(nome_servico).lower().strip()
+                                if nome_serv_lower in SERVICOS_SEM_EQUIPAMENTO: desc_texto_final = f"Realizar {nome_servico}"
+                                else:
+                                    itens_desc = []
+                                    for sys, df_sys in df_grupo.groupby('Sistema'):
+                                        sys_clean = clean_val(sys, "Sistema Geral"); itens_desc.append(f"**{sys_clean}**")
+                                        for _, row_eq in df_sys.iterrows():
+                                            qtd = row_eq.get('Qtd.', 0); equip = row_eq.get('Equipamento', 'Indefinido')
+                                            itens_desc.append(f"- {qtd}x {equip}"); itens_desc.append("")
+                                    desc_texto_final = "<br>".join(itens_desc)
+                                st.markdown(f"<div style='background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 5px; padding: 10px; font-size: 0.9rem; max-height: 200px; overflow-y: auto;'>{desc_texto_final}</div>", unsafe_allow_html=True)
+                                st.markdown("<br>", unsafe_allow_html=True)
+                                
+                                btn_salvar = st.form_submit_button("💾 Salvar Alterações", use_container_width=True)
+                                if btn_salvar:
+                                    updates = {
+                                        "Data Abertura": nova_abertura, "Data Agendamento": novo_agend, "Data Finalização": novo_fim,
+                                        "Analista": novo_analista, "Gestor": novo_gestor, "Técnico": novo_tec,
+                                        "Projeto": novo_projeto, "Serviço": novo_servico, "Sistema": novo_sistema,
+                                        "Observações e Pendencias": nova_obs, "Link Externo": novo_link, "Nº Protocolo": novo_proto
+                                    }
+                                    recalcular = False
+                                    if novo_status != "(Automático)":
+                                        updates["Status"] = novo_status
+                                        if novo_status in ["Cancelado", "Pausado"]: updates["Sub-Status"] = ""
+                                        recalcular = False
+                                        if novo_status == "Finalizado" and novo_fim is None: st.error("Data Finalização obrigatória!"); st.stop()
+                                    else: recalcular = True
+                                    
+                                    with st.spinner("Salvando..."):
+                                        count = 0
+                                        for cid in ids_chamados:
+                                            if utils_chamados.atualizar_chamado_db(cid, updates): count += 1
+                                        if count > 0:
+                                            st.success("Salvo!")
+                                            st.cache_data.clear()
+                                            if recalcular:
+                                                df_all = utils_chamados.carregar_chamados_db()
+                                                df_target = df_all[df_all['ID'].isin(ids_chamados)]
+                                                calcular_e_atualizar_status_projeto(df_target, ids_chamados)
+                                                st.cache_data.clear()
+                                            time.sleep(0.5)
+                                            st.rerun()
+                                        else: st.error("Erro ao salvar.")
