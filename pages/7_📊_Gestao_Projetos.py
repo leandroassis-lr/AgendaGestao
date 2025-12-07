@@ -525,17 +525,17 @@ else:
                 l2_c1, l2_c2, l2_c3, l2_c4 = st.columns([2, 1.5, 1.5, 2])
                 
                 with l2_c1: 
-                    st.markdown(f"<span class='meta-label'>PROJETO</span><br><b>{proj_nome}</b>", unsafe_allow_html=True)
+                    st.markdown(f"<span class='meta-label'></span><br><b>{proj_nome}</b>", unsafe_allow_html=True)
                 with l2_c2:
-                    st.markdown(f"<span class='meta-label'>DATA</span><br>{data_str}", unsafe_allow_html=True)
+                    st.markdown(f"<span class='meta-label'>📅</span><br>{data_str}", unsafe_allow_html=True)
                 with l2_c3:
-                    st.markdown(f"<span class='meta-label'>ANALISTA</span><br><span class='{css_ana}'>{nome_ana_raw}</span>", unsafe_allow_html=True)
+                    st.markdown(f"<span class='meta-label'></span><br><span class='{css_ana}'>{nome_ana_raw}</span>", unsafe_allow_html=True)
                 with l2_c4:
-                    st.markdown(f"<span class='meta-label'>STATUS</span><br><span class='status-badge' style='background-color:{cor_st};'>{st_atual}</span>", unsafe_allow_html=True)
+                    st.markdown(f"<span class='meta-label'></span><br><span class='status-badge' style='background-color:{cor_st};'>{st_atual}</span>", unsafe_allow_html=True)
 
                 # LINHA 3: Serviço - SLA - Gestor - Ação
                 st.markdown("<div style='margin-top: 6px;'></div>", unsafe_allow_html=True) # Espacinho
-                l3_c1, l3_c2, l3_c3, l3_c4 = st.columns([2.5, 1.5, 1.5, 1.5])
+                l3_c1, l3_c2, l3_c3, l3_c4 = st.columns([2, 1.5, 1.5, 2])
                 
                 with l3_c1:
                     st.markdown(f"<span style='color:#1565C0; font-weight:600;'>{nome_servico}</span>", unsafe_allow_html=True)
@@ -650,6 +650,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
