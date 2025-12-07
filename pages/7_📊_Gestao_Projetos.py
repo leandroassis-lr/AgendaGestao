@@ -29,7 +29,7 @@ st.markdown("""
         .gestor-bold { color: #000000; font-weight: 900; font-size: 0.9em; }
 
         /* Status Badge */
-        .status-badge { padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 0.75em; text-transform: uppercase; color: white; display: inline-block;}
+        .status-badge { padding: 6px 10px; border-radius: 8px; font-weight: bold; font-size: 1.75em; text-transform: uppercase; color: white; display: inline-block;}
         
         /* Ação */
         .action-text { color: #004D40; font-weight: 700; font-size: 0.85em; text-transform: uppercase; }
@@ -522,12 +522,12 @@ else:
                 
                 # LINHA 2: Projeto - Agendamento - Analista - Status
                 # Dividido em 4 colunas proporcionais
-                l2_c1, l2_c2, l2_c3, l2_c4 = st.columns([2, 1.5, 1.5, 2])
+                l2_c1, l2_c2, l2_c3, l2_c4 = st.columns([2, 1.5, 1.5, 1])
                 
                 with l2_c1: 
                     st.markdown(f"<span class='meta-label'></span><br><b>{proj_nome}</b>", unsafe_allow_html=True)
                 with l2_c2:
-                    st.markdown(f"<span class='meta-label'>📅</span><br>{data_str}", unsafe_allow_html=True)
+                    st.markdown(f"<span class='meta-label'></span><br>📅 {data_str}", unsafe_allow_html=True)
                 with l2_c3:
                     st.markdown(f"<span class='meta-label'></span><br><span class='{css_ana}'>{nome_ana_raw}</span>", unsafe_allow_html=True)
                 with l2_c4:
@@ -535,7 +535,7 @@ else:
 
                 # LINHA 3: Serviço - SLA - Gestor - Ação
                 st.markdown("<div style='margin-top: 6px;'></div>", unsafe_allow_html=True) # Espacinho
-                l3_c1, l3_c2, l3_c3, l3_c4 = st.columns([2, 1.5, 1.5, 2])
+                l3_c1, l3_c2, l3_c3, l3_c4 = st.columns([2, 1.5, 1.5, 1])
                 
                 with l3_c1:
                     st.markdown(f"<span style='color:#1565C0; font-weight:600;'>{nome_servico}</span>", unsafe_allow_html=True)
@@ -650,6 +650,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
