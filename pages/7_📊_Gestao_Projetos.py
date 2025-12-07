@@ -116,7 +116,7 @@ def run_importer_dialog():
                     'SERVIÇO': 'Serviço', 'SERVICO': 'Serviço',
                     'STATUS': 'Status',
                     'DATA ABERTURA': 'Abertura', 'DATA AGENDAMENTO': 'Agendamento', 'DATA PRAZO': 'Prazo',
-                    'DESCRIÇÃO': 'Sistema', 'EQUIPAMENTO': 'Sistema', # O segredo dos equipamentos está aqui
+                    'DESCRIÇÃO': 'Sistema', 'EQUIPAMENTO': 'Sistema',
                     'OBSERVAÇÃO': 'Observações e Pendencias', 'QUANTIDADE': 'Qtd'
                 }
                 
@@ -130,56 +130,67 @@ def run_importer_dialog():
                     if col not in df_raw.columns: df_raw[col] = ""
                 df_raw = df_raw.fillna("")
 
-                # --- 2. AGRUPAMENTO INTELIGENTE (RESOLVE AS 10 LINHAS) ---
-                # Essa função cria um texto bonito: "3x Câmera Dome | 5x Sensor IVP"
-                def agrupar_equipamentos(grupo):
-                    itens = []
-                    for _, row in grupo.iterrows():
-                        qtd = str(row.get('Qtd', '')).strip()
-                        desc = str(row.get('Sistema', '')).strip()
-                        if desc:
-                            item_str = f"{qtd}x {desc}" if qtd and qtd != "0" else desc
-                            itens.append(item_str)
-                    return " | ".join(itens)
+                # --- 2. PRÉ-PROCESSAMENTO (CORREÇÃO DO ERRO) ---
+                # Criamos o texto formatado "3x Câmera" ANTES de agrupar
+                def formatar_item(row):
+                    qtd = str(row['Qtd']).strip()
+                    desc = str(row['Sistema']).strip()
+                    if not desc: return ""
+                    if qtd and qtd != "0" and qtd.lower() != "nan":
+                        return f"{qtd}x {desc}"
+                    return desc
 
-                # Regras para as outras colunas (pega sempre o primeiro valor encontrado)
-                regras = {c: 'first' for c in df_raw.columns if c not in ['Sistema', 'Qtd', 'Observações e Pendencias']}
-                # Regras especiais
-                regras['Sistema'] = agrupar_equipamentos # Aplica a função acima
-                regras['Observações e Pendencias'] = lambda x: " | ".join([s for s in x if s]) # Junta obs
+                df_raw['Item_Formatado'] = df_raw.apply(formatar_item, axis=1)
+
+                # --- 3. AGRUPAMENTO INTELIGENTE ---
+                # Função simples para juntar textos com pipe
+                def juntar_textos(lista):
+                    return " | ".join([str(s) for s in lista if str(s).strip()])
+
+                # Regras de agrupamento
+                # Para todas as colunas normais, pega o primeiro valor.
+                # Para as colunas de texto variável, aplica a junção.
+                regras = {c: 'first' for c in df_raw.columns if c not in ['Sistema', 'Qtd', 'Observações e Pendencias', 'Item_Formatado']}
                 
-                # Agrupa
+                regras['Item_Formatado'] = juntar_textos
+                regras['Observações e Pendencias'] = juntar_textos
+                
+                # Removemos Sistema e Qtd da regra pois usaremos Item_Formatado
+                if 'Sistema' in regras: del regras['Sistema']
+                if 'Qtd' in regras: del regras['Qtd']
+
+                # Realiza o agrupamento
                 df_grouped = df_raw.groupby('Nº Chamado', as_index=False).agg(regras)
                 
-                # --- 3. SEPARAÇÃO (NOVOS vs EXISTENTES) ---
+                # Renomeia a coluna temporária para o nome final do banco
+                df_grouped = df_grouped.rename(columns={'Item_Formatado': 'Sistema'})
+                
+                # --- 4. SEPARAÇÃO (NOVOS vs EXISTENTES) ---
                 df_banco = utils_chamados.carregar_chamados_db()
                 
                 lista_novos = []
                 lista_atualizar = []
                 
                 if not df_banco.empty:
-                    # Cria um dicionário {Numero_Chamado: ID_Banco} para saber quem atualizar
                     mapa_ids = dict(zip(df_banco['Nº Chamado'].astype(str).str.strip(), df_banco['ID']))
                     
                     for _, row in df_grouped.iterrows():
                         chamado_num = str(row['Nº Chamado']).strip()
                         if chamado_num in mapa_ids:
-                            # Adiciona o ID do banco na linha para podermos atualizar
                             row['ID_Banco'] = mapa_ids[chamado_num]
                             lista_atualizar.append(row)
                         else:
                             lista_novos.append(row)
                 else:
-                    # Banco vazio, tudo é novo
                     for _, row in df_grouped.iterrows(): lista_novos.append(row)
 
                 df_insert = pd.DataFrame(lista_novos)
                 df_update = pd.DataFrame(lista_atualizar)
 
-                # --- 4. EXIBIÇÃO E CONFIRMAÇÃO ---
+                # --- 5. EXIBIÇÃO E CONFIRMAÇÃO ---
                 c1, c2 = st.columns(2)
                 c1.metric("🆕 Novos Chamados", len(df_insert))
-                c2.metric("🔄 Chamados para Atualizar", len(df_update), help="Já existem no banco. Serão atualizados com a nova descrição/equipamentos.")
+                c2.metric("🔄 Chamados para Atualizar", len(df_update), help="Já existem no banco. Serão atualizados com a nova descrição.")
                 
                 if st.button("🚀 Processar Importação"):
                     bar = st.progress(0)
@@ -197,17 +208,13 @@ def run_importer_dialog():
                         total_up = len(df_update)
                         for i, row in enumerate(df_update.iterrows()):
                             idx, dados = row
-                            # Monta o dicionário com o que queremos atualizar
-                            # Focamos em atualizar DESCRIÇÃO, STATUS e OBSERVAÇÕES
                             updates = {
-                                'Sistema': dados['Sistema'], # Aqui vai a nova quantidade (ex: 8x Câmera)
+                                'Sistema': dados['Sistema'], # Atualiza a lista de equipamentos
                                 'Observações e Pendencias': dados['Observações e Pendencias'],
-                                'Status': dados['Status'] # Opcional: Atualiza o status também
+                                'Status': dados['Status']
                             }
-                            # Chama função de update usando o ID real do banco
                             utils_chamados.atualizar_chamado_db(dados['ID_Banco'], updates)
                             
-                            # Atualiza barra de progresso (de 50% a 100%)
                             if total_up > 0:
                                 progresso = 50 + int((i / total_up) * 50)
                                 bar.progress(min(progresso, 100))
@@ -847,3 +854,4 @@ else:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
+
