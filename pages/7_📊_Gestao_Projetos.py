@@ -780,6 +780,75 @@ else:
                                             st.rerun()
                                         else: st.error("Erro ao salvar.")
 
-
+    # --- ABA 2: AGENDA SEMANAL (CALENDÁRIO) ---
+    with aba_calendario:
+        st.subheader("🗓️ Agenda da Semana")
+        
+        col_nav, col_vazia = st.columns([1, 4])
+        data_referencia = col_nav.date_input("Escolha um dia da semana que deseja visualizar:", value=date.today())
+        
+        inicio_semana = data_referencia - timedelta(days=data_referencia.weekday())
+        
+        st.markdown(f"**Visualizando semana de:** {inicio_semana.strftime('%d/%m')} a {(inicio_semana + timedelta(days=4)).strftime('%d/%m')}")
+        st.markdown("---")
+        
+        col_seg, col_ter, col_qua, col_qui, col_sex = st.columns(5)
+        cols_dias = [col_seg, col_ter, col_qua, col_qui, col_sex]
+        nomes_dias = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"]
+        
+        for i, col in enumerate(cols_dias):
+            dia_atual = inicio_semana + timedelta(days=i)
+            dia_str = dia_atual.strftime('%d/%m')
+            
+            with col:
+                st.markdown(f"""
+                    <div style="text-align: center; border-bottom: 2px solid #eee; padding-bottom: 5px; margin-bottom: 10px;">
+                        <div style="font-weight: bold; color: #555;">{nomes_dias[i]}</div>
+                        <div style="font-size: 0.85em; color: #999;">{dia_str}</div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                if not df_view.empty:
+                    df_dia = df_view[pd.to_datetime(df_view['Agendamento']).dt.date == dia_atual]
+                else:
+                    df_dia = pd.DataFrame()
+                
+                if df_dia.empty:
+                    st.markdown("<div style='text-align:center; color:#e0e0e0; font-size:2em; margin-top:20px;'>•</div>", unsafe_allow_html=True)
+                else:
+                    df_dia = df_dia.sort_values(by='Analista')
+                    
+                    for _, row in df_dia.iterrows():
+                        id_chamado = row['ID']
+                        servico = str(row.get('Serviço', 'Serviço')).strip()
+                        if len(servico) > 25: servico = servico[:22] + "..."
+                            
+                        analista = str(row.get('Analista', 'N/D')).split(' ')[0].upper()
+                        cod_ag = str(row.get('Cód. Agência', '')).split('.')[0]
+                        status = row.get('Status', '')
+                        
+                        try: cor_borda = utils_chamados.get_status_color(status)
+                        except: cor_borda = "#ccc"
+                        
+                        st.markdown(f"""
+                        <div style="
+                            background-color: white; 
+                            border-left: 5px solid {cor_borda}; 
+                            border-radius: 6px; 
+                            padding: 8px 10px; 
+                            margin-bottom: 8px; 
+                            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                            font-family: sans-serif;
+                        ">
+                            <div style="font-weight: bold; font-size: 0.85em; color: #333; margin-bottom: 2px;">{servico}</div>
+                            <div style="font-size: 0.8em; color: #666; display: flex; justify-content: space-between;">
+                                <span>🏠 AG {cod_ag}</span>
+                            </div>
+                            <div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed #eee; display: flex; justify-content: space-between; align-items: center;">
+                                <span style="font-size: 0.75em; font-weight: bold; color: #1565C0; background-color: #E3F2FD; padding: 2px 6px; border-radius: 4px;">{analista}</span>
+                                <span style="font-size: 0.7em; color: #999;">ID {id_chamado}</span>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
 
 
