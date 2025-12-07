@@ -481,7 +481,7 @@ else:
     # A. Buscador Geral
     busca_geral = col_busca.text_input("Buscador Geral (Texto)")
     
-    # B. Filtro por Projeto
+    # B. Filtro por Projeto (Carrega lista do banco ou do DF atual)
     try:
         df_proj_cfg = utils.carregar_config_db("projetos_nomes")
         opcoes_projeto_db = df_proj_cfg.iloc[:, 0].tolist() if not df_proj_cfg.empty else []
@@ -490,21 +490,42 @@ else:
     if not opcoes_projeto_db:
         opcoes_projeto_db = sorted(df_filtrado['Projeto'].dropna().unique().tolist())
     
-    # ALTERAÇÃO 1: default=[] para iniciar vazio (sem tags pré-selecionadas)
-    filtro_projeto_multi = col_proj.multiselect("Projetos", options=opcoes_projeto_db, default=[])
+    # --- LÓGICA DE REDIRECIONAMENTO (CORREÇÃO AQUI) ---
+    # Verifica se veio algum projeto selecionado lá da Visão Geral (botão)
+    padrao_projetos = []
+    if "sel_projeto" in st.session_state:
+        proj_selecionado = st.session_state["sel_projeto"]
+        # Verifica se o projeto existe na lista para evitar erros
+        if proj_selecionado in opcoes_projeto_db:
+            padrao_projetos = [proj_selecionado]
+        
+        # Limpa a variável da sessão para não ficar travado nesse filtro para sempre
+        # Assim, se o usuário limpar o filtro manualmente depois, ele obedece
+        del st.session_state["sel_projeto"]
+    
+    # Cria o multiselect com o padrão definido (Vazio ou Com o Projeto clicado)
+    filtro_projeto_multi = col_proj.multiselect("Projetos", options=opcoes_projeto_db, default=padrao_projetos)
     
     # C. Filtro por Status
     opcoes_status = sorted(df_filtrado['Status'].dropna().unique().tolist())
-    # ALTERAÇÃO 1: default=[] para iniciar vazio
     filtro_status_multi = col_status.multiselect("Status", options=opcoes_status, default=[])
     
     # D. Filtro por Data
+    # ... (o resto do código de data e aplicação dos filtros continua igual) ...
     df_filtrado['Agendamento'] = pd.to_datetime(df_filtrado['Agendamento'], errors='coerce')
     data_min = df_filtrado['Agendamento'].min()
     data_max = df_filtrado['Agendamento'].max()
     if pd.isna(data_min): data_min = date.today()
     if pd.isna(data_max): data_max = date.today()
     
+    filtro_data_range = col_data.date_input(
+        "Período (Agendamento)", 
+        value=(data_min, data_max), 
+        format="DD/MM/YYYY"
+    )
+
+    df_view = df_filtrado.copy()
+  
     # ALTERAÇÃO 2: format="DD/MM/YYYY" para padronizar a exibição
     filtro_data_range = col_data.date_input(
         "Período (Agendamento)", 
@@ -869,6 +890,7 @@ else:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
+
 
 
 
