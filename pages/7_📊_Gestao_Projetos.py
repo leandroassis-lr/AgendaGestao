@@ -644,7 +644,7 @@ else:
                     c1, c2, c3, c4 = st.columns([2, 1.2, 1.5, 1.5])
                     
                     with c1: st.markdown(f"#### {proj_nome}")
-                    with c2: st.markdown(f"#####🗓️ {data_str}")
+                    with c2: st.markdown(f"####🗓️ {data_str}")
                     with c3: st.markdown(f"👤 {analista}")
                     with c4: 
                         # Badge de Status
@@ -872,6 +872,7 @@ else:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
+
 
 
 
