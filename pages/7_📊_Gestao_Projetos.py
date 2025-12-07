@@ -443,7 +443,7 @@ else:
     st.divider()
 
     # --- 1. CRIAÇÃO DAS ABAS (ESSA LINHA É ESSENCIAL) ---
-    aba_lista, aba_calendario = st.tabs(["📋 Lista Detalhada", "📅 Linha do Tempo (Gantt)"])
+    aba_lista, aba_calendario = st.tabs(["📋 Lista Detalhada", "📅 Agenda Semanal"])
 
     # --- 2. ABA: LISTA DETALHADA ---
     with aba_lista:    
@@ -561,7 +561,7 @@ else:
                                 nova_abertura = c2.date_input("Abertura", value=abert_val, format="DD/MM/YYYY", key=f"ab_{form_key}")
                                 
                                 agend_val = _to_date_safe(first_row.get('Agendamento'))
-                                nova_agend = c3.date_input("Agendamento", value=agend_val, format="DD/MM/YYYY", key=f"ag_{form_key}")
+                                novo_agend = c3.date_input("Agendamento", value=agend_val, format="DD/MM/YYYY", key=f"ag_{form_key}")
                                 
                                 fim_val = _to_date_safe(first_row.get('Fechamento'))
                                 nova_fim = c4.date_input("Finalização", value=fim_val, format="DD/MM/YYYY", key=f"fim_{form_key}")
@@ -723,5 +723,6 @@ else:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
+
 
 
