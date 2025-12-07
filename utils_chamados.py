@@ -168,7 +168,7 @@ DB_PATH = "dados_projeto.db"
 def bulk_insert_chamados_db(df: pd.DataFrame):
     """
     Recebe um DataFrame tratado pelo importador e salva no Banco de Dados SQLite.
-    Faz INSERT (se novo) ou UPDATE (se já existe).
+    VERSÃO DEBUG: Mostra erro detalhado e para a execução.
     """
     if df.empty:
         return False, 0
@@ -179,8 +179,7 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         cursor = conn.cursor()
         
         # 1. MAPEAMENTO DE NOMES
-        # Lado Esquerdo: Como está no DataFrame (Vindo do Importador)
-        # Lado Direito:  Como é o nome da COLUNA NO SEU BANCO DE DADOS (SQLite)
+        # Lado Esquerdo: DataFrame | Lado Direito: Banco de Dados
         map_db = {
             'Nº Chamado': 'CHAMADO',
             'Cód. Agência': 'N° AGENCIA',
@@ -201,35 +200,26 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         # 2. PREPARAÇÃO DOS DADOS
         df_save = df.copy()
         
-        # Garante tratamento de datas para o padrão do banco (YYYY-MM-DD)
         cols_data = ['Agendamento', 'Abertura', 'Prazo']
         for col in cols_data:
             if col in df_save.columns:
-                # Converte para datetime e extrai apenas a data (sem hora)
                 df_save[col] = pd.to_datetime(df_save[col], errors='coerce').dt.date
-                # Transforma NaT (erro de data) em None (NULL no SQL)
                 df_save[col] = df_save[col].astype(object).where(df_save[col].notnull(), None)
 
-        # Renomeia as colunas do DF para os nomes do Banco
-        # (Filtra apenas as colunas que realmente existem no DF para não dar erro)
         cols_to_rename = {k: v for k, v in map_db.items() if k in df_save.columns}
         df_save = df_save.rename(columns=cols_to_rename)
         
-        # Mantém apenas as colunas que foram mapeadas (Segurança para não tentar salvar lixo)
         cols_finais = list(cols_to_rename.values())
         df_save = df_save[cols_finais]
 
         if 'CHAMADO' not in df_save.columns:
             st.error("Erro interno: Coluna CHAMADO se perdeu no mapeamento.")
-            return False, 0
+            st.stop() # Para tudo aqui
 
-        # 3. CONSTRUÇÃO DO SQL (UPSERT - Inserir ou Atualizar)
-        # Monta a lista de colunas: "CHAMADO", "N° AGENCIA", "RESPONSÁVEL"...
+        # 3. CONSTRUÇÃO DO SQL
         colunas_str = ", ".join([f'"{c}"' for c in cols_finais]) 
         placeholders = ", ".join(["?"] * len(cols_finais))
         
-        # Monta a parte de atualização (SET NOME=Excluded.NOME...)
-        # Isso diz: "Se o CHAMADO já existe, atualize os outros campos"
         update_clause = ", ".join([f'"{col}" = excluded."{col}"' for col in cols_finais if col != 'CHAMADO'])
 
         sql = f"""
@@ -238,7 +228,6 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
             ON CONFLICT(CHAMADO) DO UPDATE SET {update_clause}
         """
         
-        # Converte o DataFrame para lista de listas (formato que o SQLite aceita)
         dados = df_save.values.tolist()
         
         # Executa
@@ -249,7 +238,33 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
 
     except Exception as e:
         if conn: conn.rollback()
-        st.error(f"Erro ao salvar no banco de dados: {e}")
+        
+        # --- BLOCO DE DEPURAÇÃO VISUAL ---
+        st.error("🚨 ERRO CRÍTICO AO SALVAR NO BANCO")
+        
+        # Mostra o erro técnico exato
+        st.exception(e) 
+        
+        with st.expander("🔍 Ver Detalhes para Correção (Clique aqui)", expanded=True):
+            st.markdown("### 1. Colunas que tentamos salvar:")
+            st.code(str(cols_finais))
+            
+            st.markdown("### 2. Verificar Nomes no Banco:")
+            try:
+                # Tenta ler o nome real das colunas no banco para comparar
+                df_real = pd.read_sql("PRAGMA table_info(Chamados)", conn)
+                st.write("Colunas que existem REALMENTE na tabela 'Chamados':")
+                st.dataframe(df_real[['name', 'type']])
+            except:
+                st.write("Não foi possível ler a estrutura da tabela.")
+
+            st.markdown("### 3. Amostra dos Dados:")
+            if 'df_save' in locals():
+                st.dataframe(df_save.head(3))
+        
+        # Importante: Isso impede a página de recarregar e sumir com o erro
+        st.stop() 
+        
         return False, 0
     finally:
         if conn: conn.close()
@@ -418,6 +433,7 @@ def resetar_tabela_chamados():
     except Exception as e:
         conn.rollback()
         return False, f"Erro ao limpar banco: {e}"
+
 
 
 
