@@ -555,22 +555,29 @@ else:
 
                                 # --- 3. CAMPOS DO FORMULÁRIO ---
                                 c1, c2, c3, c4 = st.columns(4)
+                                
+                                # Status
                                 novo_status = c1.selectbox("Status", lista_final_status, index=idx_st, key=f"st_{form_key}")
                                 
+                                # Data Abertura (Manteve nova_abertura pois está correto no save)
                                 abert_val = _to_date_safe(first_row.get('Abertura')) or date.today()
                                 nova_abertura = c2.date_input("Abertura", value=abert_val, format="DD/MM/YYYY", key=f"ab_{form_key}")
                                 
+                                # Data Agendamento (CORRIGIDO: de nova_agend para novo_agend)
                                 agend_val = _to_date_safe(first_row.get('Agendamento'))
                                 novo_agend = c3.date_input("Agendamento", value=agend_val, format="DD/MM/YYYY", key=f"ag_{form_key}")
                                 
+                                # Data Finalização (CORRIGIDO: de nova_fim para novo_fim)
                                 fim_val = _to_date_safe(first_row.get('Fechamento'))
-                                nova_fim = c4.date_input("Finalização", value=fim_val, format="DD/MM/YYYY", key=f"fim_{form_key}")
-
+                                novo_fim = c4.date_input("Finalização", value=fim_val, format="DD/MM/YYYY", key=f"fim_{form_key}")
+        
+                                # Linha 2
                                 c5, c6, c7 = st.columns(3)
                                 novo_analista = c5.selectbox("Analista (Usuário)", lista_final_ana, index=idx_ana, key=f"ana_{form_key}")
                                 novo_gestor = c6.text_input("Gestor", value=first_row.get('Gestor', ''), key=f"ges_{form_key}")
                                 novo_tec = c7.selectbox("Técnico Campo", lista_final_tec, index=idx_tec, key=f"tec_{form_key}")
-
+        
+                                # Linha 3
                                 c8, c9, c10 = st.columns(3)
                                 novo_projeto = c8.selectbox("Nome do Projeto", lista_final_proj, index=idx_proj, key=f"proj_{form_key}")
                                 novo_servico = c9.text_input("Serviço", value=first_row.get('Serviço', ''), key=f"serv_{form_key}")
@@ -723,6 +730,7 @@ else:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
+
 
 
 
