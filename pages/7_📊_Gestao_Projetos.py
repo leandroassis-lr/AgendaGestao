@@ -441,7 +441,7 @@ else:
         st.info("Sem dados para exibir resumo de status.")
 
     st.divider()
-
+    
     # 4. LISTA DETALHADA + FORMULÁRIO INTELIGENTE
     with aba_lista:    
         st.markdown(f"### 📋 Detalhes ({len(df_view)} registros)")
