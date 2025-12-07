@@ -163,106 +163,97 @@ def carregar_chamados_db(agencia_id_filtro=None):
             'Cód. Agência': 'N° AGENCIA'
         })
 
+DB_PATH = "dados_projeto.db" 
+
 def bulk_insert_chamados_db(df: pd.DataFrame):
-
-    conn = get_valid_conn()
-    if not conn:
+    """
+    Recebe um DataFrame tratado pelo importador e salva no Banco de Dados SQLite.
+    Faz INSERT (se novo) ou UPDATE (se já existe).
+    """
+    if df.empty:
         return False, 0
 
-    # MAPEAMENTO DE IMPORTAÇÃO
-    MAP_IMPORT = {
-        "Nº Chamado": "CHAMADO",
-        "Cód. Agência": "N° AGENCIA",
-        "Analista": "RESPONSÁVEL",
-        "Gestor": "GESTOR ITAU",
-        "Serviço": "TIPO DO SERVIÇO",
-        "Projeto": "NOME DO PROJETO",
-        "Agendamento": "AGENDAMENTO",
-        "Sistema": "SISTEMA",
-        "Qtd": "QTD"
-    }
-
-    # Renomeia colunas do DF ORIGINAL
-    df_renamed = df.rename(columns=lambda c: str(c).strip().upper())
-
-    # Mapeia colunas que EXISTEM no arquivo
-    map_para_renomear = {
-        excel_header.upper(): db_col.upper()
-        for excel_header, db_col in MAP_IMPORT.items()
-        if excel_header.upper() in df_renamed.columns
-    }
-
-    df_to_insert = df_renamed.rename(columns=map_para_renomear)
-
-    # VALIDAÇÕES
-    if 'CHAMADO' not in df_to_insert.columns:
-        st.error("Erro: A planilha deve conter o cabeçalho 'Nº Chamado'.")
-        return False, 0
-
-    if 'N° AGENCIA' not in df_to_insert.columns:
-        st.error("Erro: A planilha deve conter o cabeçalho 'Cód. Agência'.")
-        return False, 0
-
-    # TRATA DATAS
-    df_to_insert['DATA_ABERTURA'] = date.today()
-
-    cols_data = ['DATA_ABERTURA', 'DATA_FECHAMENTO', 'AGENDAMENTO']
-    for col in cols_data:
-        if col in df_to_insert.columns:
-            df_to_insert[col] = pd.to_datetime(df_to_insert[col], errors='coerce', dayfirst=True)
-        else:
-            df_to_insert[col] = None
-
-    # TRATA NUMÉRICOS
-    if 'VALOR_CHAMADO' in df_to_insert.columns:
-        df_to_insert['VALOR_CHAMADO'] = pd.to_numeric(df_to_insert['VALOR_CHAMADO'], errors='coerce').fillna(0.0)
-
-    if 'QTD' in df_to_insert.columns:
-        df_to_insert['QTD'] = pd.to_numeric(df_to_insert['QTD'], errors='coerce').astype('Int64')
-
-    # SELECIONA COLUNAS VÁLIDAS
-    colunas_validas = [c.upper() for c in MAP_IMPORT.values()] + ['DATA_ABERTURA']
-    df_final = df_to_insert[[c for c in df_to_insert.columns if c in colunas_validas]]
-
-    # CONVERTE LINHAS EM VALORES
-    values = []
-    for _, row in df_final.iterrows():
-        linha = []
-        for cell in row:
-            if pd.isna(cell) or cell is pd.NaT:
-                linha.append(None)
-            elif isinstance(cell, (pd.Timestamp, datetime)):
-                linha.append(cell.date())
-            else:
-                linha.append(cell)
-        values.append(tuple(linha))
-
-    # MONTA SQL
-    cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns))
-    placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
-
-    update_clause = sql.SQL(", ").join(
-        sql.SQL("{} = EXCLUDED.{}").format(sql.Identifier(col), sql.Identifier(col))
-        for col in df_final.columns if col != 'CHAMADO'
-    )
-
-    query = sql.SQL(
-        "INSERT INTO chamados ({}) VALUES ({}) "
-        "ON CONFLICT (CHAMADO) DO UPDATE SET {}"
-    ).format(cols_sql, placeholders, update_clause)
-
+    conn = None
     try:
-        with conn.cursor() as cur:
-            cur.executemany(query, values)
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # 1. MAPEAMENTO DE NOMES
+        # Lado Esquerdo: Como está no DataFrame (Vindo do Importador)
+        # Lado Direito:  Como é o nome da COLUNA NO SEU BANCO DE DADOS (SQLite)
+        map_db = {
+            'Nº Chamado': 'CHAMADO',
+            'Cód. Agência': 'N° AGENCIA',
+            'Nome Agência': 'NOME DA AGÊNCIA',
+            'Analista': 'RESPONSÁVEL',
+            'Gestor': 'GESTOR ITAU',
+            'Serviço': 'TIPO DO SERVIÇO',
+            'Projeto': 'NOME DO PROJETO',
+            'Agendamento': 'AGENDAMENTO',
+            'Sistema': 'SISTEMA',
+            'Qtd': 'QTD',
+            'Status': 'STATUS',
+            'Observações e Pendencias': 'OBSERVAÇÃO',
+            'Abertura': 'DATA_ABERTURA',
+            'Prazo': 'DATA_FECHAMENTO'
+        }
+        
+        # 2. PREPARAÇÃO DOS DADOS
+        df_save = df.copy()
+        
+        # Garante tratamento de datas para o padrão do banco (YYYY-MM-DD)
+        cols_data = ['Agendamento', 'Abertura', 'Prazo']
+        for col in cols_data:
+            if col in df_save.columns:
+                # Converte para datetime e extrai apenas a data (sem hora)
+                df_save[col] = pd.to_datetime(df_save[col], errors='coerce').dt.date
+                # Transforma NaT (erro de data) em None (NULL no SQL)
+                df_save[col] = df_save[col].astype(object).where(df_save[col].notnull(), None)
+
+        # Renomeia as colunas do DF para os nomes do Banco
+        # (Filtra apenas as colunas que realmente existem no DF para não dar erro)
+        cols_to_rename = {k: v for k, v in map_db.items() if k in df_save.columns}
+        df_save = df_save.rename(columns=cols_to_rename)
+        
+        # Mantém apenas as colunas que foram mapeadas (Segurança para não tentar salvar lixo)
+        cols_finais = list(cols_to_rename.values())
+        df_save = df_save[cols_finais]
+
+        if 'CHAMADO' not in df_save.columns:
+            st.error("Erro interno: Coluna CHAMADO se perdeu no mapeamento.")
+            return False, 0
+
+        # 3. CONSTRUÇÃO DO SQL (UPSERT - Inserir ou Atualizar)
+        # Monta a lista de colunas: "CHAMADO", "N° AGENCIA", "RESPONSÁVEL"...
+        colunas_str = ", ".join([f'"{c}"' for c in cols_finais]) 
+        placeholders = ", ".join(["?"] * len(cols_finais))
+        
+        # Monta a parte de atualização (SET NOME=Excluded.NOME...)
+        # Isso diz: "Se o CHAMADO já existe, atualize os outros campos"
+        update_clause = ", ".join([f'"{col}" = excluded."{col}"' for col in cols_finais if col != 'CHAMADO'])
+
+        sql = f"""
+            INSERT INTO Chamados ({colunas_str}) 
+            VALUES ({placeholders})
+            ON CONFLICT(CHAMADO) DO UPDATE SET {update_clause}
+        """
+        
+        # Converte o DataFrame para lista de listas (formato que o SQLite aceita)
+        dados = df_save.values.tolist()
+        
+        # Executa
+        cursor.executemany(sql, dados)
         conn.commit()
-        st.cache_data.clear()
-        return True, len(values)
+        
+        return True, len(dados)
 
     except Exception as e:
-        conn.rollback()
-        st.error(f"Erro ao salvar no banco: {e}")
+        if conn: conn.rollback()
+        st.error(f"Erro ao salvar no banco de dados: {e}")
         return False, 0
-
+    finally:
+        if conn: conn.close()
+            
 # --- 5. FUNÇÃO PARA ATUALIZAR CHAMADO (CORRIGIDA) ---
 
 def atualizar_chamado_db(chamado_id_interno, updates: dict):
@@ -427,6 +418,7 @@ def resetar_tabela_chamados():
     except Exception as e:
         conn.rollback()
         return False, f"Erro ao limpar banco: {e}"
+
 
 
 
