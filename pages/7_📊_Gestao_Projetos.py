@@ -77,29 +77,27 @@ def clean_val(val, default="N/A"):
     if val is None or pd.isna(val) or str(val).lower() in ["none", "nan"]: return default
     return str(val)
 
-@st.dialog("Importar Chamados (Blindado)", width="large")
-
+@st.dialog("Importar Chamados (Mapeamento Fixo)", width="large")
 def run_importer_dialog():
-
-    st.info("Importação via Mapeamento de Colunas (Posição).")
+    st.info("Importação via Mapeamento de Colunas (Posição Fixa).")
+    
     uploaded_files = st.file_uploader(
         "Selecione arquivos (.xlsx ou .csv)", 
         type=["xlsx", "csv"], 
         accept_multiple_files=True,
         key="up_imp_blindado"
     )
+
     if uploaded_files:
         dfs_list = []
-
+        
         # --- 1. LEITURA DOS ARQUIVOS ---
         for uploaded_file in uploaded_files:
-
             try:
                 if uploaded_file.name.endswith('.csv'):
-                    # Tenta ler com separadores comuns
                     try:
                         df = pd.read_csv(uploaded_file, sep=';', header=0, dtype=str, encoding='utf-8-sig')
-                        if len(df.columns) < 5: # Se leu errado, tenta vírgula
+                        if len(df.columns) < 5: 
                             uploaded_file.seek(0)
                             df = pd.read_csv(uploaded_file, sep=',', header=0, dtype=str, encoding='utf-8-sig')
                     except:
@@ -107,121 +105,143 @@ def run_importer_dialog():
                         df = pd.read_csv(uploaded_file, sep=None, engine='python', header=0, dtype=str)
                 else:
                     df = pd.read_excel(uploaded_file, header=0, dtype=str)
-                # Remove linhas vazias
+                
                 df.dropna(how='all', inplace=True)
                 dfs_list.append(df)
+                
             except Exception as e:
                 st.error(f"Erro ao ler '{uploaded_file.name}': {e}")
                 return
+
         if dfs_list:
             try:
                 df_raw = pd.concat(dfs_list, ignore_index=True)
-                # --- 2. MAPEAMENTO POR ÍNDICE (IGUAL AO CÓDIGO ANTIGO) ---
-                # Garante que temos colunas suficientes
-                if len(df_raw.columns) < 23:
-                    st.error(f"O arquivo tem apenas {len(df_raw.columns)} colunas. O sistema espera pelo menos 20.")
+                
+                # --- 2. MAPEAMENTO EXATO (O QUE VOCÊ ENVIOU) ---
+                # Garante que temos colunas suficientes (pelo menos até a 23, já que Analista é 22)
+                if len(df_raw.columns) < 12: # Mínimo para ler até Qtd (11)
+                    st.error(f"O arquivo tem apenas {len(df_raw.columns)} colunas. Verifique o arquivo.")
                     st.write("Colunas encontradas:", df_raw.columns.tolist())
-
                     return
 
-                # Cria um novo DataFrame só com as colunas que importam, usando ILOC (Posição)
-                # Baseado no seu snippet: 0=ID, 1=Agencia, 9=Serviço, 10=Projeto, 11=Data, 14=Equip, 16=Qtd, 19=Gestor
-                # Adicionei 4=Analista (padrão comum) e 8=Status (padrão comum) - AJUSTE SE NECESSÁRIO
-                # Prepara dicionário de dados vazio
-
+                # SEU MAPEAMENTO AQUI:
                 dados_mapeados = {
-
-                    'Nº Chamado': df_raw.iloc[:, 0], 
-                    'Cód. Agência': df_raw.iloc[:, 1], 
+                    'Nº Chamado': df_raw.iloc[:, 0],
+                    'Cód. Agência': df_raw.iloc[:, 1],
                     'Nome Agência': df_raw.iloc[:, 2],
                     'agencia_uf': df_raw.iloc[:, 3],
                     'Analista': df_raw.iloc[:, 22] if len(df_raw.columns) > 22 else "",
-                    'Gestor': df_raw.iloc[:, 20] if len(df_raw.columns) > 20 else "", 
+                    'Gestor': df_raw.iloc[:, 20] if len(df_raw.columns) > 20 else "",
                     'Serviço': df_raw.iloc[:, 4],
                     'Projeto': df_raw.iloc[:, 5],
-                    'Agendamento': df_raw.iloc[:, 6], 
-                    'Sistema': df_raw.iloc[:, 8],
+                    'Agendamento': df_raw.iloc[:, 6],
+                    'Sistema': df_raw.iloc[:, 8],          # Categoria do Sistema
                     'Cod_equipamento': df_raw.iloc[:, 9],
-                    'Nome_equipamento': df_raw.iloc[:, 10],
+                    'Nome_equipamento': df_raw.iloc[:, 10], # Descrição do item
                     'Qtd': df_raw.iloc[:, 11]
-
                 }
+                
                 df_final = pd.DataFrame(dados_mapeados)
                 df_final = df_final.fillna("")
 
-                # --- 3. FORMATAR ITEM (QTD x DESCRIÇÃO) ---
+                # --- 3. FORMATAR ITEM (QTD x NOME_EQUIPAMENTO) ---
+                # Usa as colunas que você mapeou: Coluna 11 (Qtd) e Coluna 10 (Nome_equipamento)
                 def formatar_item(row):
                     qtd = str(row['Qtd']).strip()
-                    desc = str(row['Sistema']).strip()
+                    desc = str(row['Nome_equipamento']).strip() # Usa o nome do equipamento
+                    
+                    # Se não tiver nome de equipamento, tenta usar o Sistema (Coluna 8)
+                    if not desc: desc = str(row['Sistema']).strip()
+                    
                     if not desc: return ""
-                    if qtd and qtd not in ["0", "nan", ""]:
+                    
+                    if qtd and qtd not in ["0", "nan", "", "None"]:
                         return f"{qtd}x {desc}"
                     return desc
+
                 df_final['Item_Formatado'] = df_final.apply(formatar_item, axis=1)
 
-                # --- 4. AGRUPAMENTO (JUNTAR DUPLICADOS) ---
-
+                # --- 4. AGRUPAMENTO (JUNTAR ITENS DO MESMO CHAMADO) ---
                 def juntar_textos(lista):
                     limpos = [str(x) for x in lista if str(x).strip() not in ["", "nan", "None"]]
                     return " | ".join(dict.fromkeys(limpos))
 
-                regras = {c: 'first' for c in df_final.columns if c not in ['Sistema', 'Qtd', 'Item_Formatado']}
-
+                # Define regras: para a maioria pega o primeiro valor, para o item junta tudo
+                colunas_ignoradas_agg = ['Sistema', 'Qtd', 'Item_Formatado', 'Nome_equipamento', 'Cod_equipamento']
+                regras = {c: 'first' for c in df_final.columns if c not in colunas_ignoradas_agg}
+                
                 regras['Item_Formatado'] = juntar_textos
-
+                
+                # Agrupa
                 df_grouped = df_final.groupby('Nº Chamado', as_index=False).agg(regras)
-                df_grouped = df_grouped.rename(columns={'Item_Formatado': 'Sistema'})                
-
+                
+                # Joga o texto agrupado (ex: "3x Câmera | 1x DVR") na coluna 'Sistema' que vai para o banco
+                df_grouped = df_grouped.rename(columns={'Item_Formatado': 'Sistema'})
+                
                 # --- 5. SEPARAÇÃO (NOVOS vs ATUALIZAR) ---
                 df_banco = utils_chamados.carregar_chamados_db()
                 lista_novos = []; lista_atualizar = []
-
+                
                 if not df_banco.empty:
                     mapa_ids = dict(zip(df_banco['Nº Chamado'].astype(str).str.strip(), df_banco['ID']))
+                    
                     for row in df_grouped.to_dict('records'):
                         chamado_num = str(row['Nº Chamado']).strip()
+                        if not chamado_num or chamado_num.lower() == 'nan': continue # Pula linhas vazias
+                        
                         if chamado_num in mapa_ids:
                             row['ID_Banco'] = mapa_ids[chamado_num]
                             lista_atualizar.append(row)
                         else:
                             lista_novos.append(row)
                 else:
-                    lista_novos = df_grouped.to_dict('records')
+                    lista_novos = [r for r in df_grouped.to_dict('records') if str(r['Nº Chamado']).strip()]
+
                 df_insert = pd.DataFrame(lista_novos)
                 df_update = pd.DataFrame(lista_atualizar)
+
                 # --- 6. EXIBIÇÃO ---
                 c1, c2 = st.columns(2)
                 c1.metric("🆕 Criar Novos", len(df_insert))
                 c2.metric("🔄 Atualizar Existentes", len(df_update))
-                with st.expander("Ver dados lidos (Amostra)"):
+                
+                with st.expander("🔍 Ver Prévia dos Dados Lidos"):
                     st.dataframe(df_grouped.head())
+
                 if st.button("🚀 Processar Importação"):
                     bar = st.progress(0)
                     status_txt = st.empty()
+                    
+                    # A. Inserir Novos
                     if not df_insert.empty:
-                        status_txt.text("Inserindo novos...")
+                        status_txt.text("Inserindo novos registros...")
                         utils_chamados.bulk_insert_chamados_db(df_insert)
                         bar.progress(50)
+                    
+                    # B. Atualizar Existentes
                     if not df_update.empty:
-                        status_txt.text("Atualizando itens...")
-                        total = len(df_update
+                        status_txt.text("Atualizando dados...")
+                        total = len(df_update)
                         for i, row in enumerate(df_update.to_dict('records')):
                             updates = {
-                                'Sistema': row['Sistema'],
+                                'Sistema': row['Sistema'], # Aqui vai a lista de equipamentos agrupada
                                 'Serviço': row['Serviço'],
                                 'Projeto': row['Projeto'],
-                                'Agendamento': row['Agendamento']
+                                'Agendamento': row['Agendamento'],
+                                'Analista': row['Analista'],
+                                'Gestor': row['Gestor']
                             }
                             utils_chamados.atualizar_chamado_db(row['ID_Banco'], updates)
                             if total > 0: bar.progress(50 + int((i/total)*50))
+                    
                     bar.progress(100)
                     status_txt.text("Concluído!")
-                    st.success("Importação finalizada!")
+                    st.success("Importação finalizada com sucesso!")
                     time.sleep(1.5)
                     st.cache_data.clear()
                     st.rerun()
-            except Exception as e: st.error(f"Erro no processamento: {e}")   
-                
+
+            except Exception as e: st.error(f"Erro no processamento: {e}")                
 @st.dialog("🔗 Importar Links", width="medium")
 def run_link_importer_dialog():
     st.info("Planilha simples com colunas: **CHAMADO** e **LINK**.")
@@ -848,5 +868,6 @@ else:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
+
 
 
