@@ -663,11 +663,11 @@ else:
                         elif acao_atual: st.markdown(f"👉 {acao_atual}")
                         else: st.caption("-")
 
-                    # LINHA 3: Agência (Destaque inferior)
+                   # LINHA 3: Agência (Destaque inferior)
                     cod_ag = str(first_row.get('Cód. Agência', '')).split('.')[0]
                     nome_ag = str(nome_agencia).replace(cod_ag, '').strip(' -')
                     
-                    st.markdown(f####
+                    st.markdown(f"""
                         <div style="
                             margin-top: 8px; 
                             padding-top: 8px; 
@@ -675,7 +675,7 @@ else:
                             color: #555; 
                             font-size: 0.95em;">
                             🏠 <b>AG {cod_ag}</b> - {nome_ag}
-                            <span style="float:right; color:#999; font-size:0.8em;"""", unsafe_allow_html=True)
+                            <span style="float:right; color:#999; font-size:0.8em;"", unsafe_allow_html=True)
 
                     # EXPANDER DE EDIÇÃO
                     with st.expander("📝 Editar Detalhes"):
@@ -870,6 +870,7 @@ else:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
+
 
 
 
