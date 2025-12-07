@@ -491,10 +491,10 @@ else:
                     form_key = f"form_{first_row['ID']}"
                     with st.form(key=form_key):
                         
-                        # --- 1. CARREGAR LISTAS VINCULADAS (CONFIGURAÇÕES) ---
+                        # --- 1. CARREGAR LISTAS (AGORA USANDO USUÁRIOS REAIS) ---
                         try:
+                            # Carrega Status e Projetos (Configurações)
                             df_status_cfg = utils.carregar_config_db("status")
-                            # Convertemos para string e removemos vazios imediatamente
                             opts_status_db = [str(x) for x in df_status_cfg.iloc[:, 0].dropna().tolist()] if not df_status_cfg.empty else []
                             
                             df_proj_cfg = utils.carregar_config_db("projetos_nomes")
@@ -502,34 +502,50 @@ else:
                             
                             df_tec_cfg = utils.carregar_config_db("tecnicos")
                             opts_tec_db = [str(x) for x in df_tec_cfg.iloc[:, 0].dropna().tolist()] if not df_tec_cfg.empty else []
-                        except:
-                            opts_status_db = []; opts_proj_db = []; opts_tec_db = []
 
-                        # --- 2. PREPARAR AS LISTAS PARA OS CAMPOS (COM LIMPEZA) ---
-                        
-                        # Função auxiliar para limpar valor atual
+                            # --- NOVA LÓGICA: CARREGAR USUÁRIOS DO SISTEMA ---
+                            df_users = utils.carregar_usuarios_db()
+                            
+                            # Garante que a coluna se chame 'Nome' (igual na tela de cadastro)
+                            if not df_users.empty:
+                                df_users.columns = [col.capitalize() for col in df_users.columns]
+                            
+                            if not df_users.empty and "Nome" in df_users.columns:
+                                opts_ana_db = [str(x) for x in df_users["Nome"].dropna().tolist()]
+                            else:
+                                opts_ana_db = []
+                                
+                        except:
+                            opts_status_db = []; opts_proj_db = []; opts_tec_db = []; opts_ana_db = []
+
+                        # --- 2. PREPARAR LISTAS (Safe String e Sort) ---
                         def safe_str(val):
                             if pd.isna(val) or str(val).lower() in ['nan', 'none', '']: return ""
                             return str(val)
 
-                        # A. Status
+                        # Status
                         status_atual = safe_str(first_row.get('Status', '(Automático)'))
                         lista_raw_st = opts_status_db + [status_atual] + ["(Automático)", "Finalizado", "Cancelado"]
-                        # Remove duplicados e vazios, garante ordenação
                         lista_final_status = sorted(list(set([s for s in lista_raw_st if s])))
                         idx_st = lista_final_status.index(status_atual) if status_atual in lista_final_status else 0
                         
-                        # B. Projetos
+                        # Projetos
                         val_proj_atual = safe_str(first_row.get('Projeto', ''))
                         lista_raw_proj = opts_proj_db + [val_proj_atual]
                         lista_final_proj = sorted(list(set([p for p in lista_raw_proj if p])))
                         idx_proj = lista_final_proj.index(val_proj_atual) if val_proj_atual in lista_final_proj else 0
 
-                        # C. Técnico de Campo
+                        # Técnico de Campo (Configuração)
                         val_tec_atual = safe_str(first_row.get('Técnico', ''))
                         lista_raw_tec = opts_tec_db + [val_tec_atual]
                         lista_final_tec = sorted(list(set([t for t in lista_raw_tec if t])))
                         idx_tec = lista_final_tec.index(val_tec_atual) if val_tec_atual in lista_final_tec else 0
+
+                        # Analistas (Usuários Cadastrados)
+                        val_ana_atual = safe_str(first_row.get('Analista', ''))
+                        lista_raw_ana = opts_ana_db + [val_ana_atual]
+                        lista_final_ana = sorted(list(set([a for a in lista_raw_ana if a]))) # Limpa vazios e ordena
+                        idx_ana = lista_final_ana.index(val_ana_atual) if val_ana_atual in lista_final_ana else 0
 
                         # --- 3. CAMPOS DO FORMULÁRIO ---
                         c1, c2, c3, c4 = st.columns(4)
@@ -545,12 +561,11 @@ else:
                         novo_fim = c4.date_input("Finalização", value=fim_val, format="DD/MM/YYYY", key=f"fim_{form_key}")
 
                         c5, c6, c7 = st.columns(3)
-                        # Analista continua como Texto Livre (ou crie a lista se desejar)
-                        novo_analista = c5.text_input("Analista", value=first_row.get('Analista', ''), key=f"ana_{form_key}")
+                        
+                        # SELECTBOX DE ANALISTAS (USUÁRIOS)
+                        novo_analista = c5.selectbox("Analista (Usuário)", lista_final_ana, index=idx_ana, key=f"ana_{form_key}")
                         
                         novo_gestor = c6.text_input("Gestor", value=first_row.get('Gestor', ''), key=f"ges_{form_key}")
-                        
-                        # Técnico Campo CORRIGIDO com a lista segura
                         novo_tec = c7.selectbox("Técnico Campo", lista_final_tec, index=idx_tec, key=f"tec_{form_key}")
 
                         c8, c9, c10 = st.columns(3)
