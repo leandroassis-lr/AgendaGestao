@@ -6,6 +6,7 @@ import html
 import psycopg2
 from psycopg2 import sql
 import numpy as np 
+import sqlite3
 
 # --- 1. GERENCIAMENTO DE CONEXÃO ROBUSTO ---
 
@@ -174,6 +175,8 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         return False, 0
 
     conn = None
+    cols_finais = [] # Inicializa vazio para evitar erro no bloco 'except'
+
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -214,7 +217,7 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
 
         if 'CHAMADO' not in df_save.columns:
             st.error("Erro interno: Coluna CHAMADO se perdeu no mapeamento.")
-            st.stop() # Para tudo aqui
+            st.stop()
 
         # 3. CONSTRUÇÃO DO SQL
         colunas_str = ", ".join([f'"{c}"' for c in cols_finais]) 
@@ -239,33 +242,29 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
     except Exception as e:
         if conn: conn.rollback()
         
-        # --- BLOCO DE DEPURAÇÃO VISUAL ---
         st.error("🚨 ERRO CRÍTICO AO SALVAR NO BANCO")
+        st.exception(e) # Mostra o erro técnico
         
-        # Mostra o erro técnico exato
-        st.exception(e) 
-        
-        with st.expander("🔍 Ver Detalhes para Correção (Clique aqui)", expanded=True):
-            st.markdown("### 1. Colunas que tentamos salvar:")
-            st.code(str(cols_finais))
+        with st.expander("🔍 Ver Detalhes para Correção", expanded=True):
+            st.markdown("### 1. Colunas identificadas:")
+            if cols_finais:
+                st.code(str(cols_finais))
+            else:
+                st.warning("Falha antes de definir as colunas.")
             
             st.markdown("### 2. Verificar Nomes no Banco:")
             try:
-                # Tenta ler o nome real das colunas no banco para comparar
-                df_real = pd.read_sql("PRAGMA table_info(Chamados)", conn)
-                st.write("Colunas que existem REALMENTE na tabela 'Chamados':")
-                st.dataframe(df_real[['name', 'type']])
+                if conn:
+                    df_real = pd.read_sql("PRAGMA table_info(Chamados)", conn)
+                    st.dataframe(df_real[['name', 'type']], use_container_width=True)
+                else:
+                    st.warning("Sem conexão com o banco.")
             except:
                 st.write("Não foi possível ler a estrutura da tabela.")
 
-            st.markdown("### 3. Amostra dos Dados:")
-            if 'df_save' in locals():
-                st.dataframe(df_save.head(3))
-        
-        # Importante: Isso impede a página de recarregar e sumir com o erro
-        st.stop() 
-        
+        st.stop() # Congela a tela para você ler o erro
         return False, 0
+        
     finally:
         if conn: conn.close()
             
@@ -433,6 +432,7 @@ def resetar_tabela_chamados():
     except Exception as e:
         conn.rollback()
         return False, f"Erro ao limpar banco: {e}"
+
 
 
 
