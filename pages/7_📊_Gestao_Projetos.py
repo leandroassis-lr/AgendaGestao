@@ -455,13 +455,13 @@ else:
                     else: sla_texto = f"🕒 {dias_restantes}d restantes"; sla_cor = "#388E3C"
                 
                 with st.container(border=True):
-                    c1, c2, c3, c4 = st.columns([2.5, 1.2, 2, 1.5])
-                    with c1: st.markdown(f"#### {proj_nome}")
+                    c1, c2, c3, c4 = st.columns([3, 1.2, 1.5, 1.5])
+                    with c1: st.markdown(f"**📂 {proj_nome}**")
                     with c2: st.markdown(f"🗓️ {data_str}")
                     with c3: st.markdown(f"👤 {analista}")
                     with c4: st.markdown(f"""<div class="card-status-badge" style="background-color: {cor_status}; margin: 0;">{status_atual}</div>""", unsafe_allow_html=True)
 
-                    c5, c6, c7, c8 = st.columns([2.5, 1.2, 2, 1.5])
+                    c5, c6, c7, c8 = st.columns([3, 1.2, 1.5, 1.5])
                     with c5: st.markdown(f"<span style='color:#1565C0; font-weight:600;'>{nome_servico}</span>", unsafe_allow_html=True)
                     with c6: st.markdown(f"<span style='color:{sla_cor}; font-size:0.9em; font-weight:bold;'>{sla_texto}</span>", unsafe_allow_html=True) if sla_texto else st.caption("-")
                     with c7: st.caption(f"Gestor: {gestor}")
