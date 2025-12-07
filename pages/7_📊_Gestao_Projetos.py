@@ -138,7 +138,7 @@ def run_importer_dialog():
                     'Cód. Agência': df_raw.iloc[:, 1], 
                     'Nome Agência': df_raw.iloc[:, 2],
                     'agencia_uf': df_raw.iloc[:, 3],
-                    'Analista': df_raw.iloc[:, 23] if len(df_raw.columns) > 23 else "",
+                    'Analista': df_raw.iloc[:, 22] if len(df_raw.columns) > 22 else "",
                     'Gestor': df_raw.iloc[:, 20] if len(df_raw.columns) > 20 else "", 
                     'Serviço': df_raw.iloc[:, 4],
                     'Projeto': df_raw.iloc[:, 5],
@@ -861,6 +861,7 @@ else:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
+
 
 
 
