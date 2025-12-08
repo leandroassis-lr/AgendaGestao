@@ -484,9 +484,7 @@ if escolha_visao == "Visão Geral (Cockpit)":
     # --- GRID DE CARDS TIPO PLANNER ---
     lista_projetos = sorted(df_filtrado['Projeto'].dropna().unique().tolist())
     cols = st.columns(3)
-    
-    # ... (código anterior do Grid mantém igual) ...
-    
+        
     # 1. DEFINA ESTA FUNÇÃO ANTES DO LOOP (Para controlar a navegação)
     def navegar_para_projeto(nome_projeto):
         st.session_state["sel_projeto"] = nome_projeto
@@ -776,6 +774,11 @@ else:
                             n_ob = st.text_area("Observações", value=row.get('Observações e Pendencias', ''), height=80, key=f"ob_{form_key}")
                             
                             k11, k12, k13 = st.columns([1, 2, 1])
+                            
+                            with k11:
+                                
+                                st.text_input("Nº Chamado", value=row.get('Nº Chamado', ''), disabled=True, key=f"nchamado_{form_key}")
+                            
                             n_lk = k12.text_input("Link", value=row.get('Link Externo', ''), key=f"lk_{form_key}")
                             n_pt = k13.text_input("Protocolo", value=row.get('Nº Protocolo', ''), key=f"pt_{form_key}")
                             
@@ -838,6 +841,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
