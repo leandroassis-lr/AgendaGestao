@@ -772,16 +772,44 @@ else:
                             n_si = k10.text_input("Sistema", value=row.get('Sistema', ''), key=f"si_{form_key}")
 
                             n_ob = st.text_area("Observações", value=row.get('Observações e Pendencias', ''), height=80, key=f"ob_{form_key}")
-                            
+
                             k11, k12, k13 = st.columns([1, 2, 1])
                             
+                            # Pega os valores para verificação
+                            chamado_val = row.get('Nº Chamado', '')
+                            link_val = row.get('Link Externo', '')
+                            
                             with k11:
-                                
-                                st.text_input("Nº Chamado", value=row.get('Nº Chamado', ''), disabled=True, key=f"nchamado_{form_key}")
+                                # LÓGICA DO CLIQUE:
+                                if link_val and str(link_val).strip().lower() not in ['nan', 'none', '']:
+                                    # Se tiver link, exibe um "Botão Link" bonito
+                                    st.markdown(f"<p style='font-size:0.8rem; margin-bottom:0.4rem;'>Nº Chamado</p>", unsafe_allow_html=True)
+                                    st.markdown(f"""
+                                    <a href="{link_val}" target="_blank" style="
+                                        display: inline-block;
+                                        background-color: #E3F2FD;
+                                        color: #1565C0;
+                                        padding: 0.55rem 1rem;
+                                        border-radius: 0.5rem;
+                                        border: 1px solid #90CAF9;
+                                        text-decoration: none;
+                                        font-weight: 700;
+                                        font-size: 0.9rem;
+                                        width: 100%;
+                                        text-align: center;
+                                        transition: background-color 0.2s;
+                                    ">
+                                    🔗 {chamado_val}
+                                    </a>
+                                    """, unsafe_allow_html=True)
+                                else:
+                                    # Se NÃO tiver link, exibe o input cinza padrão
+                                    st.text_input("Nº Chamado", value=chamado_val, disabled=True, key=f"nchamado_{form_key}")
                             
-                            n_lk = k12.text_input("Link", value=row.get('Link Externo', ''), key=f"lk_{form_key}")
+                            # Campos Editáveis
+                            n_lk = k12.text_input("Link", value=link_val, key=f"lk_{form_key}")
                             n_pt = k13.text_input("Protocolo", value=row.get('Nº Protocolo', ''), key=f"pt_{form_key}")
-                            
+                        
                             st.markdown("---")
                             desc = ""
                             if str(nome_servico).lower() in SERVICOS_SEM_EQUIPAMENTO: desc = f"Realizar {nome_servico}"
@@ -841,22 +869,4 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+                        
