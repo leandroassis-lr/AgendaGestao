@@ -481,7 +481,7 @@ if escolha_visao == "Visão Geral (Cockpit)":
     st.subheader("Meus Quadros")
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- GRID DE CARDS TIPO PLANNER ---
+# --- GRID DE CARDS TIPO PLANNER ---
     lista_projetos = sorted(df_filtrado['Projeto'].dropna().unique().tolist())
     
     # Define quantas colunas no Grid (3 fica bom em tela cheia)
@@ -539,15 +539,13 @@ if escolha_visao == "Visão Geral (Cockpit)":
             </div>
             """
             
-            # Renderiza o visual do Card
             st.markdown(card_html, unsafe_allow_html=True)
             
-            # Botão invisível sobre o card (truque do Streamlit)
-            # Como não dá pra clicar na div inteira, colocamos um botão logo abaixo que serve de ação
             if st.button(f"Ver Detalhes", key=f"btn_plan_{i}", use_container_width=True):
                 st.session_state["sel_projeto"] = proj
                 st.session_state["nav_radio"] = "Detalhar um Projeto (Operacional)"
-                st.rerun()                
+                st.rerun()
+
 else:
     # --- MODO OPERACIONAL (VISÃO DETALHADA) ---
     
@@ -842,6 +840,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
