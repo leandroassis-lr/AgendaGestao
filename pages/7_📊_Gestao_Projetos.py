@@ -621,27 +621,28 @@ else:
     
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 3. BARRA DE RESUMO DE STATUS (Melhorada)
+    # 3. BARRA DE RESUMO DE STATUS (Corrigido)
     if not df_view.empty:
         counts = df_view['Status'].value_counts()
-        # Mostra apenas os top 5 status para não quebrar o layout, ou todos se couber
         top_status = counts.head(5) 
         
-        cols = st.columns(len(top_status))
-        for i, (status, count) in enumerate(top_status.items()):
-            try: cor = utils_chamados.get_status_color(status)
-            except: cor = "#ccc"
-            
-            with cols[i]:
-                # Cardzinho com borda esquerda na cor do status
-                st.markdown(f"""
-                <div class="status-summary-box" style="border-left: 5px solid {cor};">
-                    <span class="status-label">{status}</span>
-                    <span class="status-val">{count}</span>
-                </div>
-                """, unsafe_allow_html=True)
-    
-    st.markdown("<br>", unsafe_allow_html=True)
+        # --- PROTEÇÃO CONTRA ERRO DE COLUNA ZERO ---
+        if len(top_status) > 0:
+            cols = st.columns(len(top_status))
+            for i, (status, count) in enumerate(top_status.items()):
+                try: cor = utils_chamados.get_status_color(status)
+                except: cor = "#ccc"
+                
+                with cols[i]:
+                    # Cardzinho com borda esquerda na cor do status
+                    st.markdown(f"""
+                    <div class="status-summary-box" style="border-left: 5px solid {cor};">
+                        <span class="status-label">{status}</span>
+                        <span class="status-val">{count}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+        else:
+            st.caption("Nenhum status encontrado para os filtros atuais.")
 
     # 4. CONTEÚDO (LISTA E CALENDÁRIO)
     aba_lista, aba_calendario = st.tabs(["📋 Lista Detalhada", "📅 Agenda Semanal"])
@@ -837,6 +838,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
