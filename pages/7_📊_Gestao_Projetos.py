@@ -459,7 +459,7 @@ if filtro_gestor != "Todos": df_filtrado = df_filtrado[df_filtrado['Gestor'] == 
 if "nav_radio" not in st.session_state: st.session_state["nav_radio"] = "Visão Geral (Cockpit)"
 escolha_visao = st.radio("Modo de Visualização:", ["Visão Geral (Cockpit)", "Detalhar um Projeto (Operacional)"], horizontal=True, key="nav_radio")
 
-if escolha_visao == "Visão Geral":
+if escolha_visao == "Visão Geral (Cockpit)":
     st.title("📌 Visão Geral dos Projetos")
     
     # Cálculos iniciais (mantidos)
@@ -547,8 +547,7 @@ if escolha_visao == "Visão Geral":
             if st.button(f"Ver Detalhes", key=f"btn_plan_{i}", use_container_width=True):
                 st.session_state["sel_projeto"] = proj
                 st.session_state["nav_radio"] = "Detalhar um Projeto (Operacional)"
-                st.rerun()
-                
+                st.rerun()                
 else:
     # --- MODO OPERACIONAL (VISÃO DETALHADA) ---
     
@@ -843,6 +842,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
