@@ -462,7 +462,7 @@ escolha_visao = st.radio("Modo de Visualização:", ["Visão Geral (Cockpit)", "
 if escolha_visao == "Visão Geral (Cockpit)":
     st.title("📌 Visão Geral dos Projetos")
     
-    # Cálculos iniciais (mantidos)
+    # Cálculos iniciais
     hoje = pd.Timestamp.today().normalize()
     df_filtrado['Agendamento'] = pd.to_datetime(df_filtrado['Agendamento'], errors='coerce')
     status_fim = ['concluído', 'finalizado', 'faturado', 'fechado']
@@ -471,7 +471,7 @@ if escolha_visao == "Visão Geral (Cockpit)":
     atrasados = pendentes[pendentes['Agendamento'] < hoje]
     prox = pendentes[(pendentes['Agendamento'] >= hoje) & (pendentes['Agendamento'] <= hoje + timedelta(days=5))]
     
-    # --- MÉTRICAS DE TOPO (Estilo Clean) ---
+    # --- MÉTRICAS DE TOPO ---
     m1, m2, m3 = st.columns(3)
     m1.metric("📦 Total de Chamados", len(df_filtrado))
     m2.metric("🚨 Atrasados Geral", len(atrasados), delta_color="inverse")
@@ -481,10 +481,8 @@ if escolha_visao == "Visão Geral (Cockpit)":
     st.subheader("Meus Quadros")
     st.markdown("<br>", unsafe_allow_html=True)
 
-# --- GRID DE CARDS TIPO PLANNER ---
+    # --- GRID DE CARDS TIPO PLANNER ---
     lista_projetos = sorted(df_filtrado['Projeto'].dropna().unique().tolist())
-    
-    # Define quantas colunas no Grid (3 fica bom em tela cheia)
     cols = st.columns(3)
     
     for i, proj in enumerate(lista_projetos):
@@ -493,51 +491,38 @@ if escolha_visao == "Visão Geral (Cockpit)":
         concluidos = len(df_p[df_p['Status'].str.lower().isin(status_fim)])
         atrasados_p = len(df_p[(~df_p['Status'].str.lower().isin(status_fim)) & (df_p['Agendamento'] < hoje)])
         
-        # Cálculo de Progresso
         perc = int((concluidos / total_p) * 100) if total_p > 0 else 0
         
-        # Cor da barra e saúde do projeto
         if atrasados_p > 0:
-            cor_saude = "#e74c3c" # Vermelho
+            cor_saude = "#e74c3c"
             tag_html = f"<span class='tag-status tag-red'>⚠️ {atrasados_p} Atrasados</span>"
         elif perc == 100:
-            cor_saude = "#2ecc71" # Verde
+            cor_saude = "#2ecc71"
             tag_html = "<span class='tag-status tag-green'>✨ Concluído</span>"
         else:
-            cor_saude = "#3498db" # Azul
+            cor_saude = "#3498db"
             tag_html = "<span class='tag-status tag-gray'>Em dia</span>"
 
         with cols[i % 3]:
-            # Container do Card
-            container = st.container()
-            
-            # HTML do Card
-            card_html = f"""
-            <div class="planner-card" style="border-left: 5px solid {cor_saude};">
-                <div>
-                    <div class="planner-title" title="{proj}">{proj}</div>
-                    
-                    <div style="display:flex; justify-content:space-between; font-size:0.8em; color:#666; margin-bottom:2px;">
-                        <span>Progresso</span>
-                        <span>{perc}%</span>
-                    </div>
-                    <div class="progress-container">
-                        <div class="progress-bar-fill" style="width: {perc}%; background-color: {cor_saude};"></div>
-                    </div>
-                </div>
-                
-                <div>
-                    <div style="margin-bottom:10px;">
-                        {tag_html}
-                    </div>
-                    
-                    <div class="planner-footer">
-                        <span>📋 {concluidos}/{total_p} tarefas</span>
-                        <span>📂 Abrir</span>
-                    </div>
-                </div>
-            </div>
-            """
+            # IMPORTANTE: O HTML abaixo está alinhado à esquerda para evitar bugs de identação
+            card_html = f"""<div class="planner-card" style="border-left: 5px solid {cor_saude};">
+<div>
+<div class="planner-title" title="{proj}">{proj}</div>
+<div style="display:flex; justify-content:space-between; font-size:0.8em; color:#666; margin-bottom:2px;">
+<span>Progresso</span><span>{perc}%</span>
+</div>
+<div class="progress-container">
+<div class="progress-bar-fill" style="width: {perc}%; background-color: {cor_saude};"></div>
+</div>
+</div>
+<div>
+<div style="margin-bottom:10px;">{tag_html}</div>
+<div class="planner-footer">
+<span>📋 {concluidos}/{total_p} tarefas</span>
+<span>📂 Abrir</span>
+</div>
+</div>
+</div>"""
             
             st.markdown(card_html, unsafe_allow_html=True)
             
@@ -840,6 +825,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
