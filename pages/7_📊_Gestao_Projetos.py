@@ -407,31 +407,82 @@ def run_importer_dialog():
 
             except Exception as e: st.error(f"Erro no processamento: {e}")
 
-@st.dialog("🔗 Importar Links", width="medium")
+@st.dialog("🔗 Importar Links em Massa", width="medium")
 def run_link_importer_dialog():
-    st.info("Planilha simples com colunas: **CHAMADO** e **LINK**.")
-    up = st.file_uploader("Arquivo", type=["xlsx", "csv"], key="up_imp_link")
-    if up and st.button("🚀 Atualizar Links"):
+    st.info("""
+        Atualize apenas os **Links Externos** dos chamados existentes.
+        A planilha deve ter apenas duas colunas: **CHAMADO** e **LINK**.
+    """)
+    
+    uploaded_links = st.file_uploader("Planilha de Links (.xlsx/.csv)", type=["xlsx", "csv"], key="link_up_key")
+    
+    if uploaded_links:
         try:
-            if up.name.endswith('.csv'): df = pd.read_csv(up, sep=';', dtype=str)
-            else: df = pd.read_excel(up, dtype=str)
+            if uploaded_links.name.endswith('.csv'): 
+                df_links = pd.read_csv(uploaded_links, sep=';', header=0, dtype=str)
+            else: 
+                df_links = pd.read_excel(uploaded_links, header=0, dtype=str)
             
-            df.columns = [str(c).upper().strip() for c in df.columns]
-            if 'CHAMADO' not in df.columns or 'LINK' not in df.columns:
-                st.error("Colunas 'CHAMADO' e 'LINK' obrigatórias.")
+            df_links.columns = [str(c).strip().upper() for c in df_links.columns]
+            
+            if 'CHAMADO' not in df_links.columns or 'LINK' not in df_links.columns:
+                st.error("Erro: A planilha precisa ter as colunas 'CHAMADO' e 'LINK'.")
             else:
-                with st.spinner("Atualizando..."):
-                   df_bd = utils_chamados.carregar_chamados_db()
-                   id_map = df_bd.set_index('Nº Chamado')['ID'].to_dict()
-                   cnt = 0
-                   for _, row in df.iterrows():
-                       chamado = str(row['CHAMADO'])
-                       link = str(row['LINK'])
-                       if chamado in id_map and pd.notna(link) and link.strip():
-                           utils_chamados.atualizar_chamado_db(id_map[chamado], {'Link Externo': link})
-                           cnt += 1
-                   st.success(f"✅ {cnt} links atualizados!"); st.cache_data.clear(); time.sleep(1.5); st.rerun()
-        except Exception as e: st.error(f"Erro: {e}")
+                st.dataframe(df_links.head(), use_container_width=True)
+                if st.button("🚀 Atualizar Links"):
+                    with st.spinner("Atualizando links..."):
+                        df_bd = utils_chamados.carregar_chamados_db()
+                        if df_bd.empty: st.error("Banco de dados vazio."); st.stop()
+                        
+                        id_map = df_bd.set_index('Nº Chamado')['ID'].to_dict()
+                        count = 0
+                        
+                        for _, row in df_links.iterrows():
+                            chamado = row['CHAMADO']
+                            link = row['LINK']
+                            if chamado in id_map and pd.notna(link) and str(link).strip():
+                                internal_id = id_map[chamado]
+                                utils_chamados.atualizar_chamado_db(internal_id, {'Link Externo': link})
+                                count += 1
+                        
+                        st.success(f"✅ {count} links atualizados com sucesso!")
+                        st.cache_data.clear() # Limpa cache
+                        st.session_state.importer_done = True
+                        
+        except Exception as e:
+            st.error(f"Erro ao ler arquivo: {e}")
+
+    if st.session_state.get("importer_done", False):
+        st.session_state.importer_done = False; st.rerun()
+    if st.button("Fechar"): st.rerun()
+
+# --- DIALOG (POP-UP) DE EXPORTAÇÃO ---
+@st.dialog("⬇️ Exportar Dados Filtrados", width="small")
+def run_exporter_dialog(df_data_to_export):
+    st.info(f"Preparando {len(df_data_to_export)} linhas para download.")
+    
+    colunas_exportacao_ordenadas = [
+        'ID', 'Abertura', 'Nº Chamado', 'Cód. Agência', 'Nome Agência', 'UF', 'Projeto', 
+        'Agendamento', 'Sistema', 'Serviço', 'Cód. Equip.', 'Equipamento', 'Qtd.', 
+        'Gestor', 'Fechamento', 'Status', 'Analista', 'Técnico', 'Prioridade', 
+        'Link Externo', 'Nº Protocolo', 'Nº Pedido', 'Data Envio', 'Obs. Equipamento', 
+        'Prazo', 'Descrição', 'Observações e Pendencias', 'Sub-Status', 
+        'Status Financeiro', 'Observação', 'Log do Chamado', 'Agencia_Combinada'
+    ]
+    colunas_presentes_no_df = [col for col in colunas_exportacao_ordenadas if col in df_data_to_export.columns]
+    df_para_exportar = df_data_to_export[colunas_presentes_no_df]
+    
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+        df_para_exportar.to_excel(writer, index=False, sheet_name="Dados Filtrados")
+    buffer.seek(0)
+    
+    st.download_button(
+        label="📥 Baixar Arquivo Excel", data=buffer, file_name="dados_filtrados.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True
+    )
+    if st.button("Fechar", use_container_width=True):
+        st.session_state.show_export_popup = False; st.rerun()
 
 # --- 5. CARREGAMENTO E SIDEBAR ---
 df = utils_chamados.carregar_chamados_db()
@@ -870,3 +921,4 @@ else:
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
                         
+
