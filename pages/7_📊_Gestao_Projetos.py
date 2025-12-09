@@ -193,7 +193,7 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
     # Pega a primeira linha para analisar o contexto do grupo
     row = df_projeto.iloc[0]
     
-    status_atual = str(row.get('Status', 'Não Iniciado')).strip()
+    status_atual = str(row.get('Status', 'Automatico')).strip()
     status_manual_list = ["Pendência de Infra", "Pendência de Equipamento", "Pausado", "Cancelado", "Finalizado"]
     
     # 1. Se estiver em um status "Manual/Bloqueante", apenas limpa o sub-status e retorna
@@ -232,7 +232,7 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
     tecnico_presente = check_col_present(df_projeto, 'Técnico')
     
     novo_status = "Não Iniciado"
-    novo_sub_status = ""
+    novo_sub_status = "Abrir chamado Btime"
 
     # --- Cenário 1: Só Serviço (S-Only) ---
     if has_S and not has_E:
@@ -921,4 +921,5 @@ else:
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
                         
+
 
