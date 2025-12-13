@@ -785,7 +785,7 @@ else:
                     if acao: st.markdown(f"<span class='action-text'>👉 {acao}</span>", unsafe_allow_html=True)
                     else: st.caption("-")
                 
-                # Expander
+                # Expander# Expander
                 with st.expander(f"📝 Editar Detalhes - ID: {ids[0]}"):
                     form_key = f"form_{row['ID']}"
                     with st.form(key=form_key):
@@ -828,12 +828,16 @@ else:
 
                         n_ob = st.text_area("Observações", value=row.get('Observações e Pendencias', ''), height=80, key=f"ob_{form_key}")
                         
-                        # Linha 4: Links e Chamado
+                        # --- LINHA 4: CAMPOS DINÂMICOS (Chamado, Link ou Pedido) ---
                         k11, k12, k13 = st.columns([1, 2, 1])
                         
-                        chamado_val = row.get('Nº Chamado', '')
+                        chamado_val = str(row.get('Nº Chamado', ''))
                         link_val = row.get('Link Externo', '')
                         
+                        # Verifica se é Equipamento (-E- ou -e-)
+                        is_equipamento = '-e-' in chamado_val.lower()
+                        
+                        # Coluna 1: Nº Chamado (Sempre visível)
                         with k11:
                             if link_val and str(link_val).strip().lower() not in ['nan', 'none', '']:
                                 st.markdown(f"<p style='font-size:0.8rem; margin-bottom:0.4rem;'>Nº Chamado</p>", unsafe_allow_html=True)
@@ -846,46 +850,46 @@ else:
                             else:
                                 st.text_input("Nº Chamado", value=chamado_val, disabled=True, key=f"nchamado_{form_key}")
                         
-                        n_lk = k12.text_input("Link", value=link_val, key=f"lk_{form_key}")
-                        n_pt = k13.text_input("Protocolo", value=row.get('Nº Protocolo', ''), key=f"pt_{form_key}")
-                        
+                        # Colunas 2 e 3: Lógica Dinâmica
+                        if is_equipamento:
+                            # Se for Equipamento: Pede Pedido e Data Envio
+                            n_pedido = k12.text_input("📦 Nº Pedido", value=row.get('Nº Pedido', ''), key=f"ped_{form_key}")
+                            n_envio = k13.date_input("🚚 Data Envio", value=_to_date_safe(row.get('Data Envio')), format="DD/MM/YYYY", key=f"env_{form_key}")
+                            
+                            # Mantém os valores antigos de Link/Protocolo para não apagar do banco sem querer
+                            n_lk = row.get('Link Externo', '')
+                            n_pt = row.get('Nº Protocolo', '')
+                        else:
+                            # Se for Serviço/Outros: Pede Link e Protocolo
+                            n_lk = k12.text_input("Link", value=link_val, key=f"lk_{form_key}")
+                            n_pt = k13.text_input("Protocolo", value=row.get('Nº Protocolo', ''), key=f"pt_{form_key}")
+                            
+                            # Mantém valores antigos de Pedido/Envio
+                            n_pedido = row.get('Nº Pedido', '')
+                            n_envio = _to_date_safe(row.get('Data Envio'))
+
+                        # --- ÁREA DOS ITENS (COM CORREÇÃO DO ZERO) ---
                         st.markdown("---")
                         desc = ""
-                        
                         if str(nome_servico).lower() in SERVICOS_SEM_EQUIPAMENTO: 
                             desc = f"Realizar {nome_servico}"
                         else:
                             its = []
                             for s, d in df_grupo.groupby('Sistema'):
-                                # Título do Sistema
                                 its.append(f"{clean_val(s, 'Geral')}")
                                 
-                                # --- 1. IDENTIFICAÇÃO DAS COLUNAS CERTAS ---
-                                # Verifica qual nome de coluna de quantidade existe no DataFrame (Qtd ou Qtd.)
                                 col_qtd = 'Qtd.' if 'Qtd.' in d.columns else 'Qtd'
                                 col_eqp = 'Equipamento'
-                                
-                                # --- 2. FILTRO DE DUPLICIDADE ---
-                                # Cria lista de colunas existentes para remover duplicatas
                                 cols_check = [c for c in [col_qtd, col_eqp] if c in d.columns]
                                 
-                                if cols_check:
-                                    d_visual = d.drop_duplicates(subset=cols_check)
-                                else:
-                                    d_visual = d
+                                if cols_check: d_visual = d.drop_duplicates(subset=cols_check)
+                                else: d_visual = d
 
-                                # --- 3. FORMATAÇÃO VISUAL ---
                                 for _, r in d_visual.iterrows():
-                                    # Pega o valor usando a coluna identificada
                                     qtd_raw = str(r.get(col_qtd, '0'))
-                                    
-                                    # Limpeza visual (remove .0 e None/Nan)
                                     if qtd_raw.lower() in ['nan', 'none', '']: qtd_raw = '0'
                                     qtd_fmt = qtd_raw.replace('.0', '') if qtd_raw.replace('.', '').isdigit() else qtd_raw
-                                    
                                     nome_eq = r.get(col_eqp, 'Item')
-                                    
-                                    # Formato solicitado: "7 - SENSOR..."
                                     its.append(f"{qtd_fmt} - {nome_eq}")
                             
                             desc = "<br>".join(its)
@@ -899,7 +903,9 @@ else:
                                 "Data Abertura": n_ab, "Data Agendamento": n_ag, "Data Finalização": n_fi,
                                 "Analista": n_an, "Gestor": n_ge, "Técnico": n_tc, "Projeto": n_pj,
                                 "Serviço": n_sv, "Sistema": n_si, "Observações e Pendencias": n_ob,
-                                "Link Externo": n_lk, "Nº Protocolo": n_pt
+                                # Salva todos os campos possíveis
+                                "Link Externo": n_lk, "Nº Protocolo": n_pt,
+                                "Nº Pedido": n_pedido, "Data Envio": n_envio
                             }
                             recalc = False
                             if n_st == "(Automático)": recalc = True
@@ -943,6 +949,7 @@ else:
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
                         
+
 
 
 
