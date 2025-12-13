@@ -784,145 +784,129 @@ else:
                 with l3_c4:
                     if acao: st.markdown(f"<span class='action-text'>👉 {acao}</span>", unsafe_allow_html=True)
                     else: st.caption("-")
-
-                # Expander
-                with st.expander(f"📝 Editar Detalhes"):
-                   
-                        form_key = f"form_{row['ID']}"
-                        with st.form(key=form_key):
-                            try:
-                                df_st = utils.carregar_config_db("status"); lst_st = [str(x) for x in df_st.iloc[:,0].dropna().tolist()] if not df_st.empty else []
-                                df_pj = utils.carregar_config_db("projetos_nomes"); lst_pj = [str(x) for x in df_pj.iloc[:,0].dropna().tolist()] if not df_pj.empty else []
-                                df_tc = utils.carregar_config_db("tecnicos"); lst_tc = [str(x) for x in df_tc.iloc[:,0].dropna().tolist()] if not df_tc.empty else []
-                                df_us = utils.carregar_usuarios_db(); df_us.columns = [c.capitalize() for c in df_us.columns] if not df_us.empty else []
-                                lst_an = [str(x) for x in df_us["Nome"].dropna().tolist()] if not df_us.empty and "Nome" in df_us.columns else []
-                            except: lst_st=[]; lst_pj=[]; lst_tc=[]; lst_an=[]
-
-                            def sf(v): return str(v) if pd.notna(v) and str(v).lower() not in ['nan', 'none', ''] else ""
-                            
-                            l_st = sorted(list(set(lst_st + [st_atual] + ["(Automático)", "Finalizado"])))
-                            i_st = l_st.index(st_atual) if st_atual in l_st else 0
-                            
-                            v_pj = sf(row.get('Projeto', '')); l_pj = sorted(list(set(lst_pj + [v_pj]))); i_pj = l_pj.index(v_pj) if v_pj in l_pj else 0
-                            v_tc = sf(row.get('Técnico', '')); l_tc = sorted(list(set(lst_tc + [v_tc]))); i_tc = l_tc.index(v_tc) if v_tc in l_tc else 0
-                            v_an = sf(row.get('Analista', '')); l_an = sorted(list(set(lst_an + [v_an]))); i_an = l_an.index(v_an) if v_an in l_an else 0
-
-                            k1, k2, k3, k4 = st.columns(4)
-                            n_st = k1.selectbox("Status", l_st, index=i_st, key=f"st_{form_key}")
-                            n_ab = k2.date_input("Abertura", value=_to_date_safe(row.get('Abertura')) or date.today(), format="DD/MM/YYYY", key=f"ab_{form_key}")
-                            n_ag = k3.date_input("Agendamento", value=_to_date_safe(row.get('Agendamento')), format="DD/MM/YYYY", key=f"ag_{form_key}")
-                            n_fi = k4.date_input("Finalização", value=_to_date_safe(row.get('Fechamento')), format="DD/MM/YYYY", key=f"fi_{form_key}")
-
-                            k5, k6, k7 = st.columns(3)
-                            n_an = k5.selectbox("Analista", l_an, index=i_an, key=f"an_{form_key}")
-                            n_ge = k6.text_input("Gestor", value=row.get('Gestor', ''), key=f"ge_{form_key}")
-                            n_tc = k7.selectbox("Técnico", l_tc, index=i_tc, key=f"tc_{form_key}")
-
-                            k8, k9, k10 = st.columns(3)
-                            n_pj = k8.selectbox("Projeto", l_pj, index=i_pj, key=f"pj_{form_key}")
-                            n_sv = k9.text_input("Serviço", value=row.get('Serviço', ''), key=f"sv_{form_key}")
-                            n_si = k10.text_input("Sistema", value=row.get('Sistema', ''), key=f"si_{form_key}")
-
-                            n_ob = st.text_area("Observações", value=row.get('Observações e Pendencias', ''), height=80, key=f"ob_{form_key}")
-
-                            k11, k12, k13 = st.columns([1, 2, 1])
-                            
-                            # Pega os valores para verificação
-                            chamado_val = row.get('Nº Chamado', '')
-                            link_val = row.get('Link Externo', '')
-                            
-                            with k11:
-                                # LÓGICA DO CLIQUE:
-                                if link_val and str(link_val).strip().lower() not in ['nan', 'none', '']:
-                                    # Se tiver link, exibe um "Botão Link" bonito
-                                    st.markdown(f"<p style='font-size:0.8rem; margin-bottom:0.4rem;'>Nº Chamado</p>", unsafe_allow_html=True)
-                                    st.markdown(f"""
-                                    <a href="{link_val}" target="_blank" style="
-                                        display: inline-block;
-                                        background-color: #E3F2FD;
-                                        color: #1565C0;
-                                        padding: 0.55rem 1rem;
-                                        border-radius: 0.5rem;
-                                        border: 1px solid #90CAF9;
-                                        text-decoration: none;
-                                        font-weight: 700;
-                                        font-size: 0.9rem;
-                                        width: 100%;
-                                        text-align: center;
-                                        transition: background-color 0.2s;
-                                    ">
-                                    🔗 {chamado_val}
-                                    </a>
-                                    """, unsafe_allow_html=True)
-                                else:
-                                    # Se NÃO tiver link, exibe o input cinza padrão
-                                    st.text_input("Nº Chamado", value=chamado_val, disabled=True, key=f"nchamado_{form_key}")
-                            
-                            # Campos Editáveis
-                            n_lk = k12.text_input("Link", value=link_val, key=f"lk_{form_key}")
-                            n_pt = k13.text_input("Protocolo", value=row.get('Nº Protocolo', ''), key=f"pt_{form_key}")
-                                        
-                                st.markdown("---")
-                                desc = ""
-                                
-                                # Verifica se é um serviço sem equipamentos listados
-                                if str(nome_servico).lower() in SERVICOS_SEM_EQUIPAMENTO: 
-                                    desc = f"Realizar {nome_servico}"
-                                else:
-                                    its = []
-                                    # Agrupa por Sistema (Alarme, CFTV, etc)
-                                    for s, d in df_grupo.groupby('Sistema'):
-                                        its.append(f"**{clean_val(s, 'Geral')}**")
-                                        
-                                        cols_visual = ['Qtd', 'Equipamento']
-                                        # Garante que as colunas existem antes de filtrar
-                                        cols_existentes = [c for c in cols_visual if c in d.columns]
-                                        
-                                        if cols_existentes:
-                                            d_visual = d[cols_existentes].drop_duplicates()
-                                        else:
-                                            d_visual = d # Se não achar as colunas, usa o original
-                                        
-                                        for _, r in d_visual.iterrows():
-                                            # Formatação da Quantidade (tira o .0 se existir, ex: 7.0 -> 7)
-                                            qtd_raw = str(r.get('Qtd', '0'))
-                                            qtd_fmt = qtd_raw.replace('.0', '') if qtd_raw.replace('.', '').isdigit() else qtd_raw
-                                            
-                                            nome_eq = r.get('Equipamento', 'Item')
-                                            its.append(f"- {qtd_fmt}x {nome_eq}")
-                                            
-                                    desc = "<br>".join(its)
-                                
-                                st.caption("Itens:")
-                                st.markdown(f"<div style='background:#f9f9f9; padding:10px; border-radius:4px; font-size:0.9em;'>{desc}</div>", unsafe_allow_html=True)
-                                st.markdown("<br>", unsafe_allow_html=True)
                 
-                                if st.form_submit_button("💾 Salvar"):
-                                upds = {
-                                    "Data Abertura": n_ab, "Data Agendamento": n_ag, "Data Finalização": n_fi,
-                                    "Analista": n_an, "Gestor": n_ge, "Técnico": n_tc, "Projeto": n_pj,
-                                    "Serviço": n_sv, "Sistema": n_si, "Observações e Pendencias": n_ob,
-                                    "Link Externo": n_lk, "Nº Protocolo": n_pt
-                                }
-                                recalc = False
-                                if n_st == "(Automático)": recalc = True
-                                else:
-                                    upds["Status"] = n_st
-                                    if n_st in ["Cancelado", "Pausado"]: upds["Sub-Status"] = ""
-                                    if n_st == "Finalizado" and n_fi is None: st.error("Data Finalização obrigatória!"); st.stop()
+                # Expander
+                with st.expander(f"📝 Editar Detalhes - ID: {ids[0]}"):
+                    form_key = f"form_{row['ID']}"
+                    with st.form(key=form_key):
+                        # Carregamento de listas auxiliares
+                        try:
+                            df_st = utils.carregar_config_db("status"); lst_st = [str(x) for x in df_st.iloc[:,0].dropna().tolist()] if not df_st.empty else []
+                            df_pj = utils.carregar_config_db("projetos_nomes"); lst_pj = [str(x) for x in df_pj.iloc[:,0].dropna().tolist()] if not df_pj.empty else []
+                            df_tc = utils.carregar_config_db("tecnicos"); lst_tc = [str(x) for x in df_tc.iloc[:,0].dropna().tolist()] if not df_tc.empty else []
+                            df_us = utils.carregar_usuarios_db(); df_us.columns = [c.capitalize() for c in df_us.columns] if not df_us.empty else []
+                            lst_an = [str(x) for x in df_us["Nome"].dropna().tolist()] if not df_us.empty and "Nome" in df_us.columns else []
+                        except: lst_st=[]; lst_pj=[]; lst_tc=[]; lst_an=[]
 
-                                with st.spinner("Salvando..."):
-                                    c = 0
-                                    for cid in ids:
-                                        if utils_chamados.atualizar_chamado_db(cid, upds): c += 1
-                                    if c > 0:
-                                        st.success("Salvo!")
-                                        if recalc:
-                                            da = utils_chamados.carregar_chamados_db()
-                                            dt = da[da['ID'].isin(ids)]
-                                            calcular_e_atualizar_status_projeto(dt, ids)
-                                        st.cache_data.clear(); time.sleep(0.5); st.rerun()
-                                    else: st.error("Erro.")
+                        def sf(v): return str(v) if pd.notna(v) and str(v).lower() not in ['nan', 'none', ''] else ""
+                        
+                        l_st = sorted(list(set(lst_st + [st_atual] + ["(Automático)", "Finalizado"])))
+                        i_st = l_st.index(st_atual) if st_atual in l_st else 0
+                        
+                        v_pj = sf(row.get('Projeto', '')); l_pj = sorted(list(set(lst_pj + [v_pj]))); i_pj = l_pj.index(v_pj) if v_pj in l_pj else 0
+                        v_tc = sf(row.get('Técnico', '')); l_tc = sorted(list(set(lst_tc + [v_tc]))); i_tc = l_tc.index(v_tc) if v_tc in l_tc else 0
+                        v_an = sf(row.get('Analista', '')); l_an = sorted(list(set(lst_an + [v_an]))); i_an = l_an.index(v_an) if v_an in l_an else 0
+
+                        # Linha 1: Status e Datas
+                        k1, k2, k3, k4 = st.columns(4)
+                        n_st = k1.selectbox("Status", l_st, index=i_st, key=f"st_{form_key}")
+                        n_ab = k2.date_input("Abertura", value=_to_date_safe(row.get('Abertura')) or date.today(), format="DD/MM/YYYY", key=f"ab_{form_key}")
+                        n_ag = k3.date_input("Agendamento", value=_to_date_safe(row.get('Agendamento')), format="DD/MM/YYYY", key=f"ag_{form_key}")
+                        n_fi = k4.date_input("Finalização", value=_to_date_safe(row.get('Fechamento')), format="DD/MM/YYYY", key=f"fi_{form_key}")
+
+                        # Linha 2: Pessoas
+                        k5, k6, k7 = st.columns(3)
+                        n_an = k5.selectbox("Analista", l_an, index=i_an, key=f"an_{form_key}")
+                        n_ge = k6.text_input("Gestor", value=row.get('Gestor', ''), key=f"ge_{form_key}")
+                        n_tc = k7.selectbox("Técnico", l_tc, index=i_tc, key=f"tc_{form_key}")
+
+                        # Linha 3: Projeto e Serviço
+                        k8, k9, k10 = st.columns(3)
+                        n_pj = k8.selectbox("Projeto", l_pj, index=i_pj, key=f"pj_{form_key}")
+                        n_sv = k9.text_input("Serviço", value=row.get('Serviço', ''), key=f"sv_{form_key}")
+                        n_si = k10.text_input("Sistema", value=row.get('Sistema', ''), key=f"si_{form_key}")
+
+                        n_ob = st.text_area("Observações", value=row.get('Observações e Pendencias', ''), height=80, key=f"ob_{form_key}")
+                        
+                        # Linha 4: Links e Chamado
+                        k11, k12, k13 = st.columns([1, 2, 1])
+                        
+                        chamado_val = row.get('Nº Chamado', '')
+                        link_val = row.get('Link Externo', '')
+                        
+                        with k11:
+                            if link_val and str(link_val).strip().lower() not in ['nan', 'none', '']:
+                                st.markdown(f"<p style='font-size:0.8rem; margin-bottom:0.4rem;'>Nº Chamado</p>", unsafe_allow_html=True)
+                                st.markdown(f"""
+                                <a href="{link_val}" target="_blank" style="
+                                    display: inline-block; background-color: #E3F2FD; color: #1565C0;
+                                    padding: 0.55rem 1rem; border-radius: 0.5rem; border: 1px solid #90CAF9;
+                                    text-decoration: none; font-weight: 700; font-size: 0.9rem; width: 100%; text-align: center;
+                                ">🔗 {chamado_val}</a>""", unsafe_allow_html=True)
+                            else:
+                                st.text_input("Nº Chamado", value=chamado_val, disabled=True, key=f"nchamado_{form_key}")
+                        
+                        n_lk = k12.text_input("Link", value=link_val, key=f"lk_{form_key}")
+                        n_pt = k13.text_input("Protocolo", value=row.get('Nº Protocolo', ''), key=f"pt_{form_key}")
+                        
+                        # --- ÁREA DOS ITENS (CORREÇÃO DE DUPLICIDADE) ---
+                        st.markdown("---")
+                        desc = ""
+                        
+                        if str(nome_servico).lower() in SERVICOS_SEM_EQUIPAMENTO: 
+                            desc = f"Realizar {nome_servico}"
+                        else:
+                            its = []
+                            for s, d in df_grupo.groupby('Sistema'):
+                                its.append(f"**{clean_val(s, 'Geral')}**")
+                                
+                                # Remove duplicatas exatas baseadas em Qtd e Equipamento
+                                cols_visual = ['Qtd', 'Equipamento']
+                                cols_ok = [c for c in cols_visual if c in d.columns]
+                                
+                                if cols_ok:
+                                    d_visual = d.drop_duplicates(subset=cols_ok)
+                                else:
+                                    d_visual = d
+
+                                for _, r in d_visual.iterrows():
+                                    qtd_raw = str(r.get('Qtd', '0'))
+                                    qtd_fmt = qtd_raw.replace('.0', '') if qtd_raw.replace('.', '').isdigit() else qtd_raw
+                                    nome_eq = r.get('Equipamento', 'Item')
+                                    its.append(f"- {qtd_fmt}x {nome_eq}")
+                            
+                            desc = "<br>".join(its)
+                        
+                        st.caption("Itens:")
+                        st.markdown(f"<div style='background:#f9f9f9; padding:10px; border-radius:4px; font-size:0.9em;'>{desc}</div>", unsafe_allow_html=True)
+                        st.markdown("<br>", unsafe_allow_html=True)
+
+                        if st.form_submit_button("💾 Salvar"):
+                            upds = {
+                                "Data Abertura": n_ab, "Data Agendamento": n_ag, "Data Finalização": n_fi,
+                                "Analista": n_an, "Gestor": n_ge, "Técnico": n_tc, "Projeto": n_pj,
+                                "Serviço": n_sv, "Sistema": n_si, "Observações e Pendencias": n_ob,
+                                "Link Externo": n_lk, "Nº Protocolo": n_pt
+                            }
+                            recalc = False
+                            if n_st == "(Automático)": recalc = True
+                            else:
+                                upds["Status"] = n_st
+                                if n_st in ["Cancelado", "Pausado"]: upds["Sub-Status"] = ""
+                                if n_st == "Finalizado" and n_fi is None: st.error("Data Finalização obrigatória!"); st.stop()
+
+                            with st.spinner("Salvando..."):
+                                c = 0
+                                for cid in ids:
+                                    if utils_chamados.atualizar_chamado_db(cid, upds): c += 1
+                                if c > 0:
+                                    st.success("Salvo!")
+                                    if recalc:
+                                        da = utils_chamados.carregar_chamados_db()
+                                        dt = da[da['ID'].isin(ids)]
+                                        calcular_e_atualizar_status_projeto(dt, ids)
+                                    st.cache_data.clear(); time.sleep(0.5); st.rerun()
+                                else: st.error("Erro.")
 
     with aba_calendario:
         st.subheader("🗓️ Agenda da Semana")
@@ -946,6 +930,7 @@ else:
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
                         
+
 
 
 
