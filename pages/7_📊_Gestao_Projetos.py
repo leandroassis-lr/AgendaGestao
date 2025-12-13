@@ -862,45 +862,42 @@ else:
                             n_lk = k12.text_input("Link", value=link_val, key=f"lk_{form_key}")
                             n_pt = k13.text_input("Protocolo", value=row.get('Nº Protocolo', ''), key=f"pt_{form_key}")
                                         
-                st.markdown("---")
-                desc = ""
+                                st.markdown("---")
+                                desc = ""
+                                
+                                # Verifica se é um serviço sem equipamentos listados
+                                if str(nome_servico).lower() in SERVICOS_SEM_EQUIPAMENTO: 
+                                    desc = f"Realizar {nome_servico}"
+                                else:
+                                    its = []
+                                    # Agrupa por Sistema (Alarme, CFTV, etc)
+                                    for s, d in df_grupo.groupby('Sistema'):
+                                        its.append(f"**{clean_val(s, 'Geral')}**")
+                                        
+                                        cols_visual = ['Qtd', 'Equipamento']
+                                        # Garante que as colunas existem antes de filtrar
+                                        cols_existentes = [c for c in cols_visual if c in d.columns]
+                                        
+                                        if cols_existentes:
+                                            d_visual = d[cols_existentes].drop_duplicates()
+                                        else:
+                                            d_visual = d # Se não achar as colunas, usa o original
+                                        
+                                        for _, r in d_visual.iterrows():
+                                            # Formatação da Quantidade (tira o .0 se existir, ex: 7.0 -> 7)
+                                            qtd_raw = str(r.get('Qtd', '0'))
+                                            qtd_fmt = qtd_raw.replace('.0', '') if qtd_raw.replace('.', '').isdigit() else qtd_raw
+                                            
+                                            nome_eq = r.get('Equipamento', 'Item')
+                                            its.append(f"- {qtd_fmt}x {nome_eq}")
+                                            
+                                    desc = "<br>".join(its)
+                                
+                                st.caption("Itens:")
+                                st.markdown(f"<div style='background:#f9f9f9; padding:10px; border-radius:4px; font-size:0.9em;'>{desc}</div>", unsafe_allow_html=True)
+                                st.markdown("<br>", unsafe_allow_html=True)
                 
-                # Verifica se é um serviço sem equipamentos listados
-                if str(nome_servico).lower() in SERVICOS_SEM_EQUIPAMENTO: 
-                    desc = f"Realizar {nome_servico}"
-                else:
-                    its = []
-                    # Agrupa por Sistema (Alarme, CFTV, etc)
-                    for s, d in df_grupo.groupby('Sistema'):
-                        its.append(f"**{clean_val(s, 'Geral')}**")
-                        
-                        # --- CORREÇÃO DE DUPLICIDADE AQUI ---
-                        # Criamos uma visualização temporária apenas com Qtd e Equipamento
-                        # e removemos linhas que sejam EXATAMENTE iguais
-                        cols_visual = ['Qtd', 'Equipamento']
-                        # Garante que as colunas existem antes de filtrar
-                        cols_existentes = [c for c in cols_visual if c in d.columns]
-                        
-                        if cols_existentes:
-                            d_visual = d[cols_existentes].drop_duplicates()
-                        else:
-                            d_visual = d # Se não achar as colunas, usa o original
-                        
-                        for _, r in d_visual.iterrows():
-                            # Formatação da Quantidade (tira o .0 se existir, ex: 7.0 -> 7)
-                            qtd_raw = str(r.get('Qtd', '0'))
-                            qtd_fmt = qtd_raw.replace('.0', '') if qtd_raw.replace('.', '').isdigit() else qtd_raw
-                            
-                            nome_eq = r.get('Equipamento', 'Item')
-                            its.append(f"- {qtd_fmt}x {nome_eq}")
-                            
-                    desc = "<br>".join(its)
-                
-                st.caption("Itens:")
-                st.markdown(f"<div style='background:#f9f9f9; padding:10px; border-radius:4px; font-size:0.9em;'>{desc}</div>", unsafe_allow_html=True)
-                st.markdown("<br>", unsafe_allow_html=True)
-
-                if st.form_submit_button("💾 Salvar"):
+                                if st.form_submit_button("💾 Salvar"):
                                 upds = {
                                     "Data Abertura": n_ab, "Data Agendamento": n_ag, "Data Finalização": n_fi,
                                     "Analista": n_an, "Gestor": n_ge, "Técnico": n_tc, "Projeto": n_pj,
@@ -949,6 +946,7 @@ else:
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
                         
+
 
 
 
