@@ -849,7 +849,6 @@ else:
                         n_lk = k12.text_input("Link", value=link_val, key=f"lk_{form_key}")
                         n_pt = k13.text_input("Protocolo", value=row.get('Nº Protocolo', ''), key=f"pt_{form_key}")
                         
-                        # --- ÁREA DOS ITENS (CORREÇÃO DE DUPLICIDADE) ---
                         st.markdown("---")
                         desc = ""
                         
@@ -858,22 +857,36 @@ else:
                         else:
                             its = []
                             for s, d in df_grupo.groupby('Sistema'):
+                                # Título do Sistema
                                 its.append(f"**{clean_val(s, 'Geral')}**")
                                 
-                                # Remove duplicatas exatas baseadas em Qtd e Equipamento
-                                cols_visual = ['Qtd', 'Equipamento']
-                                cols_ok = [c for c in cols_visual if c in d.columns]
+                                # --- 1. IDENTIFICAÇÃO DAS COLUNAS CERTAS ---
+                                # Verifica qual nome de coluna de quantidade existe no DataFrame (Qtd ou Qtd.)
+                                col_qtd = 'Qtd.' if 'Qtd.' in d.columns else 'Qtd'
+                                col_eqp = 'Equipamento'
                                 
-                                if cols_ok:
-                                    d_visual = d.drop_duplicates(subset=cols_ok)
+                                # --- 2. FILTRO DE DUPLICIDADE ---
+                                # Cria lista de colunas existentes para remover duplicatas
+                                cols_check = [c for c in [col_qtd, col_eqp] if c in d.columns]
+                                
+                                if cols_check:
+                                    d_visual = d.drop_duplicates(subset=cols_check)
                                 else:
                                     d_visual = d
 
+                                # --- 3. FORMATAÇÃO VISUAL ---
                                 for _, r in d_visual.iterrows():
-                                    qtd_raw = str(r.get('Qtd', '0'))
+                                    # Pega o valor usando a coluna identificada
+                                    qtd_raw = str(r.get(col_qtd, '0'))
+                                    
+                                    # Limpeza visual (remove .0 e None/Nan)
+                                    if qtd_raw.lower() in ['nan', 'none', '']: qtd_raw = '0'
                                     qtd_fmt = qtd_raw.replace('.0', '') if qtd_raw.replace('.', '').isdigit() else qtd_raw
-                                    nome_eq = r.get('Equipamento', 'Item')
-                                    its.append(f"- {qtd_fmt}x {nome_eq}")
+                                    
+                                    nome_eq = r.get(col_eqp, 'Item')
+                                    
+                                    # Formato solicitado: "7 - SENSOR..."
+                                    its.append(f"{qtd_fmt} - {nome_eq}")
                             
                             desc = "<br>".join(its)
                         
@@ -930,6 +943,7 @@ else:
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
                         
+
 
 
 
