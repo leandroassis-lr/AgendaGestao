@@ -190,16 +190,10 @@ def clean_val(val, default="N/A"):
 # --- LÓGICA INTELIGENTE DE STATUS (ATUALIZADA) ---
 def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
     
-    # Pega a primeira linha para analisar o contexto do grupo
-    row = df_projeto.iloc[0]
-    
-    status_atual = str(row.get('Status', 'Não Iniciado')).strip()
-    # Lista de status que NÃO devem ser sobrescritos pela automação
+    status_atual = str(df_projeto.iloc[0].get('Status', 'Não Iniciado')).strip()
     status_manual_list = ["Pendência de Infra", "Pendência de Equipamento", "Pausado", "Cancelado", "Finalizado"]
-    
-    # 1. Se estiver em um status "Manual/Bloqueante", apenas limpa o sub-status e retorna
     if status_atual in status_manual_list:
-        sub_status_atual_val = row.get('Sub-Status')
+        sub_status_atual_val = df_projeto.iloc[0].get('Sub-Status')
         sub_status_atual = "" if pd.isna(sub_status_atual_val) else str(sub_status_atual_val).strip()
         
         if sub_status_atual != "":
@@ -209,108 +203,97 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
             return True 
         return False 
     
-    # 2. Verifica tipo de chamado (-S-erviço ou -E-quipamento)
-    n_chamado = str(row.get('Nº Chamado', ''))
-    has_S = '-S-' in n_chamado or '-s-' in n_chamado
-    has_E = '-E-' in n_chamado or '-e-' in n_chamado
+    has_S = df_projeto['Nº Chamado'].str.contains('-S-').any()
+    has_E = df_projeto['Nº Chamado'].str.contains('-E-').any()
     
-    # Funções auxiliares de verificação
     def check_col_present(df, col_name):
         if col_name in df.columns:
-            # Verifica se tem texto e não é vazio
             return df[col_name].fillna('').astype(str).str.strip().ne('').any()
         return False
 
     def check_date_present(df, col_name):
         if col_name in df.columns:
-            # Verifica se a data é válida/não nula
             return df[col_name].notna().any()
         return False
     
-    # Verifica preenchimento das colunas Chave
     link_presente = check_col_present(df_projeto, 'Link Externo')
     protocolo_presente = check_col_present(df_projeto, 'Nº Protocolo')
-    pedido_presente = check_col_present(df_projeto, 'Nº Pedido') # Para Equipamento
-    envio_presente = check_date_present(df_projeto, 'Data Envio') # Para Equipamento
+    pedido_presente = check_col_present(df_projeto, 'Nº Pedido')
+    envio_presente = check_date_present(df_projeto, 'Data Envio')
     tecnico_presente = check_col_present(df_projeto, 'Técnico')
     
-    # Valores padrão de início (Regra: Status automático)
     novo_status = "Não Iniciado"
-    novo_sub_status = "Aguardando Ação"
+    novo_sub_status = ""
 
-    # --- LÓGICA DE DECISÃO ---
-
-    # --- Cenário 1: Misto (S e E) - Prioridade para Equipamento depois Serviço ---
-    if has_S and has_E:
-        # FASE 1: Equipamento (Bloqueante)
-        if not pedido_presente:
-            novo_status = "Não Iniciado"
-            novo_sub_status = "Solicitar Equipamento (Inserir Nº Pedido)"
-        elif not envio_presente:
-            novo_status = "Em Andamento"
-            novo_sub_status = "Aguardando Envio (Inserir Data)"
-        
-        # FASE 2: Serviço (Só avança se equipamento ok)
-        # Assumimos que se tem pedido e data de envio, focamos no serviço
-        elif not link_presente:
-            novo_status = "Em Andamento"
-            novo_sub_status = "Pendente Link"
-        elif not tecnico_presente:
-            novo_status = "Em Andamento"
-            novo_sub_status = "Acionar técnico"
-        elif not protocolo_presente:
-            novo_status = "Em Andamento"
-            novo_sub_status = "Enviar Status Cliente"
-        else:
+    # --- Cenário 1: Só Serviço (S-Only) ---
+    if has_S and not has_E:
+        if protocolo_presente:
             novo_status = "Concluído"
             novo_sub_status = "Enviar Book"
+        elif tecnico_presente:
+            novo_status = "Em Andamento"
+            novo_sub_status = "Enviar Status Cliente"
+        elif link_presente:
+            novo_status = "Em Andamento"
+            novo_sub_status = "Acionar técnico"
+        else:
+            novo_status = "Não Iniciado"
+            novo_sub_status = "Pendente Link"
 
-    # --- Cenário 2: Só Equipamento (E-Only) - Regra Nova ---
+    # --- Cenário 2: Misto (S e E) ---
+    elif has_S and has_E:
+        if protocolo_presente:
+            novo_status = "Concluído"
+            novo_sub_status = "Enviar Book"
+        elif tecnico_presente:
+            novo_status = "Em Andamento"
+            novo_sub_status = "Enviar Status Cliente"
+        elif envio_presente:
+            novo_status = "Em Andamento"
+            novo_sub_status = "Equipamento entregue - Acionar técnico"
+        elif pedido_presente:
+            novo_status = "Em Andamento"
+            novo_sub_status = "Equipamento Solicitado"
+        elif link_presente:
+            novo_status = "Em Andamento"
+            novo_sub_status = "Solicitar Equipamento"
+        else:
+            novo_status = "Não Iniciado"
+            novo_sub_status = "Pendente Link"
+
+    # --- Cenário 3: Só Equipamento (E-Only) ---
     elif not has_S and has_E:
-        if not pedido_presente:
-            novo_status = "Não Iniciado"
-            novo_sub_status = "Solicitar Equipamento (Inserir Nº Pedido)"
-        elif not envio_presente:
-            novo_status = "Em Andamento"
-            novo_sub_status = "Aguardando Envio (Inserir Data)"
-        else:
-            # Se já tem pedido e data de envio, está concluído o processo logístico
-            novo_status = "Concluído" 
-            novo_sub_status = "Equipamento Enviado/Entregue"
-
-    # --- Cenário 3: Só Serviço (S-Only) - Regra Antiga ---
-    elif has_S and not has_E:
-        if not link_presente:
-            novo_status = "Não Iniciado"
-            novo_sub_status = "Pendente Link"
-        elif not tecnico_presente:
-            novo_status = "Em Andamento"
-            novo_sub_status = "Acionar técnico"
-        elif not protocolo_presente:
-            novo_status = "Em Andamento"
-            novo_sub_status = "Enviar Status Cliente"
-        else:
+        if envio_presente:
             novo_status = "Concluído"
-            novo_sub_status = "Enviar Book"
-
+            novo_sub_status = "Equipamento entregue"
+        elif pedido_presente:
+            novo_status = "Em Andamento"
+            novo_sub_status = "Equipamento Solicitado"
+        else:
+            novo_status = "Não Iniciado"
+            novo_sub_status = "Solicitar Equipamento"
+    
     else: 
-        # Caso genérico (se não tiver nem S nem E no nome)
         novo_status = "Não Iniciado"
-        novo_sub_status = "Classificar Chamado (S ou E)"
+        novo_sub_status = "Verificar Chamados"
 
-    # --- ATUALIZAÇÃO NO BANCO ---
-    sub_status_atual_val = row.get('Sub-Status')
+    sub_status_atual_val = df_projeto.iloc[0].get('Sub-Status')
     sub_status_atual = "" if pd.isna(sub_status_atual_val) else str(sub_status_atual_val).strip()
     
     if status_atual != novo_status or sub_status_atual != novo_sub_status:
-        # st.toast opcional para não poluir a tela se rodar em loop, mas ajuda no debug
-        # st.toast(f"🔄 Status atualizado: '{status_atual}' -> '{novo_status}'", icon="🤖")
-        
+        st.info(f"Status do projeto mudou de '{status_atual} | {sub_status_atual}' para '{novo_status} | {novo_sub_status}'")
         updates = {"Status": novo_status, "Sub-Status": novo_sub_status}
         for chamado_id in ids_para_atualizar:
             utils_chamados.atualizar_chamado_db(chamado_id, updates)
         return True
     return False
+
+# --- FUNÇÃO HELPER PARA LIMPAR VALORES ---
+def clean_val(val, default="N/A"):
+    """Converte None, NaN, etc. para 'N/A' ou o padrão definido."""
+    if val is None or pd.isna(val) or str(val).lower() == "none" or str(val).lower() == "nan":
+        return default
+    return str(val)
 
 # --- FUNÇÕES DE IMPORTAÇÃO ---
 @st.dialog("Importar Chamados (Mapeamento Fixo)", width="large")
@@ -934,6 +917,7 @@ else:
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
                         
+
 
 
 
