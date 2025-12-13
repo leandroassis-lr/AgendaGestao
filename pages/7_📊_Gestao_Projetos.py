@@ -166,6 +166,11 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# --- Controle Principal de Login ---
+if "logado" not in st.session_state or not st.session_state.logado:
+    st.warning("Por favor, faça o login na página principal (app.py) antes de acessar esta página.")
+    st.stop()
+
 # --- CONSTANTES ---
 SERVICOS_SEM_EQUIPAMENTO = [
    "vistoria", "adequação de gerador (recall)", "desinstalação total", "recolhimento de eqto",
@@ -917,6 +922,7 @@ else:
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
                         
+
 
 
 
