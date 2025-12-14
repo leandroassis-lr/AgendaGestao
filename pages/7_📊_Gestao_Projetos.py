@@ -192,46 +192,46 @@ def clean_val(val, default="N/A"):
     if val is None or pd.isna(val) or str(val).lower() in ["none", "nan", ""]: return default
     return str(val)
 
-# --- LÓGICA DE STATUS "TOP-DOWN" (HIERARQUIA FINANCEIRA -> MANUAL -> AUTOMÁTICA) ---
+# --- LÓGICA DE STATUS "TOP-DOWN" (ATUALIZADA) ---
 def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
     
     row = df_projeto.iloc[0]
     
     # --- 1. LEITURA DE DADOS ---
-    # Campos Chave
     n_chamado = str(row.get('Nº Chamado', ''))
+    
+    # Identificação de Tipo
+    is_equip = '-e-' in n_chamado.lower()
+    # Se não for equipamento, assumimos que é Serviço (ou Padrão)
+    is_serv = not is_equip 
+    
+    # Campos Chave
     link_presente = row.get('Link Externo') and str(row.get('Link Externo')).strip() not in ['', 'nan', 'None']
     tecnico_presente = row.get('Técnico') and str(row.get('Técnico')).strip() not in ['', 'nan', 'None']
-    
-    # Campos Equipamento
     pedido_presente = row.get('Nº Pedido') and str(row.get('Nº Pedido')).strip() not in ['', 'nan', 'None']
     envio_presente = row.get('Data Envio') and pd.notna(row.get('Data Envio'))
     
-    # Flags (Checkboxes e Importações)
-    # Assumimos que o sistema Financeiro vai preencher 'chk_financeiro_banco' e 'chk_financeiro_book'
+    # Flags Checkboxes (Lidos do Banco)
     flag_banco = str(row.get('chk_financeiro_banco', '')).upper() == 'TRUE'
     flag_book = str(row.get('chk_financeiro_book', '')).upper() == 'TRUE'
-    book_enviado_sim = str(row.get('Book Enviado', '')).upper() == 'SIM' # Coluna que vem da planilha do financeiro
+    book_enviado_sim = str(row.get('Book Enviado', '')).upper() == 'SIM'
     
-    # Flags Manuais (Checkboxes do Form)
     chk_status_cli = str(row.get('chk_status_enviado', '')).upper() == 'TRUE'
     chk_eq_entregue = str(row.get('chk_equipamento_entregue', '')).upper() == 'TRUE'
 
-    # Status Atual (para verificação manual)
     status_atual = str(row.get('Status', 'Não Iniciado')).strip()
     status_manual_bloqueantes = ["Pendência de Infra", "Pendência de Equipamento", "Cancelado", "Pausado"]
 
     novo_status = "Não Iniciado"
     novo_sub_status = ""
 
-    # --- HIERARQUIA 1: FINANCEIRO (BANCO / LIBERAÇÃO) ---
+    # --- HIERARQUIA 1: FINANCEIRO (BANCO) ---
     if flag_banco:
         novo_status = "Finalizado"
         novo_sub_status = "FATURADO"
 
     # --- HIERARQUIA 2: FINANCEIRO (BOOK) ---
     elif flag_book:
-        # Se está na lista de Book, a regra é clara:
         if book_enviado_sim:
             novo_status = "Finalizado"
             novo_sub_status = "AGUARDANDO FATURAMENTO"
@@ -240,38 +240,18 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
             novo_sub_status = "ENVIAR BOOK"
 
     # --- HIERARQUIA 3: STATUS MANUAL ---
-    # Só permite manter manual se NÃO estiver nas fases financeiras acima
     elif status_atual in status_manual_bloqueantes:
-        # Mantém o que o usuário escolheu manualmente
         novo_status = status_atual
-        novo_sub_status = str(row.get('Sub-Status', '')) # Mantém o substatus atual ou vazio
-        
-        # Regra de Limpeza: Se estava pausado e voltou, o usuário muda manual para "Em Andamento",
-        # aí ele cairá na automação abaixo (Hierarquia 4 ou 5).
+        novo_sub_status = str(row.get('Sub-Status', ''))
 
-    # --- HIERARQUIA 4: AUTOMÁTICO SERVIÇO (-S-) ---
-    elif '-s-' in n_chamado.lower():
-        if chk_status_cli:
-            novo_status = "Concluído"
-            novo_sub_status = "Enviar Book"
-        elif tecnico_presente:
-            novo_status = "Em Andamento"
-            novo_sub_status = "Enviar Status Cliente"
-        elif link_presente:
-            novo_status = "Em Andamento"
-            novo_sub_status = "Acionar técnico"
-        else:
-            novo_status = "Não Iniciado"
-            novo_sub_status = "Abrir chamado Btime"
-
-    # --- HIERARQUIA 5: AUTOMÁTICO EQUIPAMENTO (-E-) ---
-    elif '-e-' in n_chamado.lower():
+    # --- HIERARQUIA 4: AUTOMÁTICO EQUIPAMENTO (-E-) ---
+    elif is_equip:
         if chk_eq_entregue:
             novo_status = "Concluído"
             novo_sub_status = "Aguardando Faturamento"
         elif envio_presente:
             novo_status = "Em Andamento"
-            novo_sub_status = "Aguardando Entrega"
+            novo_sub_status = "Aguardando Entrega" # <--- Checkbox deve aparecer aqui
         elif pedido_presente:
             novo_status = "Em Andamento"
             novo_sub_status = "Aguardando envio do equipamento"
@@ -279,12 +259,23 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
             novo_status = "Não Iniciado"
             novo_sub_status = "Solicitar Equipamento"
 
-    # --- HIERARQUIA 6: GENÉRICO (Se não tiver S nem E e não for financeiro) ---
-    else:
-        novo_status = "Não Iniciado"
-        novo_sub_status = "Classificar Chamado"
+    # --- HIERARQUIA 5: AUTOMÁTICO SERVIÇO (OU PADRÃO) ---
+    else: 
+        # Esta regra agora vale para "-S-" e para chamados sem sigla
+        if chk_status_cli:
+            novo_status = "Concluído"
+            novo_sub_status = "Enviar Book"
+        elif tecnico_presente:
+            novo_status = "Em Andamento"
+            novo_sub_status = "Enviar Status Cliente" # <--- Checkbox deve aparecer aqui
+        elif link_presente:
+            novo_status = "Em Andamento"
+            novo_sub_status = "Acionar técnico"
+        else:
+            novo_status = "Não Iniciado"
+            novo_sub_status = "Abrir chamado Btime"
 
-    # --- APLICAÇÃO DA ATUALIZAÇÃO ---
+    # --- APLICAÇÃO ---
     sub_status_db = str(row.get('Sub-Status', '')).strip()
     sub_status_novo_str = str(novo_sub_status).strip()
 
@@ -487,7 +478,22 @@ with st.sidebar:
     st.header("Ações")
     if st.button("➕ Importar Chamados"): run_importer_dialog()
     if st.button("🔗 Importar Links"): run_link_importer_dialog()
-    
+    if st.button("🔄 Atualizar Status"):
+        with st.spinner("Reprocessando todos os status..."):
+            df_todos = utils_chamados.carregar_chamados_db()
+            if not df_todos.empty:
+                count_mudou = 0
+                # Agrupa por Nº Chamado para processar em lote
+                for num_chamado, grupo in df_todos.groupby('Nº Chamado'):
+                    ids_grupo = grupo['ID'].tolist()
+                    # Chama a função de lógica para o grupo
+                    if calcular_e_atualizar_status_projeto(grupo, ids_grupo):
+                        count_mudou += 1
+                st.success(f"Processo finalizado! {count_mudou} projetos tiveram status alterado.")
+                time.sleep(2)
+                st.rerun()
+            else:
+                st.warning("Banco de dados vazio.")  
     st.divider()
     st.header("Filtros de Gestão")
     lista_analistas = ["Todos"] + sorted(df['Analista'].dropna().unique().tolist())
@@ -781,11 +787,10 @@ else:
                     else: st.caption("-")
                 
                 # Expander
-                # Expander
                 with st.expander(f"📝 Editar Detalhes - ID: {ids[0]}"):
                     form_key = f"form_{row['ID']}"
                     with st.form(key=form_key):
-                        # --- CARREGAMENTO LISTAS ---
+                        # ... (Bloco de Carregamento de Listas IGUAL AO ANTERIOR) ...
                         try:
                             df_st = utils.carregar_config_db("status"); lst_st = [str(x) for x in df_st.iloc[:,0].dropna().tolist()] if not df_st.empty else []
                             df_pj = utils.carregar_config_db("projetos_nomes"); lst_pj = [str(x) for x in df_pj.iloc[:,0].dropna().tolist()] if not df_pj.empty else []
@@ -796,47 +801,38 @@ else:
 
                         def sf(v): return str(v) if pd.notna(v) and str(v).lower() not in ['nan', 'none', ''] else ""
                         
-                        # Definição de Listas
                         l_st_manual = ["Pendência de Infra", "Pendência de Equipamento", "Cancelado", "Pausado"]
                         l_st_completa = sorted(list(set(lst_st + l_st_manual + [st_atual] + ["(Automático)"])))
                         
-                        # Indices
                         i_st = l_st_completa.index(st_atual) if st_atual in l_st_completa else 0
                         v_pj = sf(row.get('Projeto', '')); l_pj = sorted(list(set(lst_pj + [v_pj]))); i_pj = l_pj.index(v_pj) if v_pj in l_pj else 0
                         v_tc = sf(row.get('Técnico', '')); l_tc = sorted(list(set(lst_tc + [v_tc]))); i_tc = l_tc.index(v_tc) if v_tc in l_tc else 0
                         v_an = sf(row.get('Analista', '')); l_an = sorted(list(set(lst_an + [v_an]))); i_an = l_an.index(v_an) if v_an in l_an else 0
 
-                        # Verificações de Tipo e Financeiro
                         n_chamado_str = str(row.get('Nº Chamado', ''))
                         is_equip = '-e-' in n_chamado_str.lower()
-                        is_serv = '-s-' in n_chamado_str.lower()
-                        
-                        # Flags Financeiro (Simulação de leitura)
+                        # Finaceiro Flags
                         is_fin_banco = str(row.get('chk_financeiro_banco', '')).upper() == 'TRUE'
                         is_fin_book = str(row.get('chk_financeiro_book', '')).upper() == 'TRUE'
                         is_financeiro_locked = is_fin_banco or is_fin_book
 
-                        # --- LINHA 1: STATUS E DATAS ---
+                        # --- LINHAS 1, 2 e 3 (IGUAL AO ANTERIOR) ---
                         k1, k2, k3, k4 = st.columns(4)
-                        
-                        # Lógica de Travamento do Status
                         if is_financeiro_locked:
                             k1.markdown(f"<small>Status (Financeiro)</small><br><b>{st_atual}</b>", unsafe_allow_html=True)
-                            n_st = st_atual # Mantém valor
+                            n_st = st_atual
                         else:
-                            n_st = k1.selectbox("Status (Ou Manual)", l_st_completa, index=i_st, key=f"st_{form_key}", help="Selecione '(Automático)' para retomar o fluxo normal.")
+                            n_st = k1.selectbox("Status (Ou Manual)", l_st_completa, index=i_st, key=f"st_{form_key}", help="Selecione '(Automático)' para retomar.")
 
                         n_ab = k2.date_input("Abertura", value=_to_date_safe(row.get('Abertura')) or date.today(), format="DD/MM/YYYY", key=f"ab_{form_key}")
                         n_ag = k3.date_input("Agendamento", value=_to_date_safe(row.get('Agendamento')), format="DD/MM/YYYY", key=f"ag_{form_key}")
                         n_fi = k4.date_input("Finalização", value=_to_date_safe(row.get('Fechamento')), format="DD/MM/YYYY", key=f"fi_{form_key}")
 
-                        # --- LINHA 2: PESSOAS ---
                         k5, k6, k7 = st.columns(3)
                         n_an = k5.selectbox("Analista", l_an, index=i_an, key=f"an_{form_key}")
                         n_ge = k6.text_input("Gestor", value=row.get('Gestor', ''), key=f"ge_{form_key}")
                         n_tc = k7.selectbox("Técnico", l_tc, index=i_tc, key=f"tc_{form_key}")
 
-                        # --- LINHA 3: PROJETO E SERVIÇO ---
                         k8, k9, k10 = st.columns(3)
                         n_pj = k8.selectbox("Projeto", l_pj, index=i_pj, key=f"pj_{form_key}")
                         n_sv = k9.text_input("Serviço", value=row.get('Serviço', ''), key=f"sv_{form_key}")
@@ -844,38 +840,39 @@ else:
 
                         n_ob = st.text_area("Observações", value=row.get('Observações e Pendencias', ''), height=80, key=f"ob_{form_key}")
 
-                        # --- LINHA 4: CAMPOS DINÂMICOS (S vs E) + CHECKBOXES ---
+                        # --- LINHA 4: DINÂMICA COM CHECKBOX INTELIGENTE ---
                         st.markdown("---")
                         
-                        # Recupera valores atuais dos checkboxes
+                        # Valores atuais
                         val_chk_cli = str(row.get('chk_status_enviado', '')).upper() == 'TRUE'
                         val_chk_ent = str(row.get('chk_equipamento_entregue', '')).upper() == 'TRUE'
-                        
-                        # Variáveis de retorno
-                        ret_chk_cli = val_chk_cli
-                        ret_chk_ent = val_chk_ent
                         n_lk = row.get('Link Externo', '')
                         n_pt = row.get('Nº Protocolo', '')
                         n_pedido = row.get('Nº Pedido', '')
                         n_envio = _to_date_safe(row.get('Data Envio'))
 
+                        # Variáveis para retorno (padrão é manter o que estava)
+                        ret_chk_cli = val_chk_cli
+                        ret_chk_ent = val_chk_ent
+
                         if is_equip:
                             c_e1, c_e2, c_e3, c_e4 = st.columns([1, 1.5, 1.5, 2])
-                            
-                            with c_e1: # Chamado
-                                st.text_input("Nº Chamado", value=n_chamado_str, disabled=True, key=f"nc_{form_key}")
-                            
+                            with c_e1: st.text_input("Nº Chamado", value=n_chamado_str, disabled=True, key=f"nc_{form_key}")
                             n_pedido = c_e2.text_input("📦 Nº Pedido", value=n_pedido, key=f"ped_{form_key}")
                             n_envio = c_e3.date_input("🚚 Data Envio", value=n_envio, format="DD/MM/YYYY", key=f"env_{form_key}")
                             
-                            with c_e4: # Checkbox Específico
-                                st.markdown("<br>", unsafe_allow_html=True)
-                                ret_chk_ent = st.checkbox("✅ EQUIPAMENTO ENTREGUE", value=val_chk_ent, key=f"chk_ent_{form_key}")
+                            with c_e4:
+                                # Lógica Checkbox Equipamento: Só aparece se status for "Aguardando Entrega"
+                                if acao == "Aguardando Entrega":
+                                    st.markdown("<br>", unsafe_allow_html=True)
+                                    ret_chk_ent = st.checkbox("✅ EQUIPAMENTO ENTREGUE", value=val_chk_ent, key=f"chk_ent_{form_key}")
+                                elif val_chk_ent: 
+                                    # Se já foi entregue, mostra apenas um texto informativo (ou nada)
+                                    st.markdown("<br><small>✔️ Entregue</small>", unsafe_allow_html=True)
 
-                        else: # Serviço (-S-) ou Padrão
+                        else: # Serviço (ou Padrão)
                             c_s1, c_s2, c_s3, c_s4 = st.columns([1, 2, 1.5, 1.5])
-                            
-                            with c_s1: # Chamado com Link
+                            with c_s1: 
                                 if n_lk and str(n_lk).strip().lower() not in ['nan', 'none', '']:
                                     st.markdown("<small>Nº Chamado</small>", unsafe_allow_html=True)
                                     st.markdown(f"<a href='{n_lk}' target='_blank' style='display:block; background:#E3F2FD; color:#1565C0; padding:6px; border-radius:5px; text-align:center; text-decoration:none; font-weight:bold;'>🔗 {n_chamado_str}</a>", unsafe_allow_html=True)
@@ -885,15 +882,18 @@ else:
                             n_lk = c_s2.text_input("Link", value=n_lk, key=f"lk_{form_key}")
                             n_pt = c_s3.text_input("Protocolo", value=n_pt, key=f"pt_{form_key}")
                             
-                            with c_s4: # Checkbox Específico
-                                st.markdown("<br>", unsafe_allow_html=True)
-                                ret_chk_cli = st.checkbox("✅ STATUS ENVIADO", value=val_chk_cli, key=f"chk_cli_{form_key}")
+                            with c_s4: 
+                                # Lógica Checkbox Serviço: Só aparece se status for "Enviar Status Cliente"
+                                if acao == "Enviar Status Cliente":
+                                    st.markdown("<br>", unsafe_allow_html=True)
+                                    ret_chk_cli = st.checkbox("✅ STATUS ENVIADO", value=val_chk_cli, key=f"chk_cli_{form_key}")
+                                elif val_chk_cli:
+                                    st.markdown("<br><small>✔️ Enviado</small>", unsafe_allow_html=True)
 
-                        # --- ÁREA DOS ITENS ---
+                        # --- ITENS (MANTIDO) ---
                         st.markdown("---")
                         desc = ""
-                        if str(row.get('Serviço', '')).lower() in SERVICOS_SEM_EQUIPAMENTO: 
-                            desc = f"Realizar {row.get('Serviço', '')}"
+                        if str(row.get('Serviço', '')).lower() in SERVICOS_SEM_EQUIPAMENTO: desc = f"Realizar {row.get('Serviço', '')}"
                         else:
                             its = []
                             for s, d in df_grupo.groupby('Sistema'):
@@ -903,65 +903,40 @@ else:
                                 cols_check = [c for c in [col_qtd, col_eqp] if c in d.columns]
                                 if cols_check: d_visual = d.drop_duplicates(subset=cols_check)
                                 else: d_visual = d
-
                                 for _, r in d_visual.iterrows():
-                                    qtd_raw = str(r.get(col_qtd, '0'))
-                                    if qtd_raw.lower() in ['nan', 'none', '']: qtd_raw = '0'
+                                    qtd_raw = str(r.get(col_qtd, '0')); qtd_raw = '0' if qtd_raw.lower() in ['nan', ''] else qtd_raw
                                     qtd_fmt = qtd_raw.replace('.0', '') if qtd_raw.replace('.', '').isdigit() else qtd_raw
                                     its.append(f"{qtd_fmt} - {r.get(col_eqp, 'Item')}")
                             desc = "<br>".join(its)
-                        
-                        st.caption("Itens:")
-                        st.markdown(f"<div style='background:#f9f9f9; padding:10px; border-radius:4px; font-size:0.9em;'>{desc}</div>", unsafe_allow_html=True)
-                        st.markdown("<br>", unsafe_allow_html=True)
+                        st.caption("Itens:"); st.markdown(f"<div style='background:#f9f9f9; padding:10px;'>{desc}</div>", unsafe_allow_html=True); st.markdown("<br>", unsafe_allow_html=True)
 
-                        # --- BOTÃO SALVAR ---
+                        # --- SALVAR ---
                         if st.form_submit_button("💾 Salvar"):
-                            # 1. Validação de Cancelamento
-                            if n_st == "Cancelado" and n_fi is None:
-                                st.error("⛔ ERRO: Para status CANCELADO, a DATA DE FINALIZAÇÃO é obrigatória!")
-                                st.stop()
+                            if n_st == "Cancelado" and n_fi is None: st.error("⛔ ERRO: DATA DE FINALIZAÇÃO OBRIGATÓRIA!"); st.stop()
 
-                            # 2. Prepara Updates
                             upds = {
                                 "Data Abertura": n_ab, "Data Agendamento": n_ag, "Data Finalização": n_fi,
                                 "Analista": n_an, "Gestor": n_ge, "Técnico": n_tc, "Projeto": n_pj,
                                 "Serviço": n_sv, "Sistema": n_si, "Observações e Pendencias": n_ob,
                                 "Link Externo": n_lk, "Nº Protocolo": n_pt,
                                 "Nº Pedido": n_pedido, "Data Envio": n_envio,
-                                # Salvando os Checkboxes como Texto "TRUE"/"FALSE" para persistir no DB
                                 "chk_status_enviado": "TRUE" if ret_chk_cli else "FALSE",
                                 "chk_equipamento_entregue": "TRUE" if ret_chk_ent else "FALSE"
                             }
-                            
-                            # Lógica de Status Manual vs Automático
                             recalc = False
-                            if n_st == "(Automático)": 
-                                recalc = True
-                                # Se o usuário forçou automático, vamos limpar o status atual para a função recalcular do zero
-                                upds["Status"] = "Não Iniciado" 
-                            elif not is_financeiro_locked:
-                                # Só aplica manual se não for Financeiro
-                                upds["Status"] = n_st
-                                if n_st in l_st_manual: 
-                                    # Se for um status manual, não limpa o substatus imediatamente, deixa como está
-                                    pass
+                            if n_st == "(Automático)": recalc = True; upds["Status"] = "Não Iniciado" # Força reset
+                            elif not is_financeiro_locked: upds["Status"] = n_st
 
                             with st.spinner("Salvando..."):
                                 c = 0
                                 for cid in ids:
                                     if utils_chamados.atualizar_chamado_db(cid, upds): c += 1
                                 if c > 0:
-                                    st.success("Salvo!")
-                                    
-                                    # SEMPRE RECALCULAR A LÓGICA APÓS SALVAR
-                                    # Isso garante que se ele marcou o checkbox, o status mude para Concluído sozinho
-                                    da = utils_chamados.carregar_chamados_db()
-                                    dt = da[da['ID'].isin(ids)]
-                                    calcular_e_atualizar_status_projeto(dt, ids)
-                                    
+                                    st.success("Salvo!"); 
+                                    # Recálculo obrigatório para o checkbox fazer efeito
+                                    da = utils_chamados.carregar_chamados_db(); dt = da[da['ID'].isin(ids)]; calcular_e_atualizar_status_projeto(dt, ids)
                                     st.cache_data.clear(); time.sleep(0.5); st.rerun()
-                                else: st.error("Erro ao salvar no banco.")
+                                else: st.error("Erro.")
                                 
     with aba_calendario:
         st.subheader("🗓️ Agenda da Semana")
@@ -984,17 +959,3 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
-                        
-
-
-
-
-
-
-
-
-
-
-
-
-
