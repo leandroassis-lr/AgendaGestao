@@ -72,29 +72,26 @@ def calcular_valor_linha(row, lpu_f, lpu_s, lpu_e):
     if equip in lpu_e: return lpu_e.get(equip, 0.0) * qtd
     return 0.0
 
-# --- NOVA LÓGICA DE STATUS KPI ---
+# --- LÓGICA DE STATUS KPI (MUTUAMENTE EXCLUSIVOS PARA O CARD DO USUÁRIO) ---
 def definir_status_financeiro(row, dict_books_info, set_liberados):
     chamado_id = str(row['Nº Chamado']).strip()
     
-    # 1. TOTAL ACUMULADO (FATURADO) -> Está na planilha de Liberação do Banco
+    # 1. FATURADO (PAGO) - Está na planilha do Banco
     if chamado_id in set_liberados: 
         return "FATURADO (Pago)", "#2E7D32" # Verde Escuro
 
-    # 2. Verifica se está na Planilha de Books
+    # 2. PENDENTE FATURAMENTO - Está na planilha de Book como Enviado
     if chamado_id in dict_books_info:
         info_book = dict_books_info[chamado_id]
-        
-        # Lógica: Se "BOOK PRONTO?" for SIM ou "DATA ENVIO" tiver data -> PENDENTE FATURAMENTO
         book_pronto = str(info_book.get('book_pronto', '')).strip().upper() == 'SIM'
         tem_data_envio = str(info_book.get('data_envio', '')).strip() not in ['', 'nan', 'None']
         
         if book_pronto or tem_data_envio:
             return "PENDENTE FATURAMENTO", "#FB8C00" # Laranja
         else:
-            # Está na planilha mas não tem SIM nem Data -> PENDENTE ENVIO BOOK
             return "PENDENTE ENVIO BOOK", "#C62828" # Vermelho
             
-    # 3. POTENCIAL (Não está no banco nem na planilha de books)
+    # 3. POTENCIAL
     return "POTENCIAL", "#1565C0" # Azul
 
 # --- CARREGAMENTO ---
@@ -106,34 +103,38 @@ with st.spinner("Processando dados financeiros..."):
 if df_chamados_raw.empty:
     st.warning("Sem dados. Importe chamados primeiro."); st.stop()
 
-# --- PROCESSAMENTO PRELIMINAR ---
+# --- PROCESSAMENTO ---
 df_chamados_raw['Valor_Calculado'] = df_chamados_raw.apply(lambda x: calcular_valor_linha(x, lpu_f, lpu_s, lpu_e), axis=1)
 
 # Preparar Dados Auxiliares
-# 1. Set de Liberados (Banco)
 set_liberados = set(df_lib['chamado'].astype(str).str.strip()) if not df_lib.empty else set()
 
-# 2. Dicionário de Books (Para verificar status SIM/DATA)
 dict_books_info = {}
+ids_books_enviados_total = set() # Novo Conjunto para o KPI Extra
+
 if not df_books.empty:
-    # Normaliza colunas para garantir leitura correta independente de maiúscula/minúscula
     df_books.columns = [c.upper().strip() for c in df_books.columns]
-    
     for _, row_b in df_books.iterrows():
         ch = str(row_b.get('CHAMADO', '')).strip()
-        # Tenta pegar as colunas da imagem: 'BOOK PRONTO?' e 'DATA ENVIO'
-        # Adicionei variações de nome caso a planilha mude levemente
         pronto = row_b.get('BOOK PRONTO?', row_b.get('BOOK PRONTO', row_b.get('PRONTO', '')))
         dt_env = row_b.get('DATA ENVIO', row_b.get('ENVIO', ''))
         
         dict_books_info[ch] = {'book_pronto': pronto, 'data_envio': dt_env}
+        
+        # Lógica para "Total Enviado": Considera enviado se tiver SIM ou Data
+        is_sim = str(pronto).strip().upper() == 'SIM'
+        has_date = str(dt_env).strip() not in ['', 'nan', 'None']
+        if is_sim or has_date:
+            ids_books_enviados_total.add(ch)
 
-# Aplica a Nova Lógica
+# Aplica Status (Exclusivos)
 df_chamados_raw[['Status_Fin', 'Cor_Fin']] = df_chamados_raw.apply(
     lambda x: pd.Series(definir_status_financeiro(x, dict_books_info, set_liberados)), axis=1
 )
 
-# --- DASHBOARD DE KPIS ---
+# --- CÁLCULO DOS KPIS ---
+
+# 1. KPIs de Status (Exclusivos)
 df_faturado = df_chamados_raw[df_chamados_raw['Status_Fin'] == 'FATURADO (Pago)']
 df_pend_fat = df_chamados_raw[df_chamados_raw['Status_Fin'] == 'PENDENTE FATURAMENTO']
 df_pend_book = df_chamados_raw[df_chamados_raw['Status_Fin'] == 'PENDENTE ENVIO BOOK']
@@ -144,17 +145,27 @@ val_pend_fat = df_pend_fat['Valor_Calculado'].sum()
 val_pend_book = df_pend_book['Valor_Calculado'].sum()
 val_potencial = df_potencial['Valor_Calculado'].sum()
 
+# 2. KPI Extra: Total Enviado (Independente se já pagou ou não)
+# Filtra chamados que estão na lista de IDs enviados
+mask_total_enviados = df_chamados_raw['Nº Chamado'].astype(str).str.strip().isin(ids_books_enviados_total)
+df_total_enviados = df_chamados_raw[mask_total_enviados]
+val_total_enviados = df_total_enviados['Valor_Calculado'].sum()
+qtd_total_enviados = len(df_total_enviados)
+
+# Quantidades
 qtd_faturado = len(df_faturado)
 qtd_pend_fat = len(df_pend_fat)
 qtd_pend_book = len(df_pend_book)
 qtd_potencial = len(df_potencial)
 
-# Exibição dos Cards
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("💰 Total Acumulado (Banco)", f"R$ {val_faturado:,.2f}", f"{qtd_faturado} chamados")
-c2.metric("📄 Pendente Faturamento (Enviado)", f"R$ {val_pend_fat:,.2f}", f"{qtd_pend_fat} chamados", delta_color="off")
-c3.metric("🚨 Pendente Envio Book (Na Planilha)", f"R$ {val_pend_book:,.2f}", f"{qtd_pend_book} chamados", delta_color="inverse")
-c4.metric("📈 Potencial (Em Aberto)", f"R$ {val_potencial:,.2f}", f"{qtd_potencial} chamados", delta_color="normal")
+# --- EXIBIÇÃO DOS CARDS (5 COLUNAS) ---
+c1, c2, c3, c4, c5 = st.columns(5)
+
+c1.metric("💰 Total Pago (Banco)", f"R$ {val_faturado:,.2f}", f"{qtd_faturado} chamados")
+c2.metric("📤 Books Enviados (Total)", f"R$ {val_total_enviados:,.2f}", f"{qtd_total_enviados} chamados", help="Soma de tudo que foi marcado como Enviado na planilha de books, pago ou não.")
+c3.metric("⏳ Pendente Recebimento", f"R$ {val_pend_fat:,.2f}", f"{qtd_pend_fat} chamados", delta_color="off", help="Enviado mas ainda não consta na planilha do banco.")
+c4.metric("🚨 Pendente Envio Book", f"R$ {val_pend_book:,.2f}", f"{qtd_pend_book} chamados", delta_color="inverse", help="Está na planilha de books mas sem SIM ou Data.")
+c5.metric("📈 Potencial (Aberto)", f"R$ {val_potencial:,.2f}", f"{qtd_potencial} chamados", delta_color="normal")
 
 st.divider()
 
@@ -168,32 +179,18 @@ with col_sync:
             
             count_ops = 0
             
-            # Percorre os chamados e aplica a lógica inversa (Financeiro -> Gestão)
             for index, row in df_chamados_raw.iterrows():
                 chamado_num = str(row['Nº Chamado'])
                 status_kpi = row['Status_Fin']
                 
                 if chamado_num in id_map:
                     updates = {}
-                    
                     if status_kpi == 'FATURADO (Pago)':
-                        updates = {
-                            'Status': 'Finalizado', 'Sub-Status': 'Faturado',
-                            'chk_financeiro_banco': 'TRUE', 'chk_financeiro_book': 'TRUE'
-                        }
-                        # Data Faturamento já é tratada na importação da planilha
-                        
+                        updates = {'Status': 'Finalizado', 'Sub-Status': 'Faturado', 'chk_financeiro_banco': 'TRUE', 'chk_financeiro_book': 'TRUE'}
                     elif status_kpi == 'PENDENTE FATURAMENTO':
-                        updates = {
-                            'Status': 'Finalizado', 'Sub-Status': 'Aguardando faturamento',
-                            'chk_financeiro_book': 'TRUE'
-                        }
-                    
+                        updates = {'Status': 'Finalizado', 'Sub-Status': 'Aguardando faturamento', 'chk_financeiro_book': 'TRUE'}
                     elif status_kpi == 'PENDENTE ENVIO BOOK':
-                        # Se está na planilha de book mas ainda não tem SIM, força o status
-                        updates = {
-                            'Status': 'Finalizado', 'Sub-Status': 'Enviar Book'
-                        }
+                        updates = {'Status': 'Finalizado', 'Sub-Status': 'Enviar Book'}
 
                     if updates:
                         utils_chamados.atualizar_chamado_db(id_map[chamado_num], updates)
@@ -226,18 +223,15 @@ with st.expander("⚙️ Importações (LPU, Books, Liberação)"):
         if up_bk and st.button("Importar Books"):
             try:
                 df_b = pd.read_csv(up_bk, sep=';', dtype=str) if up_bk.name.endswith('.csv') else pd.read_excel(up_bk, dtype=str)
-                # Normaliza colunas
                 df_b.columns = [str(c).strip().upper() for c in df_b.columns]
                 
-                # Importar
                 suc, msg = utils_financeiro.importar_planilha_books(df_b)
                 
                 if suc:
                     st.success(msg)
-                    # Sincronia Rápida de Protocolo e Datas (sem mexer em status KPI ainda)
+                    # Sincronia Rápida KPI
                     df_bd = utils_chamados.carregar_chamados_db()
                     id_map = df_bd.set_index('Nº Chamado')['ID'].to_dict()
-                    
                     cnt = 0
                     for _, r in df_b.iterrows():
                         i_d = id_map.get(r.get('CHAMADO'))
@@ -245,12 +239,10 @@ with st.expander("⚙️ Importações (LPU, Books, Liberação)"):
                             current_row = df_bd[df_bd['ID'] == i_d].iloc[0]
                             updates = {'Nº Protocolo': r.get('PROTOCOLO')}
                             
-                            # KPI Data Book: Só grava se vier SIM e data atual for vazia
                             book_ok = str(r.get('BOOK PRONTO?', r.get('BOOK PRONTO', ''))).upper() == 'SIM'
                             if book_ok:
                                 updates['chk_financeiro_book'] = 'TRUE'
-                                if pd.isna(current_row.get('Data Book Enviado')):
-                                    updates['Data Book Enviado'] = date.today()
+                                if pd.isna(current_row.get('Data Book Enviado')): updates['Data Book Enviado'] = date.today()
 
                             dt_conc = pd.to_datetime(r.get('DATA CONCLUSAO'), errors='coerce')
                             if not pd.isna(dt_conc): updates['Data Finalização'] = dt_conc
