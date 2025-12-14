@@ -374,23 +374,65 @@ def run_importer_dialog():
 
                 if st.button("🚀 Processar Importação"):
                     bar = st.progress(0); status_txt = st.empty()
+                    
+                    # ETAPA 1: INSERÇÃO DE NOVOS (0% -> 30%)
                     if not df_insert.empty:
-                        status_txt.text("Inserindo novos...")
+                        status_txt.text("Inserindo novos chamados...")
                         utils_chamados.bulk_insert_chamados_db(df_insert)
-                        bar.progress(50)
+                    bar.progress(30)
+                    
+                    # ETAPA 2: ATUALIZAÇÃO DE DADOS BÁSICOS (30% -> 60%)
                     if not df_update.empty:
-                        status_txt.text("Atualizando dados...")
+                        status_txt.text("Atualizando dados básicos...")
                         total = len(df_update)
+                        # Se tiver muitos registros, atualiza a barra passo a passo
                         for i, row in enumerate(df_update.to_dict('records')):
                             updates = {
                                 'Sistema': row['Sistema'], 'Serviço': row['Serviço'], 'Projeto': row['Projeto'],
                                 'Agendamento': row['Agendamento'], 'Analista': row['Analista'], 'Gestor': row['Gestor']
                             }
                             utils_chamados.atualizar_chamado_db(row['ID_Banco'], updates)
-                            if total > 0: bar.progress(50 + int((i/total)*50))
-                    bar.progress(100); status_txt.text("Concluído!")
-                    st.success("Importação finalizada!"); time.sleep(1.5)
-                    st.cache_data.clear(); st.rerun()
+                            
+                            # Atualização visual suave da barra entre 30 e 60
+                            if total > 0:
+                                progresso_atual = 30 + int((i / total) * 30)
+                                bar.progress(min(progresso_atual, 60))
+                    else:
+                        bar.progress(60) # Se não tiver updates, pula direto pra 60%
+
+                    # ETAPA 3: APLICAÇÃO AUTOMÁTICA DE REGRAS DE STATUS (60% -> 100%)
+                    status_txt.text("🔄 Aplicando regras automáticas de Status...")
+                    
+                    # Recarrega o banco para pegar os IDs corretos (inclusive os novos recém criados)
+                    df_todos = utils_chamados.carregar_chamados_db()
+                    
+                    # Filtra apenas os chamados que estavam na planilha de importação para não processar o banco todo à toa
+                    chamados_importados = df_grouped['Nº Chamado'].astype(str).str.strip().tolist()
+                    df_afetados = df_todos[df_todos['Nº Chamado'].astype(str).str.strip().isin(chamados_importados)]
+                    
+                    if not df_afetados.empty:
+                        total_calc = len(df_afetados)
+                        passo = 0
+                        # Processa a lógica Top-Down para cada chamado importado
+                        # Agrupa por Nº Chamado para evitar erros se houver linhas duplicadas no banco
+                        for num_chamado, grupo in df_afetados.groupby('Nº Chamado'):
+                            ids_grupo = grupo['ID'].tolist()
+                            
+                            # CHAMA A SUA FUNÇÃO DE LÓGICA AQUI
+                            calcular_e_atualizar_status_projeto(grupo, ids_grupo)
+                            
+                            passo += len(grupo)
+                            # Atualiza a barra do 60 até o 100
+                            progresso = 60 + int((passo / total_calc) * 40)
+                            bar.progress(min(progresso, 100))
+                    
+                    # FINALIZAÇÃO
+                    bar.progress(100)
+                    status_txt.text("Concluído!")
+                    st.success("Importação e Automação finalizadas!")
+                    time.sleep(1.5)
+                    st.cache_data.clear()
+                    st.rerun()
 
             except Exception as e: st.error(f"Erro no processamento: {e}")
 
@@ -790,7 +832,7 @@ else:
                 with st.expander(f"📝 Editar Detalhes - ID: {ids[0]}"):
                     form_key = f"form_{row['ID']}"
                     with st.form(key=form_key):
-                        # ... (Bloco de Carregamento de Listas IGUAL AO ANTERIOR) ...
+                        # --- CARREGAMENTO DE LISTAS ---
                         try:
                             df_st = utils.carregar_config_db("status"); lst_st = [str(x) for x in df_st.iloc[:,0].dropna().tolist()] if not df_st.empty else []
                             df_pj = utils.carregar_config_db("projetos_nomes"); lst_pj = [str(x) for x in df_pj.iloc[:,0].dropna().tolist()] if not df_pj.empty else []
@@ -801,38 +843,64 @@ else:
 
                         def sf(v): return str(v) if pd.notna(v) and str(v).lower() not in ['nan', 'none', ''] else ""
                         
+                        # Definição de Listas e Índices
                         l_st_manual = ["Pendência de Infra", "Pendência de Equipamento", "Cancelado", "Pausado"]
-                        l_st_completa = sorted(list(set(lst_st + l_st_manual + [st_atual] + ["(Automático)"])))
                         
-                        i_st = l_st_completa.index(st_atual) if st_atual in l_st_completa else 0
+                        # Se o status atual NÃO for manual, ele está em modo automático (mesmo sendo "Em Andamento")
+                        is_manual_mode = st_atual in l_st_manual
+                        
+                        # Monta a lista do Selectbox
+                        lista_opcoes = sorted(list(set(lst_st + l_st_manual + [st_atual])))
+                        # Adiciona a opção de reset no topo
+                        lista_opcoes.insert(0, "🔄 (Recalcular Automático)") 
+                        
+                        # Define o índice inicial
+                        if st_atual in lista_opcoes:
+                            idx_inicial = lista_opcoes.index(st_atual)
+                        else:
+                            idx_inicial = 0 # Default
+
+                        # Índices auxiliares
                         v_pj = sf(row.get('Projeto', '')); l_pj = sorted(list(set(lst_pj + [v_pj]))); i_pj = l_pj.index(v_pj) if v_pj in l_pj else 0
                         v_tc = sf(row.get('Técnico', '')); l_tc = sorted(list(set(lst_tc + [v_tc]))); i_tc = l_tc.index(v_tc) if v_tc in l_tc else 0
                         v_an = sf(row.get('Analista', '')); l_an = sorted(list(set(lst_an + [v_an]))); i_an = l_an.index(v_an) if v_an in l_an else 0
 
+                        # Flags e Variáveis
                         n_chamado_str = str(row.get('Nº Chamado', ''))
                         is_equip = '-e-' in n_chamado_str.lower()
-                        # Finaceiro Flags
                         is_fin_banco = str(row.get('chk_financeiro_banco', '')).upper() == 'TRUE'
                         is_fin_book = str(row.get('chk_financeiro_book', '')).upper() == 'TRUE'
                         is_financeiro_locked = is_fin_banco or is_fin_book
 
-                        # --- LINHAS 1, 2 e 3 (IGUAL AO ANTERIOR) ---
+                        # --- LINHA 1: STATUS E DATAS ---
                         k1, k2, k3, k4 = st.columns(4)
-                        if is_financeiro_locked:
-                            k1.markdown(f"<small>Status (Financeiro)</small><br><b>{st_atual}</b>", unsafe_allow_html=True)
-                            n_st = st_atual
-                        else:
-                            n_st = k1.selectbox("Status (Ou Manual)", l_st_completa, index=i_st, key=f"st_{form_key}", help="Selecione '(Automático)' para retomar.")
+                        
+                        with k1:
+                            if is_financeiro_locked:
+                                st.markdown(f"<small style='color:#666'>Status (Financeiro)</small><br><b style='color:#2E7D32'>{st_atual}</b>", unsafe_allow_html=True)
+                                n_st = st_atual
+                            else:
+                                # Label dinâmico para mostrar se está automático ou manual
+                                label_status = "Status (Manual)" if is_manual_mode else "Status (Calculado)"
+                                n_st = st.selectbox(label_status, lista_opcoes, index=idx_inicial, key=f"st_{form_key}")
+                                
+                                # Badge visual logo abaixo do selectbox
+                                if not is_manual_mode:
+                                    st.caption("⚙️ Regra Automática Ativa")
+                                else:
+                                    st.caption("✋ Modo Manual Ativo")
 
                         n_ab = k2.date_input("Abertura", value=_to_date_safe(row.get('Abertura')) or date.today(), format="DD/MM/YYYY", key=f"ab_{form_key}")
                         n_ag = k3.date_input("Agendamento", value=_to_date_safe(row.get('Agendamento')), format="DD/MM/YYYY", key=f"ag_{form_key}")
                         n_fi = k4.date_input("Finalização", value=_to_date_safe(row.get('Fechamento')), format="DD/MM/YYYY", key=f"fi_{form_key}")
 
+                        # --- LINHA 2: PESSOAS ---
                         k5, k6, k7 = st.columns(3)
                         n_an = k5.selectbox("Analista", l_an, index=i_an, key=f"an_{form_key}")
                         n_ge = k6.text_input("Gestor", value=row.get('Gestor', ''), key=f"ge_{form_key}")
                         n_tc = k7.selectbox("Técnico", l_tc, index=i_tc, key=f"tc_{form_key}")
 
+                        # --- LINHA 3: PROJETO E SERVIÇO ---
                         k8, k9, k10 = st.columns(3)
                         n_pj = k8.selectbox("Projeto", l_pj, index=i_pj, key=f"pj_{form_key}")
                         n_sv = k9.text_input("Serviço", value=row.get('Serviço', ''), key=f"sv_{form_key}")
@@ -840,10 +908,9 @@ else:
 
                         n_ob = st.text_area("Observações", value=row.get('Observações e Pendencias', ''), height=80, key=f"ob_{form_key}")
 
-                        # --- LINHA 4: DINÂMICA COM CHECKBOX INTELIGENTE ---
+                        # --- LINHA 4: CAMPOS DINÂMICOS ---
                         st.markdown("---")
                         
-                        # Valores atuais
                         val_chk_cli = str(row.get('chk_status_enviado', '')).upper() == 'TRUE'
                         val_chk_ent = str(row.get('chk_equipamento_entregue', '')).upper() == 'TRUE'
                         n_lk = row.get('Link Externo', '')
@@ -851,7 +918,6 @@ else:
                         n_pedido = row.get('Nº Pedido', '')
                         n_envio = _to_date_safe(row.get('Data Envio'))
 
-                        # Variáveis para retorno (padrão é manter o que estava)
                         ret_chk_cli = val_chk_cli
                         ret_chk_ent = val_chk_ent
 
@@ -862,18 +928,18 @@ else:
                             n_envio = c_e3.date_input("🚚 Data Envio", value=n_envio, format="DD/MM/YYYY", key=f"env_{form_key}")
                             
                             with c_e4:
-                                # Lógica Checkbox Equipamento: Só aparece se status for "Aguardando Entrega"
                                 if acao == "Aguardando Entrega":
                                     st.markdown("<br>", unsafe_allow_html=True)
                                     ret_chk_ent = st.checkbox("✅ EQUIPAMENTO ENTREGUE", value=val_chk_ent, key=f"chk_ent_{form_key}")
                                 elif val_chk_ent: 
-                                    # Se já foi entregue, mostra apenas um texto informativo (ou nada)
                                     st.markdown("<br><small>✔️ Entregue</small>", unsafe_allow_html=True)
 
-                        else: # Serviço (ou Padrão)
+                        else: # Serviço
                             c_s1, c_s2, c_s3, c_s4 = st.columns([1, 2, 1.5, 1.5])
                             with c_s1: 
-                                if n_lk and str(n_lk).strip().lower() not in ['nan', 'none', '']:
+                                # Verifica Link de forma robusta
+                                has_link = n_lk and str(n_lk).strip().lower() not in ['nan', 'none', '']
+                                if has_link:
                                     st.markdown("<small>Nº Chamado</small>", unsafe_allow_html=True)
                                     st.markdown(f"<a href='{n_lk}' target='_blank' style='display:block; background:#E3F2FD; color:#1565C0; padding:6px; border-radius:5px; text-align:center; text-decoration:none; font-weight:bold;'>🔗 {n_chamado_str}</a>", unsafe_allow_html=True)
                                 else:
@@ -883,14 +949,13 @@ else:
                             n_pt = c_s3.text_input("Protocolo", value=n_pt, key=f"pt_{form_key}")
                             
                             with c_s4: 
-                                # Lógica Checkbox Serviço: Só aparece se status for "Enviar Status Cliente"
                                 if acao == "Enviar Status Cliente":
                                     st.markdown("<br>", unsafe_allow_html=True)
                                     ret_chk_cli = st.checkbox("✅ STATUS ENVIADO", value=val_chk_cli, key=f"chk_cli_{form_key}")
                                 elif val_chk_cli:
                                     st.markdown("<br><small>✔️ Enviado</small>", unsafe_allow_html=True)
 
-                        # --- ITENS (MANTIDO) ---
+                        # --- ITENS ---
                         st.markdown("---")
                         desc = ""
                         if str(row.get('Serviço', '')).lower() in SERVICOS_SEM_EQUIPAMENTO: desc = f"Realizar {row.get('Serviço', '')}"
@@ -923,17 +988,32 @@ else:
                                 "chk_status_enviado": "TRUE" if ret_chk_cli else "FALSE",
                                 "chk_equipamento_entregue": "TRUE" if ret_chk_ent else "FALSE"
                             }
+                            
                             recalc = False
-                            if n_st == "(Automático)": recalc = True; upds["Status"] = "Não Iniciado" # Força reset
-                            elif not is_financeiro_locked: upds["Status"] = n_st
+                            
+                            # Se escolheu "Recalcular", força o status para "Não Iniciado" para obrigar o robô a pensar do zero
+                            if "Recalcular Automático" in n_st: 
+                                recalc = True
+                                upds["Status"] = "Não Iniciado"
+                                upds["Sub-Status"] = ""
+                            
+                            # Se escolheu manual, salva o manual (desde que não esteja travado pelo financeiro)
+                            elif not is_financeiro_locked:
+                                upds["Status"] = n_st
+                                if n_st in l_st_manual:
+                                    # É manual, mantém
+                                    pass
+                                else:
+                                    # Se escolheu algo como "Concluído" direto, força o recálculo para validar
+                                    recalc = True
 
                             with st.spinner("Salvando..."):
                                 c = 0
                                 for cid in ids:
                                     if utils_chamados.atualizar_chamado_db(cid, upds): c += 1
                                 if c > 0:
-                                    st.success("Salvo!"); 
-                                    # Recálculo obrigatório para o checkbox fazer efeito
+                                    st.success("Salvo!")
+                                    # Sempre roda o recálculo se não for manual puro
                                     da = utils_chamados.carregar_chamados_db(); dt = da[da['ID'].isin(ids)]; calcular_e_atualizar_status_projeto(dt, ids)
                                     st.cache_data.clear(); time.sleep(0.5); st.rerun()
                                 else: st.error("Erro.")
@@ -959,3 +1039,4 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
