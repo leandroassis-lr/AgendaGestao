@@ -145,9 +145,7 @@ c4.metric("Potencial Total", f"R$ {total_geral:,.2f}", f"{qtd_geral} chamados", 
 
 st.divider()
 
-# ... logo após c4.metric(...) e st.divider() ...
-
-# --- BOTÃO DE SINCRONIZAÇÃO MANUAL ---
+# --- BOTÃO DE SINCRONIZAÇÃO MANUAL (Mantido para garantir consistência) ---
 col_sync, col_info = st.columns([1, 4])
 with col_sync:
     if st.button("🔄 Sincronizar Tudo", help="Força a atualização dos status na Página 7 baseado no que está importado aqui."):
@@ -163,18 +161,13 @@ with col_sync:
                 for _, row in df_books.iterrows():
                     chamado = str(row['chamado'])
                     if chamado in id_map:
-                        updates = {'Status': 'Finalizado', 'Sub-Status': 'Aguardando faturamento'}
-                        # Tenta pegar protocolo se tiver
-                        if 'protocolo' in row and pd.notna(row['protocolo']):
-                            updates['Nº Protocolo'] = row['protocolo']
-                            
+                        updates = {'Status': 'Finalizado', 'Sub-Status': 'Aguardando faturamento', 'chk_financeiro_book': 'TRUE'}
                         utils_chamados.atualizar_chamado_db(id_map[chamado], updates)
                         count_books += 1
             
-            # 3. Sincronizar Liberação (Faturados) - TEM PRIORIDADE
+            # 3. Sincronizar Liberação (Faturados)
             if not df_lib.empty:
                 count_fat = 0
-                from datetime import date
                 for _, row in df_lib.iterrows():
                     chamado = str(row['chamado'])
                     if chamado in id_map:
@@ -182,7 +175,7 @@ with col_sync:
                             'Status Financeiro': 'FATURADO',
                             'Status': 'Finalizado',
                             'Sub-Status': 'Faturado',
-                            'Data Faturamento': date.today()
+                            'chk_financeiro_banco': 'TRUE'
                         })
                         count_fat += 1
             
@@ -210,7 +203,7 @@ with st.expander("⚙️ Configurações e Importações (LPU, Books, Liberaçã
             except Exception as e: st.error(f"Erro: {e}")
 
     with tab2:
-        st.info("Importe o controle de Books. Todos os chamados presentes no arquivo terão Status atualizado para 'Finalizado' e Protocolo salvo.")
+        st.info("Importe o controle de Books. Todos os chamados presentes no arquivo serão marcados como 'Enviados' e receberão a data de hoje (se ainda não tiverem).")
         up_bk = st.file_uploader("Books (.xlsx/.csv)", type=["xlsx", "csv"], key="up_bk")
         if up_bk and st.button("Importar Books e Atualizar Sistema"):
             try:
@@ -222,11 +215,9 @@ with st.expander("⚙️ Configurações e Importações (LPU, Books, Liberaçã
                 if not suc: st.error(msg)
                 else:
                     st.success(msg)
-                    # 2. Write-Back: Atualizar Tabela Principal de Chamados
+                    # 2. Write-Back: Atualizar Tabela Principal de Chamados (Com Lógica de KPI)
                     df_b.columns = [str(c).strip().upper() for c in df_b.columns]
                     
-                    # --- AJUSTE: NÃO FILTRA MAIS POR 'SIM' ---
-                    # Processa TODOS os chamados da planilha
                     df_bd = utils_chamados.carregar_chamados_db()
                     id_map = df_bd.set_index('Nº Chamado')['ID'].to_dict()
                     
@@ -234,69 +225,84 @@ with st.expander("⚙️ Configurações e Importações (LPU, Books, Liberaçã
                     for _, r in df_b.iterrows():
                         i_d = id_map.get(r['CHAMADO'])
                         if i_d:
+                            # Busca dados atuais para verificar se já existe data
+                            current_row = df_bd[df_bd['ID'] == i_d].iloc[0]
+                            data_book_atual = current_row.get('Data Book Enviado')
+                            
                             updates = {
                                 'Nº Protocolo': r.get('PROTOCOLO'),
-                                'Status': 'Finalizado' # Força Finalizado pois está na planilha de books (concluído)
+                                'Status': 'Finalizado', # Força Finalizado
+                                'chk_financeiro_book': 'TRUE' # Flag para automação do dashboard
                             }
+                            
+                            # --- LÓGICA KPI: SÓ GRAVA DATA SE ESTIVER VAZIA ---
+                            if pd.isna(data_book_atual) or str(data_book_atual).strip() == '':
+                                updates['Data Book Enviado'] = date.today()
+                            
+                            # Data de conclusão técnica
                             dt_conc = pd.to_datetime(r.get('DATA CONCLUSAO'), errors='coerce')
                             if not pd.isna(dt_conc): updates['Data Finalização'] = dt_conc
 
                             utils_chamados.atualizar_chamado_db(i_d, updates)
                             cnt += 1
                     
-                    st.info(f"✅ {cnt} chamados foram atualizados automaticamente com Protocolo e Status.")
+                    st.info(f"✅ {cnt} chamados foram atualizados. (Data do KPI preservada para os já existentes).")
                     st.cache_data.clear(); st.cache_resource.clear(); time.sleep(1); st.rerun()
 
             except Exception as e: st.error(f"Erro: {e}")
 
-        with tab3:
-            up_lib = st.file_uploader("Liberação (.xlsx/.csv)", type=["xlsx", "csv"], key="up_lib")
-            if up_lib and st.button("Importar Liberação"):
-                try:
-                    df_l = pd.read_csv(up_lib, sep=';', dtype=str) if up_lib.name.endswith('.csv') else pd.read_excel(up_lib, dtype=str)
+    with tab3:
+        up_lib = st.file_uploader("Liberação (.xlsx/.csv)", type=["xlsx", "csv"], key="up_lib")
+        if up_lib and st.button("Importar Liberação"):
+            try:
+                df_l = pd.read_csv(up_lib, sep=';', dtype=str) if up_lib.name.endswith('.csv') else pd.read_excel(up_lib, dtype=str)
+                
+                # 1. Salva na tabela espelho (faturamento_liberado)
+                suc, msg = utils_financeiro.importar_planilha_liberacao(df_l)
+                
+                if suc: 
+                    st.success(msg)
                     
-                    # 1. Salva na tabela espelho (faturamento_liberado)
-                    suc, msg = utils_financeiro.importar_planilha_liberacao(df_l)
-                    
-                    if suc: 
-                        st.success(msg)
+                    # --- SINCRONIZAÇÃO COM A GESTÃO PRINCIPAL (Com Lógica de KPI) ---
+                    with st.spinner("Atualizando status na tabela principal..."):
+                        df_bd = utils_chamados.carregar_chamados_db()
+                        id_map = df_bd.set_index('Nº Chamado')['ID'].to_dict()
                         
-                        # --- NOVO: SINCRONIZAÇÃO COM A PÁGINA 7 ---
-                        with st.spinner("Atualizando status na tabela principal..."):
-                            # Carrega os chamados para pegar o ID interno
-                            df_bd = utils_chamados.carregar_chamados_db()
-                            # Cria um mapa: Nº Chamado -> ID Interno (ex: 'CH-123' -> 55)
-                            id_map = df_bd.set_index('Nº Chamado')['ID'].to_dict()
+                        df_l.columns = [str(c).strip().upper() for c in df_l.columns]
+                        
+                        cont_atualizados = 0
+                        
+                        for _, row in df_l.iterrows():
+                            chamado_banco = str(row.get('CHAMADO', '')).strip()
                             
-                            # Normaliza nomes das colunas do Excel importado
-                            df_l.columns = [str(c).strip().upper() for c in df_l.columns]
-                            
-                            cont_atualizados = 0
-                            
-                            # Percorre a planilha do banco
-                            for _, row in df_l.iterrows():
-                                chamado_banco = str(row.get('CHAMADO', '')).strip()
+                            if chamado_banco in id_map:
+                                id_interno = id_map[chamado_banco]
                                 
-                                # Se esse chamado existe no nosso sistema
-                                if chamado_banco in id_map:
-                                    id_interno = id_map[chamado_banco]
-                                    
-                                    # ATUALIZA A TABELA PRINCIPAL
-                                    utils_chamados.atualizar_chamado_db(id_interno, {
-                                        'Status Financeiro': 'FATURADO',
-                                        'Data Faturamento': date.today() # <--- NOVA LINHA: Grava o dia de hoje
-                                    })
-                                    cont_atualizados += 1
-                            
-                            st.info(f"🔄 Sincronização completa: {cont_atualizados} chamados foram marcados como FATURADO na gestão principal.")
-                            
+                                # Busca dados atuais para verificar data
+                                current_row = df_bd[df_bd['ID'] == id_interno].iloc[0]
+                                data_fat_atual = current_row.get('Data Faturamento')
+                                
+                                updates = {
+                                    'Status Financeiro': 'FATURADO',
+                                    'chk_financeiro_banco': 'TRUE' # Flag para automação
+                                }
+                                
+                                # --- LÓGICA KPI: SÓ GRAVA DATA SE ESTIVER VAZIA ---
+                                if pd.isna(data_fat_atual) or str(data_fat_atual).strip() == '':
+                                    updates['Data Faturamento'] = date.today()
+                                
+                                utils_chamados.atualizar_chamado_db(id_interno, updates)
+                                cont_atualizados += 1
+                        
+                        st.info(f"🔄 Sincronização completa: {cont_atualizados} chamados marcados como FATURADO.")
+                        
                         st.cache_data.clear()
                         time.sleep(2)
                         st.rerun()
-                    else: 
-                        st.error(msg)
-                except Exception as e: 
-                    st.error(f"Erro: {e}")
+                else: 
+                    st.error(msg)
+            except Exception as e: 
+                st.error(f"Erro: {e}")
 
 # --- FILTROS ---
 col_f1, col_f2, col_f3 = st.columns([2, 2, 4])
@@ -386,8 +392,3 @@ for nome_agencia, df_ag in agencias_view:
 if total_paginas > 1:
     st.divider()
     nav_controls("bottom")
-
-
-
-
-
