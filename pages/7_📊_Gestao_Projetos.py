@@ -286,7 +286,7 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
         return True
     return False
     
-# --- FUNÇÃO DE IMPORTAÇÃO (CORRIGIDA - SEM SOBRESCREVER SISTEMA) ---
+# --- FUNÇÃO DE IMPORTAÇÃO (CORRIGIDA - SALVANDO EQUIPAMENTOS) ---
 @st.dialog("Importar Chamados (Mapeamento Fixo)", width="large")
 def run_importer_dialog():
     st.info("Importação via Mapeamento de Colunas (Posição Fixa).")
@@ -319,51 +319,47 @@ def run_importer_dialog():
                 df_raw = pd.concat(dfs_list, ignore_index=True)
                 if len(df_raw.columns) < 12: st.error("Arquivo com colunas insuficientes."); return
 
-                # Mapeamento
+                # Mapeamento Inicial
                 dados_mapeados = {
                     'Nº Chamado': df_raw.iloc[:, 0], 'Cód. Agência': df_raw.iloc[:, 1], 'Nome Agência': df_raw.iloc[:, 2],
                     'agencia_uf': df_raw.iloc[:, 3], 'Analista': df_raw.iloc[:, 22] if len(df_raw.columns) > 22 else "",
                     'Gestor': df_raw.iloc[:, 20] if len(df_raw.columns) > 20 else "", 'Serviço': df_raw.iloc[:, 4],
                     'Projeto': df_raw.iloc[:, 5], 'Agendamento': df_raw.iloc[:, 6], 
-                    'Sistema': df_raw.iloc[:, 8], # <--- ESTA É A COLUNA CORRETA DE SISTEMA
+                    'Sistema': df_raw.iloc[:, 8], 
                     'Cod_equipamento': df_raw.iloc[:, 9], 'Nome_equipamento': df_raw.iloc[:, 10], 'Qtd': df_raw.iloc[:, 11]
                 }
                 df_final = pd.DataFrame(dados_mapeados).fillna("")
 
-                # Formatação de Itens (Para exibição na lista, não para sobrescrever sistema)
+                # Formatação de Itens (Ex: "7x Sensor")
                 def formatar_item(row):
                     qtd = str(row['Qtd']).strip()
                     desc = str(row['Nome_equipamento']).strip()
                     if not desc: desc = str(row['Sistema']).strip()
                     if not desc: return ""
-                    if qtd and qtd not in ["0", "nan", "", "None"]: return f"{qtd}x {desc}"
+                    if qtd and qtd not in ["0", "nan", "", "None"]: return f"{qtd} - {desc}"
                     return desc
 
                 df_final['Item_Formatado'] = df_final.apply(formatar_item, axis=1)
 
+                # Função para juntar múltiplos itens com separador " | "
                 def juntar_textos(lista):
                     limpos = [str(x) for x in lista if str(x).strip() not in ["", "nan", "None"]]
                     return " | ".join(dict.fromkeys(limpos))
 
+                # Regras de Agrupamento
                 colunas_ignoradas_agg = ['Sistema', 'Qtd', 'Item_Formatado', 'Nome_equipamento', 'Cod_equipamento']
-                # Regra: Sistema pega o primeiro valor encontrado (ex: CFTV)
                 regras = {c: 'first' for c in df_final.columns if c not in colunas_ignoradas_agg}
                 regras['Sistema'] = 'first' 
-                regras['Item_Formatado'] = juntar_textos # Agrupa os itens
+                regras['Item_Formatado'] = juntar_textos 
                 
                 df_grouped = df_final.groupby('Nº Chamado', as_index=False).agg(regras)
                 
-                # --- CORREÇÃO: NÃO SOBRESCREVER SISTEMA ---
-                # Antes fazíamos: rename(columns={'Item_Formatado': 'Sistema'}) <- ERRO
-                # Agora mantemos Sistema como Sistema e Item_Formatado vai para uma coluna auxiliar se precisar,
-                # ou apenas usamos na lógica de inserção.
-                
-                # Para garantir que a lista de itens apareça no detalhe (df_grupo),
-                # o código principal já busca por 'Item_Formatado' ou agrupa por 'Sistema' vindo do raw.
-                # Como o banco de dados tem colunas fixas, vamos jogar Item_Formatado para 'Descrição' (campo livre)
-                df_grouped['Descrição'] = df_grouped['Item_Formatado']
+                # --- CORREÇÃO AQUI ---
+                # Garante que a coluna 'Equipamento' receba a lista formatada de itens
+                df_grouped['Equipamento'] = df_grouped['Item_Formatado']
+                df_grouped['Descrição'] = df_grouped['Item_Formatado'] # Backup na descrição
 
-                # Separa Novos vs Existentes
+                # Separação (Novos vs Existentes)
                 df_banco = utils_chamados.carregar_chamados_db()
                 lista_novos = []; lista_atualizar = []
                 
@@ -398,14 +394,20 @@ def run_importer_dialog():
                     
                     # 2. Atualização
                     if not df_update.empty:
-                        status_txt.text("Atualizando dados básicos...")
+                        status_txt.text("Atualizando dados básicos e equipamentos...")
                         total = len(df_update)
                         for i, row in enumerate(df_update.to_dict('records')):
+                            
+                            # --- CORREÇÃO DO UPDATE ---
+                            # Agora incluímos 'Equipamento' na atualização
                             updates = {
-                                'Sistema': row['Sistema'], # Agora salva o Sistema correto (Ex: CFTV)
+                                'Sistema': row['Sistema'], 
+                                'Equipamento': row['Equipamento'], # <--- IMPORTANTE: Salva a lista de itens
+                                'Descrição': row['Descrição'],
                                 'Serviço': row['Serviço'], 'Projeto': row['Projeto'],
                                 'Agendamento': row['Agendamento'], 'Analista': row['Analista'], 'Gestor': row['Gestor']
                             }
+                            
                             utils_chamados.atualizar_chamado_db(row['ID_Banco'], updates)
                             if total > 0: bar.progress(30 + int((i / total) * 30))
                     else: bar.progress(60)
@@ -1016,6 +1018,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
