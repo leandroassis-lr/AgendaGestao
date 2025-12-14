@@ -30,9 +30,7 @@ utils_financeiro.criar_tabelas_lpu()
 utils_financeiro.criar_tabela_books()
 utils_financeiro.criar_tabela_liberacao()
 
-# --- ESTADO DA PAGINAÇÃO ---
-if 'pag_fin_atual' not in st.session_state:
-    st.session_state.pag_fin_atual = 0
+if 'pag_fin_atual' not in st.session_state: st.session_state.pag_fin_atual = 0
 
 # --- FUNÇÕES AUXILIARES ---
 def formatar_agencia_excel(id_agencia, nome_agencia):
@@ -74,36 +72,33 @@ def calcular_valor_linha(row, lpu_f, lpu_s, lpu_e):
     if equip in lpu_e: return lpu_e.get(equip, 0.0) * qtd
     return 0.0
 
-def definir_status_financeiro(row, lista_books, lista_liberados):
+# --- NOVA LÓGICA DE STATUS KPI ---
+def definir_status_financeiro(row, dict_books_info, set_liberados):
     chamado_id = str(row['Nº Chamado']).strip()
     
-    # Normaliza textos para evitar erros de maiúscula/minúscula
-    status_tecnico = str(row.get('Status', '')).strip().lower()
-    sub_status = str(row.get('Sub-Status', '')).strip().lower()
-    
-    # 1. Se está na lista de liberados do banco -> FATURADO
-    if chamado_id in lista_liberados: 
-        return "FATURADO", "#2E7D32" # Verde Escuro
+    # 1. TOTAL ACUMULADO (FATURADO) -> Está na planilha de Liberação do Banco
+    if chamado_id in set_liberados: 
+        return "FATURADO (Pago)", "#2E7D32" # Verde Escuro
+
+    # 2. Verifica se está na Planilha de Books
+    if chamado_id in dict_books_info:
+        info_book = dict_books_info[chamado_id]
         
-    # 2. Se está na lista de books enviados -> PENDENTE FATURAMENTO
-    if chamado_id in lista_books: 
-        return "PENDENTE FATURAMENTO", "#FB8C00" # Laranja
+        # Lógica: Se "BOOK PRONTO?" for SIM ou "DATA ENVIO" tiver data -> PENDENTE FATURAMENTO
+        book_pronto = str(info_book.get('book_pronto', '')).strip().upper() == 'SIM'
+        tem_data_envio = str(info_book.get('data_envio', '')).strip() not in ['', 'nan', 'None']
         
-    # 3. Identificar "Aguardando Book"
-    # Pega se o status for de conclusão OU se a ação falar de book
-    palavras_chave_fim = ['finalizado', 'concluido', 'concluído', 'fechado', 'resolvido', 'encerrado', 'executado']
-    
-    status_ok = any(k in status_tecnico for k in palavras_chave_fim)
-    acao_book = 'book' in sub_status # Pega "Enviar Book", "Pendente Book", etc.
-    
-    if status_ok or acao_book: 
-        return "AGUARDANDO BOOK", "#C62828" # Vermelho
-        
-    # 4. Resto
-    return "EM ANDAMENTO", "#1565C0" # Azul
+        if book_pronto or tem_data_envio:
+            return "PENDENTE FATURAMENTO", "#FB8C00" # Laranja
+        else:
+            # Está na planilha mas não tem SIM nem Data -> PENDENTE ENVIO BOOK
+            return "PENDENTE ENVIO BOOK", "#C62828" # Vermelho
+            
+    # 3. POTENCIAL (Não está no banco nem na planilha de books)
+    return "POTENCIAL", "#1565C0" # Azul
 
 # --- CARREGAMENTO ---
-st.markdown("<div class='section-title-center'>PAINEL FINANCEIRO E FATURAMENTO</div>", unsafe_allow_html=True)
+st.markdown("<div class='section-title-center'>PAINEL FINANCEIRO (KPIS DO ANO)</div>", unsafe_allow_html=True)
 
 with st.spinner("Processando dados financeiros..."):
     df_chamados_raw, lpu_f, lpu_s, lpu_e, df_books, df_lib = carregar_dados_fin()
@@ -111,86 +106,109 @@ with st.spinner("Processando dados financeiros..."):
 if df_chamados_raw.empty:
     st.warning("Sem dados. Importe chamados primeiro."); st.stop()
 
-# --- PROCESSAMENTO ---
+# --- PROCESSAMENTO PRELIMINAR ---
 df_chamados_raw['Valor_Calculado'] = df_chamados_raw.apply(lambda x: calcular_valor_linha(x, lpu_f, lpu_s, lpu_e), axis=1)
 
-# Lista de chamados no Book (qualquer um na planilha)
-set_books = set(df_books['chamado'].astype(str))
-set_liberados = set(df_lib['chamado'].astype(str)) if not df_lib.empty else set()
+# Preparar Dados Auxiliares
+# 1. Set de Liberados (Banco)
+set_liberados = set(df_lib['chamado'].astype(str).str.strip()) if not df_lib.empty else set()
 
+# 2. Dicionário de Books (Para verificar status SIM/DATA)
+dict_books_info = {}
+if not df_books.empty:
+    # Normaliza colunas para garantir leitura correta independente de maiúscula/minúscula
+    df_books.columns = [c.upper().strip() for c in df_books.columns]
+    
+    for _, row_b in df_books.iterrows():
+        ch = str(row_b.get('CHAMADO', '')).strip()
+        # Tenta pegar as colunas da imagem: 'BOOK PRONTO?' e 'DATA ENVIO'
+        # Adicionei variações de nome caso a planilha mude levemente
+        pronto = row_b.get('BOOK PRONTO?', row_b.get('BOOK PRONTO', row_b.get('PRONTO', '')))
+        dt_env = row_b.get('DATA ENVIO', row_b.get('ENVIO', ''))
+        
+        dict_books_info[ch] = {'book_pronto': pronto, 'data_envio': dt_env}
+
+# Aplica a Nova Lógica
 df_chamados_raw[['Status_Fin', 'Cor_Fin']] = df_chamados_raw.apply(
-    lambda x: pd.Series(definir_status_financeiro(x, set_books, set_liberados)), axis=1
+    lambda x: pd.Series(definir_status_financeiro(x, dict_books_info, set_liberados)), axis=1
 )
 
-# --- DASHBOARD EXECUTIVO ---
-df_faturado = df_chamados_raw[df_chamados_raw['Status_Fin'] == 'FATURADO']
-df_pendente = df_chamados_raw[df_chamados_raw['Status_Fin'] == 'PENDENTE FATURAMENTO']
-df_aguardando = df_chamados_raw[df_chamados_raw['Status_Fin'] == 'AGUARDANDO BOOK']
+# --- DASHBOARD DE KPIS ---
+df_faturado = df_chamados_raw[df_chamados_raw['Status_Fin'] == 'FATURADO (Pago)']
+df_pend_fat = df_chamados_raw[df_chamados_raw['Status_Fin'] == 'PENDENTE FATURAMENTO']
+df_pend_book = df_chamados_raw[df_chamados_raw['Status_Fin'] == 'PENDENTE ENVIO BOOK']
+df_potencial = df_chamados_raw[df_chamados_raw['Status_Fin'] == 'POTENCIAL']
 
-total_geral = df_chamados_raw['Valor_Calculado'].sum()
 val_faturado = df_faturado['Valor_Calculado'].sum()
-val_pendente = df_pendente['Valor_Calculado'].sum()
-val_aguardando = df_aguardando['Valor_Calculado'].sum()
+val_pend_fat = df_pend_fat['Valor_Calculado'].sum()
+val_pend_book = df_pend_book['Valor_Calculado'].sum()
+val_potencial = df_potencial['Valor_Calculado'].sum()
 
-qtd_geral = len(df_chamados_raw)
 qtd_faturado = len(df_faturado)
-qtd_pendente = len(df_pendente)
-qtd_aguardando = len(df_aguardando)
+qtd_pend_fat = len(df_pend_fat)
+qtd_pend_book = len(df_pend_book)
+qtd_potencial = len(df_potencial)
 
+# Exibição dos Cards
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("Total Faturado (Pago)", f"R$ {val_faturado:,.2f}", f"{qtd_faturado} chamados")
-c2.metric("Pendente Faturamento (Enviado)", f"R$ {val_pendente:,.2f}", f"{qtd_pendente} chamados", delta_color="off")
-c3.metric("Aguardando Book (A Fazer)", f"R$ {val_aguardando:,.2f}", f"{qtd_aguardando} chamados", delta_color="inverse")
-c4.metric("Potencial Total", f"R$ {total_geral:,.2f}", f"{qtd_geral} chamados", delta_color="off")
+c1.metric("💰 Total Acumulado (Banco)", f"R$ {val_faturado:,.2f}", f"{qtd_faturado} chamados")
+c2.metric("📄 Pendente Faturamento (Enviado)", f"R$ {val_pend_fat:,.2f}", f"{qtd_pend_fat} chamados", delta_color="off")
+c3.metric("🚨 Pendente Envio Book (Na Planilha)", f"R$ {val_pend_book:,.2f}", f"{qtd_pend_book} chamados", delta_color="inverse")
+c4.metric("📈 Potencial (Em Aberto)", f"R$ {val_potencial:,.2f}", f"{qtd_potencial} chamados", delta_color="normal")
 
 st.divider()
 
-# --- BOTÃO DE SINCRONIZAÇÃO MANUAL (Mantido para garantir consistência) ---
+# --- BOTÃO DE SINCRONIZAÇÃO MANUAL ---
 col_sync, col_info = st.columns([1, 4])
 with col_sync:
-    if st.button("🔄 Sincronizar Tudo", help="Força a atualização dos status na Página 7 baseado no que está importado aqui."):
-        with st.spinner("Sincronizando Financeiro com Gestão..."):
-            
-            # 1. Carrega dados
+    if st.button("🔄 Sincronizar Tudo", help="Atualiza a Página 7 com base nestes KPIs."):
+        with st.spinner("Aplicando regras financeiras na gestão..."):
             df_bd = utils_chamados.carregar_chamados_db()
             id_map = df_bd.set_index('Nº Chamado')['ID'].to_dict()
             
-            # 2. Sincronizar Livro de Faturamento (Books Enviados)
-            if not df_books.empty:
-                count_books = 0
-                for _, row in df_books.iterrows():
-                    chamado = str(row['chamado'])
-                    if chamado in id_map:
-                        updates = {'Status': 'Finalizado', 'Sub-Status': 'Aguardando faturamento', 'chk_financeiro_book': 'TRUE'}
-                        utils_chamados.atualizar_chamado_db(id_map[chamado], updates)
-                        count_books += 1
+            count_ops = 0
             
-            # 3. Sincronizar Liberação (Faturados)
-            if not df_lib.empty:
-                count_fat = 0
-                for _, row in df_lib.iterrows():
-                    chamado = str(row['chamado'])
-                    if chamado in id_map:
-                        utils_chamados.atualizar_chamado_db(id_map[chamado], {
-                            'Status Financeiro': 'FATURADO',
-                            'Status': 'Finalizado',
-                            'Sub-Status': 'Faturado',
-                            'chk_financeiro_banco': 'TRUE'
-                        })
-                        count_fat += 1
-            
-            st.toast(f"Sincronização concluída!", icon="✅")
-            time.sleep(1)
-            st.rerun()
+            # Percorre os chamados e aplica a lógica inversa (Financeiro -> Gestão)
+            for index, row in df_chamados_raw.iterrows():
+                chamado_num = str(row['Nº Chamado'])
+                status_kpi = row['Status_Fin']
+                
+                if chamado_num in id_map:
+                    updates = {}
+                    
+                    if status_kpi == 'FATURADO (Pago)':
+                        updates = {
+                            'Status': 'Finalizado', 'Sub-Status': 'Faturado',
+                            'chk_financeiro_banco': 'TRUE', 'chk_financeiro_book': 'TRUE'
+                        }
+                        # Data Faturamento já é tratada na importação da planilha
+                        
+                    elif status_kpi == 'PENDENTE FATURAMENTO':
+                        updates = {
+                            'Status': 'Finalizado', 'Sub-Status': 'Aguardando faturamento',
+                            'chk_financeiro_book': 'TRUE'
+                        }
+                    
+                    elif status_kpi == 'PENDENTE ENVIO BOOK':
+                        # Se está na planilha de book mas ainda não tem SIM, força o status
+                        updates = {
+                            'Status': 'Finalizado', 'Sub-Status': 'Enviar Book'
+                        }
+
+                    if updates:
+                        utils_chamados.atualizar_chamado_db(id_map[chamado_num], updates)
+                        count_ops += 1
+
+            st.toast(f"{count_ops} chamados sincronizados!", icon="✅"); time.sleep(1); st.rerun()
 
 with col_info:
-    st.info("Caso a Página 7 não esteja mostrando 'Faturado' ou 'Finalizado' corretamente, clique neste botão para forçar a atualização.")
+    st.info("Este botão aplica os status dos KPIs acima lá na tela de Gestão de Projetos (Pág 7).")
 
 st.divider()
 
 # --- IMPORTADORES ---
-with st.expander("⚙️ Configurações e Importações (LPU, Books, Liberação)"):
-    tab1, tab2, tab3 = st.tabs(["Preços (LPU)", "Books (Enviados)", "Liberação (Banco)"])
+with st.expander("⚙️ Importações (LPU, Books, Liberação)"):
+    tab1, tab2, tab3 = st.tabs(["Preços (LPU)", "Books (Controle)", "Liberação (Banco)"])
     
     with tab1:
         up_lpu = st.file_uploader("LPU (.xlsx)", type=["xlsx"], key="up_lpu")
@@ -203,130 +221,98 @@ with st.expander("⚙️ Configurações e Importações (LPU, Books, Liberaçã
             except Exception as e: st.error(f"Erro: {e}")
 
     with tab2:
-        st.info("Importe o controle de Books. Todos os chamados presentes no arquivo serão marcados como 'Enviados' e receberão a data de hoje (se ainda não tiverem).")
+        st.info("Importe a planilha de Controle de Books. O sistema verificará as colunas 'BOOK PRONTO?' e 'DATA ENVIO'.")
         up_bk = st.file_uploader("Books (.xlsx/.csv)", type=["xlsx", "csv"], key="up_bk")
-        if up_bk and st.button("Importar Books e Atualizar Sistema"):
+        if up_bk and st.button("Importar Books"):
             try:
                 df_b = pd.read_csv(up_bk, sep=';', dtype=str) if up_bk.name.endswith('.csv') else pd.read_excel(up_bk, dtype=str)
+                # Normaliza colunas
+                df_b.columns = [str(c).strip().upper() for c in df_b.columns]
                 
-                # 1. Importar para tabela de Rastreio
+                # Importar
                 suc, msg = utils_financeiro.importar_planilha_books(df_b)
                 
-                if not suc: st.error(msg)
-                else:
+                if suc:
                     st.success(msg)
-                    # 2. Write-Back: Atualizar Tabela Principal de Chamados (Com Lógica de KPI)
-                    df_b.columns = [str(c).strip().upper() for c in df_b.columns]
-                    
+                    # Sincronia Rápida de Protocolo e Datas (sem mexer em status KPI ainda)
                     df_bd = utils_chamados.carregar_chamados_db()
                     id_map = df_bd.set_index('Nº Chamado')['ID'].to_dict()
                     
                     cnt = 0
                     for _, r in df_b.iterrows():
-                        i_d = id_map.get(r['CHAMADO'])
+                        i_d = id_map.get(r.get('CHAMADO'))
                         if i_d:
-                            # Busca dados atuais para verificar se já existe data
                             current_row = df_bd[df_bd['ID'] == i_d].iloc[0]
-                            data_book_atual = current_row.get('Data Book Enviado')
+                            updates = {'Nº Protocolo': r.get('PROTOCOLO')}
                             
-                            updates = {
-                                'Nº Protocolo': r.get('PROTOCOLO'),
-                                'Status': 'Finalizado', # Força Finalizado
-                                'chk_financeiro_book': 'TRUE' # Flag para automação do dashboard
-                            }
-                            
-                            # --- LÓGICA KPI: SÓ GRAVA DATA SE ESTIVER VAZIA ---
-                            if pd.isna(data_book_atual) or str(data_book_atual).strip() == '':
-                                updates['Data Book Enviado'] = date.today()
-                            
-                            # Data de conclusão técnica
+                            # KPI Data Book: Só grava se vier SIM e data atual for vazia
+                            book_ok = str(r.get('BOOK PRONTO?', r.get('BOOK PRONTO', ''))).upper() == 'SIM'
+                            if book_ok:
+                                updates['chk_financeiro_book'] = 'TRUE'
+                                if pd.isna(current_row.get('Data Book Enviado')):
+                                    updates['Data Book Enviado'] = date.today()
+
                             dt_conc = pd.to_datetime(r.get('DATA CONCLUSAO'), errors='coerce')
                             if not pd.isna(dt_conc): updates['Data Finalização'] = dt_conc
 
                             utils_chamados.atualizar_chamado_db(i_d, updates)
                             cnt += 1
                     
-                    st.info(f"✅ {cnt} chamados foram atualizados. (Data do KPI preservada para os já existentes).")
-                    st.cache_data.clear(); st.cache_resource.clear(); time.sleep(1); st.rerun()
-
+                    st.info(f"✅ {cnt} chamados atualizados com dados da planilha.")
+                    st.cache_data.clear(); time.sleep(1.5); st.rerun()
+                else: st.error(msg)
             except Exception as e: st.error(f"Erro: {e}")
 
     with tab3:
+        st.info("Importe a planilha de Liberação (Banco). Chamados aqui viram 'Total Acumulado'.")
         up_lib = st.file_uploader("Liberação (.xlsx/.csv)", type=["xlsx", "csv"], key="up_lib")
         if up_lib and st.button("Importar Liberação"):
             try:
                 df_l = pd.read_csv(up_lib, sep=';', dtype=str) if up_lib.name.endswith('.csv') else pd.read_excel(up_lib, dtype=str)
+                df_l.columns = [str(c).strip().upper() for c in df_l.columns]
                 
-                # 1. Salva na tabela espelho (faturamento_liberado)
                 suc, msg = utils_financeiro.importar_planilha_liberacao(df_l)
-                
-                if suc: 
+                if suc:
                     st.success(msg)
-                    
-                    # --- SINCRONIZAÇÃO COM A GESTÃO PRINCIPAL (Com Lógica de KPI) ---
-                    with st.spinner("Atualizando status na tabela principal..."):
-                        df_bd = utils_chamados.carregar_chamados_db()
-                        id_map = df_bd.set_index('Nº Chamado')['ID'].to_dict()
-                        
-                        df_l.columns = [str(c).strip().upper() for c in df_l.columns]
-                        
-                        cont_atualizados = 0
-                        
-                        for _, row in df_l.iterrows():
-                            chamado_banco = str(row.get('CHAMADO', '')).strip()
-                            
-                            if chamado_banco in id_map:
-                                id_interno = id_map[chamado_banco]
-                                
-                                # Busca dados atuais para verificar data
-                                current_row = df_bd[df_bd['ID'] == id_interno].iloc[0]
-                                data_fat_atual = current_row.get('Data Faturamento')
-                                
-                                updates = {
-                                    'Status Financeiro': 'FATURADO',
-                                    'chk_financeiro_banco': 'TRUE' # Flag para automação
-                                }
-                                
-                                # --- LÓGICA KPI: SÓ GRAVA DATA SE ESTIVER VAZIA ---
-                                if pd.isna(data_fat_atual) or str(data_fat_atual).strip() == '':
-                                    updates['Data Faturamento'] = date.today()
-                                
-                                utils_chamados.atualizar_chamado_db(id_interno, updates)
-                                cont_atualizados += 1
-                        
-                        st.info(f"🔄 Sincronização completa: {cont_atualizados} chamados marcados como FATURADO.")
-                        
-                        st.cache_data.clear()
-                        time.sleep(2)
-                        st.rerun()
-                else: 
-                    st.error(msg)
-            except Exception as e: 
-                st.error(f"Erro: {e}")
+                    # Sincronia Imediata
+                    df_bd = utils_chamados.carregar_chamados_db()
+                    id_map = df_bd.set_index('Nº Chamado')['ID'].to_dict()
+                    c_banco = 0
+                    for _, row in df_l.iterrows():
+                        ch = str(row.get('CHAMADO', '')).strip()
+                        if ch in id_map:
+                            i_d = id_map[ch]
+                            curr = df_bd[df_bd['ID'] == i_d].iloc[0]
+                            upd = {'Status Financeiro': 'FATURADO', 'chk_financeiro_banco': 'TRUE'}
+                            if pd.isna(curr.get('Data Faturamento')): upd['Data Faturamento'] = date.today()
+                            utils_chamados.atualizar_chamado_db(i_d, upd)
+                            c_banco += 1
+                    st.info(f"✅ {c_banco} chamados marcados como Faturado/Pago.")
+                    st.cache_data.clear(); time.sleep(1.5); st.rerun()
+                else: st.error(msg)
+            except Exception as e: st.error(f"Erro: {e}")
 
-# --- FILTROS ---
+# --- FILTROS E TABELA ---
 col_f1, col_f2, col_f3 = st.columns([2, 2, 4])
 with col_f1:
-    filtro_status_fin = st.multiselect("Filtrar Status Financeiro", options=df_chamados_raw['Status_Fin'].unique(), default=df_chamados_raw['Status_Fin'].unique(), on_change=lambda: st.session_state.update(pag_fin_atual=0))
+    filtro_status_fin = st.multiselect("Filtrar KPI", options=df_chamados_raw['Status_Fin'].unique(), default=df_chamados_raw['Status_Fin'].unique(), on_change=lambda: st.session_state.update(pag_fin_atual=0))
 with col_f2:
     filtro_agencia = st.selectbox("Filtrar Agência", options=["Todas"] + sorted(df_chamados_raw['Agencia_Combinada'].unique().tolist()), on_change=lambda: st.session_state.update(pag_fin_atual=0))
 with col_f3:
     busca = st.text_input("Busca Rápida", placeholder="Chamado, Protocolo, Valor...")
     if busca: st.session_state.pag_fin_atual = 0
 
-# Aplica Filtros
 df_view = df_chamados_raw[df_chamados_raw['Status_Fin'].isin(filtro_status_fin)]
 if filtro_agencia != "Todas": df_view = df_view[df_view['Agencia_Combinada'] == filtro_agencia]
 if busca:
     t = busca.lower()
     df_view = df_view[df_view.astype(str).apply(lambda x: x.str.lower().str.contains(t)).any(axis=1)]
 
-# --- PAGINAÇÃO ---
+# PAGINAÇÃO
 lista_agencias_unicas = sorted(df_view['Agencia_Combinada'].unique())
 total_itens = len(lista_agencias_unicas)
 ITENS_POR_PAGINA = 10
 total_paginas = math.ceil(total_itens / ITENS_POR_PAGINA)
-
 if st.session_state.pag_fin_atual >= total_paginas: st.session_state.pag_fin_atual = 0
 inicio = st.session_state.pag_fin_atual * ITENS_POR_PAGINA
 fim = inicio + ITENS_POR_PAGINA
@@ -343,11 +329,8 @@ def nav_controls(key_prefix):
         if st.button("Próximo ➡️", key=f"{key_prefix}_next", disabled=(st.session_state.pag_fin_atual >= total_paginas - 1)):
             st.session_state.pag_fin_atual += 1; st.rerun()
 
-# --- VISÃO DE CARDS ---
-st.markdown(f"#### 📋 Detalhamento ({len(df_view)} chamados em {total_itens} agências)")
-
-nav_controls("top")
 st.divider()
+nav_controls("top")
 
 df_pagina = df_view[df_view['Agencia_Combinada'].isin(agencias_da_pagina)]
 agencias_view = df_pagina.groupby('Agencia_Combinada')
@@ -358,36 +341,20 @@ for nome_agencia, df_ag in agencias_view:
     
     for _, row in df_ag.iterrows():
         chamado = row['Nº Chamado']
-        dt_abert = pd.to_datetime(row['Abertura']).strftime('%d/%m/%Y') if pd.notna(row['Abertura']) else "-"
-        dt_conc = pd.to_datetime(row['Fechamento']).strftime('%d/%m/%Y') if pd.notna(row['Fechamento']) else "-"
         status_fin = row['Status_Fin']; cor_fin = row['Cor_Fin']; valor = row['Valor_Calculado']
-        
         st.markdown(f"""
-        <div style="border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin-bottom: 10px; background-color: white;">
+        <div style="border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin-bottom: 5px; background-color: white;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <div style="flex: 1;"><strong>🆔 {chamado}</strong></div>
-                <div style="flex: 1; text-align: center; font-size: 0.9em; color: #555;">📅 Abertura: {dt_abert}</div>
-                <div style="flex: 1; text-align: center; font-size: 0.9em; color: #555;">🏁 Conclusão: {dt_conc}</div>
+                <div style="flex: 1; text-align: center; font-size: 0.9em; color: #555;">📅 {pd.to_datetime(row['Abertura']).strftime('%d/%m/%Y') if pd.notna(row['Abertura']) else '-'}</div>
                 <div style="flex: 1; text-align: right;">
                      <span style="background-color: {cor_fin}; color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; font-weight: bold;">{status_fin}</span>
                 </div>
             </div>
         </div>
         """, unsafe_allow_html=True)
-        
-        with st.expander(f"➕ Detalhes e Valores: R$ {valor:,.2f}"):
-            c_det1, c_det2 = st.columns([3, 1])
-            with c_det1:
-                st.markdown(f"**Projeto:** {row.get('Projeto', 'N/D')}")
-                st.markdown(f"**Sistema:** {row.get('Sistema', 'N/D')} | **Serviço:** {row.get('Serviço', 'N/D')}")
-                st.markdown(f"**Equipamento:** {row.get('Equipamento', 'N/D')} (Qtd: {row.get('Qtd.', 0)})")
-                st.markdown(f"**Descrição:** {row.get('Descrição', '-')}")
-            with c_det2:
-                st.markdown("**Valor Calculado:**")
-                st.markdown(f"<h3 style='color: green;'>R$ {valor:,.2f}</h3>", unsafe_allow_html=True)
-                st.markdown(f"**Protocolo:** {row.get('Nº Protocolo', '-')}")
-
-    st.markdown("<br>", unsafe_allow_html=True)
+        with st.expander(f"➕ R$ {valor:,.2f} | Detalhes"):
+            st.write(f"Serviço: {row.get('Serviço')} | Equipamento: {row.get('Equipamento')} (Qtd: {row.get('Qtd.', 0)})")
 
 if total_paginas > 1:
     st.divider()
