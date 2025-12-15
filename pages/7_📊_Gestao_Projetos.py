@@ -6,6 +6,7 @@ import plotly.express as px
 from datetime import date, timedelta, datetime
 import time
 import math
+import io
 
 st.set_page_config(page_title="Gestão de Projetos", page_icon="📊", layout="wide")
 
@@ -532,7 +533,46 @@ with st.sidebar:
                 st.rerun()
             else:
                 st.warning("Banco de dados vazio.")  
+  
+    # --- ÁREA DE EXPORTAÇÃO ---
     st.divider()
+    st.header("📤 Exportação")
+    
+    # Botão para baixar a base completa
+    if st.button("📥 Baixar Base Completa (.xlsx)"):
+        # 1. Carrega os dados atuais do banco
+        df_export = utils_chamados.carregar_chamados_db()
+        
+        if not df_export.empty:
+            # 2. Cria o buffer de memória para o arquivo Excel
+            output = io.BytesIO()
+            
+            # 3. Escreve o Excel usando a engine do Pandas
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df_export.to_excel(writer, index=False, sheet_name='Base_Chamados')
+                
+                # (Opcional) Ajuste básico de largura das colunas
+                workbook = writer.book
+                worksheet = writer.sheets['Base_Chamados']
+                format_header = workbook.add_format({'bold': True, 'bg_color': '#D3D3D3', 'border': 1})
+                
+                for i, col in enumerate(df_export.columns):
+                    # Define largura da coluna (estimada) e formata cabeçalho
+                    worksheet.set_column(i, i, 20)
+                    worksheet.write(0, i, col, format_header)
+            
+            # 4. Prepara o download
+            data_export = output.getvalue()
+            
+            st.download_button(
+                label="✅ Clique aqui para salvar",
+                data=data_export,
+                file_name=f"Backup_Chamados_{date.today().strftime('%d-%m-%Y')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        else:
+            st.warning("O banco de dados está vazio.")
+            
     st.header("Filtros de Gestão")
     lista_analistas = ["Todos"] + sorted(df['Analista'].dropna().unique().tolist())
     lista_gestores = ["Todos"] + sorted(df['Gestor'].dropna().unique().tolist())
@@ -1006,6 +1046,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
