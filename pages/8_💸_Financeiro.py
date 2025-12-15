@@ -26,6 +26,45 @@ if "logado" not in st.session_state or not st.session_state.logado:
     st.warning("Por favor, faça o login na página principal (app.py) antes de acessar esta página.")
     st.stop()
 
+with st.sidebar:
+    st.header("📤 Exportação e Backup")
+    
+    # Botão para baixar a base completa
+    if st.button("📥 Baixar Base Completa (.xlsx)"):
+        # 1. Carrega os dados atuais do banco
+        df_export = utils_chamados.carregar_chamados_db()
+        
+        if not df_export.empty:
+            # 2. Cria o buffer de memória para o arquivo Excel
+            output = io.BytesIO()
+            
+            # 3. Escreve o Excel usando a engine do Pandas
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df_export.to_excel(writer, index=False, sheet_name='Base_Chamados')
+                
+                # Ajuste estético das colunas
+                workbook = writer.book
+                worksheet = writer.sheets['Base_Chamados']
+                format_header = workbook.add_format({'bold': True, 'bg_color': '#D3D3D3', 'border': 1})
+                
+                for i, col in enumerate(df_export.columns):
+                    worksheet.set_column(i, i, 20)
+                    worksheet.write(0, i, col, format_header)
+            
+            # 4. Prepara o download
+            data_export = output.getvalue()
+            
+            st.download_button(
+                label="✅ Clique aqui para salvar",
+                data=data_export,
+                file_name=f"Backup_Chamados_{date.today().strftime('%d-%m-%Y')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        else:
+            st.warning("O banco de dados está vazio.")
+    
+    st.divider()
+
 # --- INICIALIZAÇÃO ---
 utils_financeiro.criar_tabelas_lpu()
 utils_financeiro.criar_tabela_books()
@@ -352,5 +391,6 @@ for nome_agencia, df_ag in agencias_view:
 if total_paginas > 1:
     st.divider()
     nav_controls("bottom")
+
 
 
