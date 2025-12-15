@@ -5,6 +5,7 @@ import utils_financeiro
 import time
 import math
 from datetime import date
+import io
 
 st.set_page_config(page_title="Gestão Financeira", page_icon="💸", layout="wide")
 
@@ -167,7 +168,44 @@ c3.metric("⏳ Pendente Recebimento", f"R$ {val_pend_fat:,.2f}", f"{qtd_pend_fat
 c4.metric("🚨 Pendente Envio Book", f"R$ {val_pend_book:,.2f}", f"{qtd_pend_book} chamados", delta_color="inverse", help="Está na planilha de books mas sem SIM ou Data.")
 c5.metric("📈 Potencial (Aberto)", f"R$ {val_potencial:,.2f}", f"{qtd_potencial} chamados", delta_color="normal")
 
-st.divider()
+# --- ÁREA DE EXPORTAÇÃO ---
+    st.divider()
+    st.header("📤 Exportação")
+    
+    # Botão para baixar a base completa
+    if st.button("📥 Baixar Base Completa (.xlsx)"):
+        # 1. Carrega os dados atuais do banco
+        df_export = utils_chamados.carregar_chamados_db()
+        
+        if not df_export.empty:
+            # 2. Cria o buffer de memória para o arquivo Excel
+            output = io.BytesIO()
+            
+            # 3. Escreve o Excel usando a engine do Pandas
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df_export.to_excel(writer, index=False, sheet_name='Base_Chamados')
+                
+                # (Opcional) Ajuste básico de largura das colunas
+                workbook = writer.book
+                worksheet = writer.sheets['Base_Chamados']
+                format_header = workbook.add_format({'bold': True, 'bg_color': '#D3D3D3', 'border': 1})
+                
+                for i, col in enumerate(df_export.columns):
+                    # Define largura da coluna (estimada) e formata cabeçalho
+                    worksheet.set_column(i, i, 20)
+                    worksheet.write(0, i, col, format_header)
+            
+            # 4. Prepara o download
+            data_export = output.getvalue()
+            
+            st.download_button(
+                label="✅ Clique aqui para salvar",
+                data=data_export,
+                file_name=f"Backup_Chamados_{date.today().strftime('%d-%m-%Y')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        else:
+            st.warning("O banco de dados está vazio.")
 
 # --- BOTÃO DE SINCRONIZAÇÃO MANUAL ---
 col_sync, col_info = st.columns([1, 4])
@@ -351,3 +389,4 @@ for nome_agencia, df_ag in agencias_view:
 if total_paginas > 1:
     st.divider()
     nav_controls("bottom")
+
