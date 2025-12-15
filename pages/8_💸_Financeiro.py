@@ -26,45 +26,78 @@ if "logado" not in st.session_state or not st.session_state.logado:
     st.warning("Por favor, faça o login na página principal (app.py) antes de acessar esta página.")
     st.stop()
 
+# --- BARRA LATERAL (RELATÓRIO FINANCEIRO) ---
 with st.sidebar:
-    st.header("📤 Exportação e Backup")
+    st.header("📤 Exportação")
     
-    # Botão para baixar a base completa
-    if st.button("📥 Baixar Base Completa (.xlsx)"):
-        # 1. Carrega os dados atuais do banco
-        df_export = utils_chamados.carregar_chamados_db()
-        
-        if not df_export.empty:
-            # 2. Cria o buffer de memória para o arquivo Excel
-            output = io.BytesIO()
+    # Botão ÚNICO: Relatório Financeiro Calculado
+    if st.button("📊 Baixar Relatório Financeiro (.xlsx)"):
+        with st.spinner("Gerando planilha financeira..."):
             
-            # 3. Escreve o Excel usando a engine do Pandas
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                df_export.to_excel(writer, index=False, sheet_name='Base_Chamados')
+            # 1. Carrega dados frescos
+            df_raw, lpu_f, lpu_s, lpu_e, df_books, df_lib = carregar_dados_fin()
+            
+            if not df_raw.empty:
+                # 2. Calcula os VALORES (R$) linha a linha
+                df_raw['Valor_Total'] = df_raw.apply(lambda x: calcular_valor_linha(x, lpu_f, lpu_s, lpu_e), axis=1)
                 
-                # Ajuste estético das colunas
-                workbook = writer.book
-                worksheet = writer.sheets['Base_Chamados']
-                format_header = workbook.add_format({'bold': True, 'bg_color': '#D3D3D3', 'border': 1})
+                # 3. Calcula os STATUS (KPIs)
+                # Prepara listas de comparação
+                set_liberados = set(df_lib['chamado'].astype(str).str.strip()) if not df_lib.empty else set()
+                dict_books_info = {}
+                if not df_books.empty:
+                    df_books.columns = [c.upper().strip() for c in df_books.columns]
+                    for _, row_b in df_books.iterrows():
+                        ch = str(row_b.get('CHAMADO', '')).strip()
+                        pronto = row_b.get('BOOK PRONTO?', row_b.get('BOOK PRONTO', row_b.get('PRONTO', '')))
+                        dt_env = row_b.get('DATA ENVIO', row_b.get('ENVIO', ''))
+                        dict_books_info[ch] = {'book_pronto': pronto, 'data_envio': dt_env}
                 
-                for i, col in enumerate(df_export.columns):
-                    worksheet.set_column(i, i, 20)
-                    worksheet.write(0, i, col, format_header)
-            
-            # 4. Prepara o download
-            data_export = output.getvalue()
-            
-            st.download_button(
-                label="✅ Clique aqui para salvar",
-                data=data_export,
-                file_name=f"Backup_Chamados_{date.today().strftime('%d-%m-%Y')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-        else:
-            st.warning("O banco de dados está vazio.")
-    
-    st.divider()
+                # Aplica a lógica de Status Financeiro
+                df_raw['Status_KPI_Fin'] = df_raw.apply(
+                    lambda x: definir_status_financeiro(x, dict_books_info, set_liberados)[0], axis=1
+                )
+                
+                # 4. Seleciona APENAS colunas relevantes para o Financeiro
+                colunas_fin = [
+                    'Nº Chamado', 'Status_KPI_Fin', 'Valor_Total', 
+                    'Agencia_Combinada', 'Serviço', 'Projeto', 'Sistema',
+                    'Equipamento', 'Qtd.', 'Status', 'Sub-Status', 
+                    'Abertura', 'Fechamento', 
+                    'Data Book Enviado', 'Data Faturamento', # Datas importantes para fluxo de caixa
+                    'Nº Protocolo', 'Analista', 'Gestor'
+                ]
+                # Filtra para garantir que não dê erro se faltar alguma coluna
+                cols_finais = [c for c in colunas_fin if c in df_raw.columns]
+                df_export = df_raw[cols_finais].copy()
+                
+                # 5. Gera o Excel
+                output = io.BytesIO()
+                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                    df_export.to_excel(writer, index=False, sheet_name='Financeiro_Detalhado')
+                    
+                    # Formatação (Cabeçalho Verde + Moeda)
+                    workbook = writer.book
+                    worksheet = writer.sheets['Financeiro_Detalhado']
+                    fmt_money = workbook.add_format({'num_format': 'R$ #,##0.00'})
+                    fmt_header = workbook.add_format({'bold': True, 'bg_color': '#2E7D32', 'font_color': 'white', 'border': 1})
+                    
+                    for i, col in enumerate(df_export.columns):
+                        width = 18
+                        if col == 'Valor_Total': width = 15
+                        if col == 'Agencia_Combinada': width = 25
+                        worksheet.set_column(i, i, width, fmt_money if col == 'Valor_Total' else None)
+                        worksheet.write(0, i, col, fmt_header)
 
+                st.download_button(
+                    label="✅ Clique aqui para Salvar",
+                    data=output.getvalue(),
+                    file_name=f"Relatorio_Financeiro_{date.today().strftime('%d-%m-%Y')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            else:
+                st.warning("Sem dados para gerar relatório.")
+                
 # --- INICIALIZAÇÃO ---
 utils_financeiro.criar_tabelas_lpu()
 utils_financeiro.criar_tabela_books()
@@ -391,6 +424,7 @@ for nome_agencia, df_ag in agencias_view:
 if total_paginas > 1:
     st.divider()
     nav_controls("bottom")
+
 
 
 
