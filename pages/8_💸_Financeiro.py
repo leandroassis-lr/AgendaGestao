@@ -4,8 +4,8 @@ import utils_chamados
 import utils_financeiro
 import time
 import math
+import io # <--- Importante para a exportação
 from datetime import date
-import io
 
 st.set_page_config(page_title="Gestão Financeira", page_icon="💸", layout="wide")
 
@@ -26,86 +26,14 @@ if "logado" not in st.session_state or not st.session_state.logado:
     st.warning("Por favor, faça o login na página principal (app.py) antes de acessar esta página.")
     st.stop()
 
-# --- BARRA LATERAL (RELATÓRIO FINANCEIRO) ---
-    with st.sidebar:
-    st.header("📤 Exportação")
-    
-    # Botão ÚNICO: Relatório Financeiro Calculado
-    if st.button("📊 Baixar Relatório Financeiro (.xlsx)"):
-        with st.spinner("Gerando planilha financeira..."):
-            
-            # 1. Carrega dados frescos
-            df_raw, lpu_f, lpu_s, lpu_e, df_books, df_lib = carregar_dados_fin()
-            
-            if not df_raw.empty:
-                # 2. Calcula os VALORES (R$) linha a linha
-                df_raw['Valor_Total'] = df_raw.apply(lambda x: calcular_valor_linha(x, lpu_f, lpu_s, lpu_e), axis=1)
-                
-                # 3. Calcula os STATUS (KPIs)
-                # Prepara listas de comparação
-                set_liberados = set(df_lib['chamado'].astype(str).str.strip()) if not df_lib.empty else set()
-                dict_books_info = {}
-                if not df_books.empty:
-                    df_books.columns = [c.upper().strip() for c in df_books.columns]
-                    for _, row_b in df_books.iterrows():
-                        ch = str(row_b.get('CHAMADO', '')).strip()
-                        pronto = row_b.get('BOOK PRONTO?', row_b.get('BOOK PRONTO', row_b.get('PRONTO', '')))
-                        dt_env = row_b.get('DATA ENVIO', row_b.get('ENVIO', ''))
-                        dict_books_info[ch] = {'book_pronto': pronto, 'data_envio': dt_env}
-                
-                # Aplica a lógica de Status Financeiro
-                df_raw['Status_KPI_Fin'] = df_raw.apply(
-                    lambda x: definir_status_financeiro(x, dict_books_info, set_liberados)[0], axis=1
-                )
-                
-                # 4. Seleciona APENAS colunas relevantes para o Financeiro
-                colunas_fin = [
-                    'Nº Chamado', 'Status_KPI_Fin', 'Valor_Total', 
-                    'Agencia_Combinada', 'Serviço', 'Projeto', 'Sistema',
-                    'Equipamento', 'Qtd.', 'Status', 'Sub-Status', 
-                    'Abertura', 'Fechamento', 
-                    'Data Book Enviado', 'Data Faturamento', # Datas importantes para fluxo de caixa
-                    'Nº Protocolo', 'Analista', 'Gestor'
-                ]
-                # Filtra para garantir que não dê erro se faltar alguma coluna
-                cols_finais = [c for c in colunas_fin if c in df_raw.columns]
-                df_export = df_raw[cols_finais].copy()
-                
-                # 5. Gera o Excel
-                output = io.BytesIO()
-                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                    df_export.to_excel(writer, index=False, sheet_name='Financeiro_Detalhado')
-                    
-                    # Formatação (Cabeçalho Verde + Moeda)
-                    workbook = writer.book
-                    worksheet = writer.sheets['Financeiro_Detalhado']
-                    fmt_money = workbook.add_format({'num_format': 'R$ #,##0.00'})
-                    fmt_header = workbook.add_format({'bold': True, 'bg_color': '#2E7D32', 'font_color': 'white', 'border': 1})
-                    
-                    for i, col in enumerate(df_export.columns):
-                        width = 18
-                        if col == 'Valor_Total': width = 15
-                        if col == 'Agencia_Combinada': width = 25
-                        worksheet.set_column(i, i, width, fmt_money if col == 'Valor_Total' else None)
-                        worksheet.write(0, i, col, fmt_header)
-
-                st.download_button(
-                    label="✅ Clique aqui para Salvar",
-                    data=output.getvalue(),
-                    file_name=f"Relatorio_Financeiro_{date.today().strftime('%d-%m-%Y')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-            else:
-                st.warning("Sem dados para gerar relatório.")
-                
-# --- INICIALIZAÇÃO ---
+# --- INICIALIZAÇÃO DE TABELAS ---
 utils_financeiro.criar_tabelas_lpu()
 utils_financeiro.criar_tabela_books()
 utils_financeiro.criar_tabela_liberacao()
 
 if 'pag_fin_atual' not in st.session_state: st.session_state.pag_fin_atual = 0
 
-# --- FUNÇÕES AUXILIARES ---
+# --- FUNÇÕES AUXILIARES (DEFINIDAS NO TOPO) ---
 def formatar_agencia_excel(id_agencia, nome_agencia):
     try:
         id_agencia_limpo = str(id_agencia).split('.')[0]
@@ -145,15 +73,14 @@ def calcular_valor_linha(row, lpu_f, lpu_s, lpu_e):
     if equip in lpu_e: return lpu_e.get(equip, 0.0) * qtd
     return 0.0
 
-# --- LÓGICA DE STATUS KPI (MUTUAMENTE EXCLUSIVOS PARA O CARD DO USUÁRIO) ---
 def definir_status_financeiro(row, dict_books_info, set_liberados):
     chamado_id = str(row['Nº Chamado']).strip()
     
-    # 1. FATURADO (PAGO) - Está na planilha do Banco
+    # 1. FATURADO (PAGO)
     if chamado_id in set_liberados: 
         return "FATURADO (Pago)", "#2E7D32" # Verde Escuro
 
-    # 2. PENDENTE FATURAMENTO - Está na planilha de Book como Enviado
+    # 2. PENDENTE FATURAMENTO
     if chamado_id in dict_books_info:
         info_book = dict_books_info[chamado_id]
         book_pronto = str(info_book.get('book_pronto', '')).strip().upper() == 'SIM'
@@ -167,23 +94,92 @@ def definir_status_financeiro(row, dict_books_info, set_liberados):
     # 3. POTENCIAL
     return "POTENCIAL", "#1565C0" # Azul
 
-# --- CARREGAMENTO ---
+# --- SIDEBAR COM EXPORTAÇÃO FINANCEIRA ---
+with st.sidebar:
+    st.header("📤 Exportação")
+    
+    # Botão ÚNICO: Relatório Financeiro Calculado
+    if st.button("📊 Baixar Relatório Financeiro (.xlsx)"):
+        with st.spinner("Gerando planilha financeira..."):
+            
+            # Recarrega dados para exportação
+            df_raw, lpu_f, lpu_s, lpu_e, df_books, df_lib = carregar_dados_fin()
+            
+            if not df_raw.empty:
+                # Calcula Valores
+                df_raw['Valor_Total'] = df_raw.apply(lambda x: calcular_valor_linha(x, lpu_f, lpu_s, lpu_e), axis=1)
+                
+                # Prepara dados auxiliares para KPI
+                set_liberados = set(df_lib['chamado'].astype(str).str.strip()) if not df_lib.empty else set()
+                dict_books_info = {}
+                if not df_books.empty:
+                    df_books.columns = [c.upper().strip() for c in df_books.columns]
+                    for _, row_b in df_books.iterrows():
+                        ch = str(row_b.get('CHAMADO', '')).strip()
+                        pronto = row_b.get('BOOK PRONTO?', row_b.get('BOOK PRONTO', row_b.get('PRONTO', '')))
+                        dt_env = row_b.get('DATA ENVIO', row_b.get('ENVIO', ''))
+                        dict_books_info[ch] = {'book_pronto': pronto, 'data_envio': dt_env}
+                
+                # Aplica Status KPI
+                df_raw['Status_KPI_Fin'] = df_raw.apply(
+                    lambda x: definir_status_financeiro(x, dict_books_info, set_liberados)[0], axis=1
+                )
+                
+                # Seleciona Colunas
+                colunas_fin = [
+                    'Nº Chamado', 'Status_KPI_Fin', 'Valor_Total', 
+                    'Agencia_Combinada', 'Serviço', 'Projeto', 'Sistema',
+                    'Equipamento', 'Qtd.', 'Status', 'Sub-Status', 
+                    'Abertura', 'Fechamento', 
+                    'Data Book Enviado', 'Data Faturamento',
+                    'Nº Protocolo', 'Analista', 'Gestor'
+                ]
+                cols_finais = [c for c in colunas_fin if c in df_raw.columns]
+                df_export = df_raw[cols_finais].copy()
+                
+                # Gera Excel
+                output = io.BytesIO()
+                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                    df_export.to_excel(writer, index=False, sheet_name='Financeiro_Detalhado')
+                    
+                    workbook = writer.book
+                    worksheet = writer.sheets['Financeiro_Detalhado']
+                    fmt_money = workbook.add_format({'num_format': 'R$ #,##0.00'})
+                    fmt_header = workbook.add_format({'bold': True, 'bg_color': '#2E7D32', 'font_color': 'white', 'border': 1})
+                    
+                    for i, col in enumerate(df_export.columns):
+                        width = 18
+                        if col == 'Valor_Total': width = 15
+                        if col == 'Agencia_Combinada': width = 25
+                        worksheet.set_column(i, i, width, fmt_money if col == 'Valor_Total' else None)
+                        worksheet.write(0, i, col, fmt_header)
+
+                st.download_button(
+                    label="✅ Clique aqui para Salvar",
+                    data=output.getvalue(),
+                    file_name=f"Relatorio_Financeiro_{date.today().strftime('%d-%m-%Y')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            else:
+                st.warning("Sem dados para gerar relatório.")
+
+# --- MAIN: CARREGAMENTO DOS DADOS PARA O PAINEL ---
 st.markdown("<div class='section-title-center'>PAINEL FINANCEIRO (KPIS DO ANO)</div>", unsafe_allow_html=True)
 
 with st.spinner("Processando dados financeiros..."):
+    # AQUI ESTAVA O ERRO ANTES: A função carregar_dados_fin agora já está definida acima
     df_chamados_raw, lpu_f, lpu_s, lpu_e, df_books, df_lib = carregar_dados_fin()
 
 if df_chamados_raw.empty:
     st.warning("Sem dados. Importe chamados primeiro."); st.stop()
 
-# --- PROCESSAMENTO ---
+# --- PROCESSAMENTO DO DASHBOARD ---
 df_chamados_raw['Valor_Calculado'] = df_chamados_raw.apply(lambda x: calcular_valor_linha(x, lpu_f, lpu_s, lpu_e), axis=1)
 
-# Preparar Dados Auxiliares
+# Dados Auxiliares
 set_liberados = set(df_lib['chamado'].astype(str).str.strip()) if not df_lib.empty else set()
-
 dict_books_info = {}
-ids_books_enviados_total = set() # Novo Conjunto para o KPI Extra
+ids_books_enviados_total = set()
 
 if not df_books.empty:
     df_books.columns = [c.upper().strip() for c in df_books.columns]
@@ -194,20 +190,18 @@ if not df_books.empty:
         
         dict_books_info[ch] = {'book_pronto': pronto, 'data_envio': dt_env}
         
-        # Lógica para "Total Enviado": Considera enviado se tiver SIM ou Data
+        # Lógica para "Total Enviado"
         is_sim = str(pronto).strip().upper() == 'SIM'
         has_date = str(dt_env).strip() not in ['', 'nan', 'None']
         if is_sim or has_date:
             ids_books_enviados_total.add(ch)
 
-# Aplica Status (Exclusivos)
+# Aplica Status Visual
 df_chamados_raw[['Status_Fin', 'Cor_Fin']] = df_chamados_raw.apply(
     lambda x: pd.Series(definir_status_financeiro(x, dict_books_info, set_liberados)), axis=1
 )
 
 # --- CÁLCULO DOS KPIS ---
-
-# 1. KPIs de Status (Exclusivos)
 df_faturado = df_chamados_raw[df_chamados_raw['Status_Fin'] == 'FATURADO (Pago)']
 df_pend_fat = df_chamados_raw[df_chamados_raw['Status_Fin'] == 'PENDENTE FATURAMENTO']
 df_pend_book = df_chamados_raw[df_chamados_raw['Status_Fin'] == 'PENDENTE ENVIO BOOK']
@@ -218,14 +212,12 @@ val_pend_fat = df_pend_fat['Valor_Calculado'].sum()
 val_pend_book = df_pend_book['Valor_Calculado'].sum()
 val_potencial = df_potencial['Valor_Calculado'].sum()
 
-# 2. KPI Extra: Total Enviado (Independente se já pagou ou não)
-# Filtra chamados que estão na lista de IDs enviados
+# KPI Extra: Total Enviado
 mask_total_enviados = df_chamados_raw['Nº Chamado'].astype(str).str.strip().isin(ids_books_enviados_total)
 df_total_enviados = df_chamados_raw[mask_total_enviados]
 val_total_enviados = df_total_enviados['Valor_Calculado'].sum()
 qtd_total_enviados = len(df_total_enviados)
 
-# Quantidades
 qtd_faturado = len(df_faturado)
 qtd_pend_fat = len(df_pend_fat)
 qtd_pend_book = len(df_pend_book)
@@ -251,7 +243,6 @@ with col_sync:
             id_map = df_bd.set_index('Nº Chamado')['ID'].to_dict()
             
             count_ops = 0
-            
             for index, row in df_chamados_raw.iterrows():
                 chamado_num = str(row['Nº Chamado'])
                 status_kpi = row['Status_Fin']
@@ -424,8 +415,3 @@ for nome_agencia, df_ag in agencias_view:
 if total_paginas > 1:
     st.divider()
     nav_controls("bottom")
-
-
-
-
-
