@@ -27,7 +27,7 @@ if "logado" not in st.session_state or not st.session_state.logado:
     st.stop()
 
 # --- BARRA LATERAL (RELATÓRIO FINANCEIRO) ---
-with st.sidebar:
+    with st.sidebar:
     st.header("📤 Exportação")
     
     # Botão ÚNICO: Relatório Financeiro Calculado
@@ -424,6 +424,7 @@ for nome_agencia, df_ag in agencias_view:
 if total_paginas > 1:
     st.divider()
     nav_controls("bottom")
+
 
 
 
