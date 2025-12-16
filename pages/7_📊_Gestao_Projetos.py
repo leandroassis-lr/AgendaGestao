@@ -81,62 +81,117 @@ def clean_val(val, default="N/A"):
     return str(val)
 
 # --- DIALOG (POP-UP) DETALHES DO CHAMADO ---
-@st.dialog("📝 Detalhes do Chamado", width="medium")
+@st.dialog("📝 Editar Chamado", width="large")
 def open_chamado_dialog(row_dict):
+    # --- 1. CARREGAMENTO DE LISTAS (Para Selectbox) ---
+    # Tenta carregar listas de configuração, se falhar usa listas vazias
+    try:
+        df_tc = utils.carregar_config_db("tecnicos")
+        lista_tecnicos = df_tc.iloc[:,0].dropna().tolist()
+    except: lista_tecnicos = []
+    
+    try:
+        df_gest = utils.carregar_config_db("gestores") # Ou puxar de usuários
+        lista_gestores = df_gest.iloc[:,0].dropna().tolist()
+    except: lista_gestores = []
+
+    # Adiciona os valores atuais às listas se não estiverem nelas
+    val_tec_atual = str(row_dict.get('Técnico', '')).strip()
+    val_gest_atual = str(row_dict.get('Gestor', '')).strip()
+    
+    if val_tec_atual and val_tec_atual not in lista_tecnicos: lista_tecnicos.insert(0, val_tec_atual)
+    if val_gest_atual and val_gest_atual not in lista_gestores: lista_gestores.insert(0, val_gest_atual)
+
+    # --- INÍCIO DO FORMULÁRIO ---
     st.markdown(f"### 🎫 {row_dict.get('Nº Chamado', '')}")
-    st.caption(f"ID Interno: {row_dict.get('ID')}")
-    
-    # --- BLOCO 1: Status e Datas ---
-    c1, c2, c3 = st.columns(3)
-    c1.markdown(f"**Status Atual:**<br>{row_dict.get('Status')}", unsafe_allow_html=True)
-    c2.markdown(f"**Abertura:**<br>{_to_date_safe(row_dict.get('Abertura')) or '-'}", unsafe_allow_html=True)
-    c3.markdown(f"**Agendamento:**<br>{_to_date_safe(row_dict.get('Agendamento')) or '-'}", unsafe_allow_html=True)
+    st.caption(f"ID: {row_dict.get('ID')}")
+    st.markdown("<hr style='margin: 5px 0 15px 0'>", unsafe_allow_html=True)
 
-    st.divider()
-
-    # --- BLOCO 2: Informações Técnicas ---
-    st.markdown(f"**Projeto:** {row_dict.get('Projeto')}")
-    st.markdown(f"**Serviço:** {row_dict.get('Serviço')}")
-    st.markdown(f"**Sistema:** {row_dict.get('Sistema')}")
-    
-    st.divider()
-
-    # --- BLOCO 3: Descrição e Itens ---
-    st.markdown("📦 **Descrição / Equipamentos:**")
-    itens_desc = str(row_dict.get('Equipamento', '')).replace("|", "\n- ").replace(" | ", "\n- ")
-    if not itens_desc or itens_desc == "nan": 
-        itens_desc = str(row_dict.get('Descrição', '-'))
-    st.info(itens_desc)
-
-    st.divider()
-
-    # --- BLOCO 4: Edição e Links ---
     with st.form(key=f"form_popup_{row_dict['ID']}"):
+        
+        # --- LINHA 1: DATAS ---
+        c1, c2, c3, c4 = st.columns(4)
+        
+        # Abertura (Fixo)
+        c1.text_input("📅 Abertura", value=_to_date_safe(row_dict.get('Abertura')), disabled=True)
+        
+        # Agendamento Atual (Fixo - Referência)
+        c2.text_input("📅 Agendamento Atual", value=_to_date_safe(row_dict.get('Agendamento')), disabled=True)
+        
+        # Reprogramação (Editável - Atualiza o Agendamento)
+        nova_reprog = c3.date_input("🔄 Reprogramação", value=_to_date_safe(row_dict.get('Agendamento')))
+        
+        # Finalização (Editável)
+        nova_finalizacao = c4.date_input("✅ Finalização", value=_to_date_safe(row_dict.get('Fechamento')))
+
+        # --- LINHA 2: PESSOAS E SISTEMA ---
+        r2_c1, r2_c2, r2_c3, r2_c4 = st.columns(4)
+        
+        # Técnico (Editável)
+        novo_tecnico = r2_c1.selectbox("🔧 Técnico", options=[""] + lista_tecnicos, index=lista_tecnicos.index(val_tec_atual)+1 if val_tec_atual in lista_tecnicos else 0)
+        
+        # Sistema (Fixo)
+        r2_c2.text_input("💻 Sistema", value=row_dict.get('Sistema', ''), disabled=True)
+        
+        # Serviço (Fixo)
+        r2_c3.text_input("🛠️ Serviço", value=row_dict.get('Serviço', ''), disabled=True)
+        
+        # Gestor (Editável)
+        novo_gestor = r2_c4.text_input("👤 Gestor", value=val_gest_atual) 
+        # (Usei text_input p/ Gestor para dar flexibilidade, mas poderia ser selectbox se preferir)
+
+        # --- LINHA 3: DESCRIÇÃO (Fixo - Info Box) ---
+        st.markdown("<br><b>📦 Descrição (Item e Qtd)</b>", unsafe_allow_html=True)
+        itens_desc = str(row_dict.get('Equipamento', '')).replace("|", "\n- ").replace(" | ", "\n- ")
+        if not itens_desc or itens_desc == "nan": 
+            itens_desc = str(row_dict.get('Descrição', '-'))
+        st.info(itens_desc if itens_desc else "Sem descrição.")
+
+        # --- LINHA 4: OBSERVAÇÃO (Editável) ---
         obs_atual = row_dict.get('Observações e Pendencias', '')
         nova_obs = st.text_area("✍️ Observação / Pendência", value=obs_atual if pd.notna(obs_atual) else "", height=100)
-        
-        # Link Externo e Protocolo
-        cl1, cl2, cl3 = st.columns([1, 1, 1])
-        link_ext = row_dict.get('Link Externo', '')
-        
-        with cl1:
-            if link_ext and str(link_ext).lower() not in ['nan', 'none', '']:
-                st.markdown(f"<br><a href='{link_ext}' target='_blank' style='background:#1565C0; color:white; padding:8px 12px; border-radius:4px; text-decoration:none; display:block; text-align:center;'>🔗 Acessar Link</a>", unsafe_allow_html=True)
-            else:
-                st.caption("Sem link externo")
-        
-        with cl2:
-            st.text_input("Protocolo", value=row_dict.get('Nº Protocolo', ''), disabled=True)
-        
-        with cl3:
-            st.date_input("Data Finalização", value=_to_date_safe(row_dict.get('Fechamento')), disabled=True)
 
+        # --- LINHA 5: LINK E PROTOCOLO ---
         st.markdown("<br>", unsafe_allow_html=True)
+        l5_c1, l5_c2, l5_c3 = st.columns([3, 1.5, 1.5])
         
-        if st.form_submit_button("💾 Salvar Observação"):
-            # Atualiza apenas a observação no banco
-            utils_chamados.atualizar_chamado_db(row_dict['ID'], {"Observações e Pendencias": nova_obs})
-            st.success("Observação salva com sucesso!")
+        # Link (Editável para inserir)
+        novo_link = l5_c1.text_input("🔗 Link Externo", value=row_dict.get('Link Externo', ''))
+        
+        # Protocolo (Editável)
+        novo_protocolo = l5_c2.text_input("🔢 Protocolo", value=row_dict.get('Nº Protocolo', ''))
+        
+        # Botão de Ação (Apenas Visualização)
+        with l5_c3:
+            st.markdown("<label style='font-size:14px;'>Acessar</label>", unsafe_allow_html=True)
+            if novo_link and str(novo_link).lower() not in ['nan', 'none', '']:
+                st.markdown(f"<a href='{novo_link}' target='_blank' style='background:#1565C0; color:white; padding:9px 12px; border-radius:4px; text-decoration:none; display:block; text-align:center; font-weight:bold; margin-top:0px;'>🚀 Abrir Link</a>", unsafe_allow_html=True)
+            else:
+                st.button("🚫 Sem Link", disabled=True, key=f"lk_dis_{row_dict['ID']}")
+
+        st.markdown("<hr>", unsafe_allow_html=True)
+        
+        # --- BOTÃO SALVAR ---
+        if st.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True):
+            # Prepara dicionário de atualizações
+            updates = {
+                "Data Agendamento": nova_reprog, # A reprogramação atualiza o agendamento
+                "Data Finalização": nova_finalizacao,
+                "Técnico": novo_tecnico,
+                "Gestor": novo_gestor,
+                "Observações e Pendencias": nova_obs,
+                "Link Externo": novo_link,
+                "Nº Protocolo": novo_protocolo
+            }
+            
+            # Se a data de finalização for preenchida, sugerimos mudar status para Concluído se não estiver
+            if nova_finalizacao and row_dict.get('Status') not in ['Concluído', 'Finalizado', 'Faturado']:
+                # Opcional: Você pode forçar o status aqui se quiser, ou deixar a regra automática cuidar depois
+                updates["Status"] = "Concluído"
+                updates["Sub-Status"] = "Aguardando Faturamento"
+
+            utils_chamados.atualizar_chamado_db(row_dict['ID'], updates)
+            st.success("Chamado atualizado com sucesso!")
             time.sleep(1)
             st.rerun()
 
@@ -789,6 +844,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
