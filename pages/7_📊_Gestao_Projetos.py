@@ -650,12 +650,34 @@ else:
         if df_view.empty:
             st.warning("Nenhum projeto encontrado com os filtros atuais.")
         else:
-            # AGRUPAMENTO POR PROJETO X AGÊNCIA
+            # 1. AGRUPAMENTO
             colunas_agrupamento = ['Projeto', 'Cód. Agência', 'Nome Agência']
             grupos_projeto = list(df_view.groupby(colunas_agrupamento))
-            grupos_projeto.sort(key=lambda x: x[0][2]) 
+            grupos_projeto.sort(key=lambda x: x[0][2]) # Ordena por Nome da Agência
 
-            for (nome_proj, cod_ag, nome_ag), df_grupo in grupos_projeto:
+            # 2. LÓGICA DE PAGINAÇÃO (NOVO)
+            ITENS_POR_PAG = 20
+            total_itens = len(grupos_projeto)
+            total_paginas = math.ceil(total_itens / ITENS_POR_PAG)
+            
+            # Controles de Paginação no Topo
+            if total_paginas > 1:
+                c_info, c_pag = st.columns([4, 1])
+                with c_info:
+                    pag_atual = st.session_state.get('pag_proj', 1)
+                    st.caption(f"Exibindo {total_itens} grupos • Página {pag_atual} de {total_paginas}")
+                with c_pag:
+                    pag = st.number_input("Pág.", 1, total_paginas, key="pag_proj")
+            else:
+                pag = 1
+            
+            # Define o início e fim da lista ("fatia" da página atual)
+            inicio = (pag - 1) * ITENS_POR_PAG
+            fim = inicio + ITENS_POR_PAG
+            grupos_pagina_atual = grupos_projeto[inicio:fim]
+
+            # 3. LOOP DE RENDERIZAÇÃO (Apenas os itens da página)
+            for (nome_proj, cod_ag, nome_ag), df_grupo in grupos_pagina_atual:
                 row_head = df_grupo.iloc[0]
                 st_proj = clean_val(row_head.get('Status'), "Não Iniciado")
                 cor_st = utils_chamados.get_status_color(st_proj)
@@ -671,6 +693,7 @@ else:
                 
                 nome_ag_limpo = str(nome_ag).replace(str(cod_ag), '').strip(' -')
 
+                # Renderização Visual
                 st.markdown('<div class="gold-line"></div>', unsafe_allow_html=True)
                 st.markdown(f"<div class='agencia-header'>🏢 {cod_ag} - {nome_ag_limpo}</div>", unsafe_allow_html=True)
                 
@@ -691,9 +714,10 @@ else:
                     for i, row_chamado in df_grupo.iterrows():
                         num_chamado = str(row_chamado['Nº Chamado'])
                         servico = str(row_chamado['Serviço'])
+                        # Botão que abre o Pop-up
                         if st.button(f"📄 {num_chamado}  |  {servico}", key=f"btn_ch_{row_chamado['ID']}", use_container_width=True):
                             open_chamado_dialog(row_chamado.to_dict())
-
+                            
     with aba_calendario:
         st.subheader("🗓️ Agenda da Semana")
         cn, _ = st.columns([1, 4])
@@ -715,3 +739,4 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
