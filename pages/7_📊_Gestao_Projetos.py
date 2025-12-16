@@ -510,8 +510,70 @@ def run_exporter_dialog(df_data_to_export):
     if st.button("Fechar", use_container_width=True):
         st.session_state.show_export_popup = False; st.rerun()
 
+
+
 # --- 5. CARREGAMENTO E SIDEBAR ---
 df = utils_chamados.carregar_chamados_db()
+
+# --- NOVO DIALOG PARA DETALHES DO CHAMADO ---
+@st.dialog("📝 Detalhes do Chamado", width="medium")
+def open_chamado_dialog(row_dict):
+    # Carrega dados para edição
+    st.markdown(f"### 🎫 {row_dict.get('Nº Chamado', '')}")
+    st.caption(f"ID Interno: {row_dict.get('ID')}")
+    
+    # --- BLOCO 1: Status e Datas ---
+    c1, c2, c3 = st.columns(3)
+    c1.markdown(f"**Status Atual:**<br>{row_dict.get('Status')}", unsafe_allow_html=True)
+    c2.markdown(f"**Abertura:**<br>{_to_date_safe(row_dict.get('Abertura')) or '-'}", unsafe_allow_html=True)
+    c3.markdown(f"**Agendamento:**<br>{_to_date_safe(row_dict.get('Agendamento')) or '-'}", unsafe_allow_html=True)
+
+    st.divider()
+
+    # --- BLOCO 2: Informações Técnicas ---
+    st.markdown(f"**Projeto:** {row_dict.get('Projeto')}")
+    st.markdown(f"**Serviço:** {row_dict.get('Serviço')}")
+    st.markdown(f"**Sistema:** {row_dict.get('Sistema')}")
+    
+    st.divider()
+
+    # --- BLOCO 3: Descrição e Itens ---
+    st.markdown("📦 **Descrição / Equipamentos:**")
+    itens_desc = str(row_dict.get('Equipamento', '')).replace("|", "\n- ").replace(" | ", "\n- ")
+    if not itens_desc: itens_desc = row_dict.get('Descrição', '-')
+    st.info(itens_desc)
+
+    st.divider()
+
+    # --- BLOCO 4: Edição e Links ---
+    with st.form(key=f"form_popup_{row_dict['ID']}"):
+        obs_atual = row_dict.get('Observações e Pendencias', '')
+        nova_obs = st.text_area("✍️ Observação / Pendência", value=obs_atual if pd.notna(obs_atual) else "", height=100)
+        
+        # Link Externo e Protocolo
+        cl1, cl2, cl3 = st.columns([1, 1, 1])
+        link_ext = row_dict.get('Link Externo', '')
+        
+        with cl1:
+            if link_ext and str(link_ext).lower() not in ['nan', 'none', '']:
+                st.markdown(f"<br><a href='{link_ext}' target='_blank' style='background:#1565C0; color:white; padding:8px 12px; border-radius:4px; text-decoration:none; display:block; text-align:center;'>🔗 Acessar Link</a>", unsafe_allow_html=True)
+            else:
+                st.caption("Sem link externo")
+        
+        with cl2:
+            st.text_input("Protocolo", value=row_dict.get('Nº Protocolo', ''), disabled=True)
+        
+        with cl3:
+            st.date_input("Data Finalização", value=_to_date_safe(row_dict.get('Fechamento')), disabled=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        if st.form_submit_button("💾 Salvar Observação"):
+            # Atualiza apenas a observação no banco
+            utils_chamados.atualizar_chamado_db(row_dict['ID'], {"Observações e Pendencias": nova_obs})
+            st.success("Observação salva com sucesso!")
+            time.sleep(1)
+            st.rerun()
 
 with st.sidebar:
     st.header("Ações")
@@ -776,97 +838,82 @@ else:
     # 4. CONTEÚDO (LISTA E CALENDÁRIO)
     aba_lista, aba_calendario = st.tabs(["📋 Lista Detalhada", "📅 Agenda Semanal"])
 
-    with aba_lista:    
+    with aba_lista:     
         if df_view.empty:
-            st.warning("Nenhum chamado encontrado.")
+            st.warning("Nenhum projeto encontrado com os filtros atuais.")
         else:
-            df_view['Agendamento_str'] = pd.to_datetime(df_view['Agendamento']).dt.strftime('%d/%m/%Y').fillna("Sem Data")
-            grupos = list(df_view.groupby(['Projeto', 'Nome Agência', 'Serviço', 'Agendamento_str']))
+            # --- AGRUPAMENTO POR PROJETO X AGÊNCIA ---
+            # Aqui criamos a estrutura onde o cabeçalho é o Projeto na Agência
+            colunas_agrupamento = ['Projeto', 'Cód. Agência', 'Nome Agência']
+            grupos_projeto = list(df_view.groupby(colunas_agrupamento))
             
-            # PAGINAÇÃO
-            ITENS_POR_PAG = 20
-            total_itens = len(grupos)
-            total_paginas = math.ceil(total_itens / ITENS_POR_PAG)
-            
-            c_info, c_pag = st.columns([4, 1])
-            with c_info: st.caption(f"Exibindo {total_itens} grupos • Página {st.session_state.get('pag_proj', 1)} de {total_paginas}")
-            
-            if total_paginas > 1:
-                with c_pag: 
-                    pag = st.number_input("Pág.", 1, total_paginas, key="pag_proj")
-            else: pag = 1
-            
-            inicio = (pag - 1) * ITENS_POR_PAG
-            fim = inicio + ITENS_POR_PAG
-                        
-            for (proj_nome, nome_agencia, nome_servico, data_str), df_grupo in grupos[inicio:fim]:
-                row = df_grupo.iloc[0]
-                ids = df_grupo['ID'].tolist()
+            # Ordenação opcional (ex: por nome da agência)
+            grupos_projeto.sort(key=lambda x: x[0][2]) # Ordena pelo Nome da Agência
+
+            # Iterar sobre os Projetos (Cada iteração é um "Bloco" visual)
+            for (nome_proj, cod_ag, nome_ag), df_grupo in grupos_projeto:
                 
-                # --- PREPARAÇÃO DE DADOS ---
-                st_atual = clean_val(row.get('Status'), "Não Iniciado")
-                acao = clean_val(row.get('Sub-Status'), "")
+                # Pega dados do "Cabeçalho do Projeto" (Assume que Analista/Gestor/Técnico são iguais para o projeto)
+                row_head = df_grupo.iloc[0]
                 
-                # Lógica de Cores Analista
-                nome_ana_raw = clean_val(row.get('Analista'), "N/D").split(' ')[0].upper()
-                if "GIOVANA" in nome_ana_raw: css_ana = "ana-azul"
-                elif "MARCELA" in nome_ana_raw: css_ana = "ana-verde"
-                elif "MONIQUE" in nome_ana_raw: css_ana = "ana-rosa"
+                # Status do Projeto (Pegamos o status do chamado mais crítico ou do primeiro, conforme sua regra automática já existente)
+                st_proj = clean_val(row_head.get('Status'), "Não Iniciado")
+                cor_st = utils_chamados.get_status_color(st_proj)
+                
+                # Dados fixos do projeto
+                analista = clean_val(row_head.get('Analista'), "N/D").split(' ')[0].upper()
+                tecnico = clean_val(row_head.get('Técnico'), "N/D").split(' ')[0].title()
+                gestor = clean_val(row_head.get('Gestor'), "N/D").split(' ')[0].title()
+                
+                # Tratamento CSS Analista
+                if "GIOVANA" in analista: css_ana = "ana-azul"
+                elif "MARCELA" in analista: css_ana = "ana-verde"
+                elif "MONIQUE" in analista: css_ana = "ana-rosa"
                 else: css_ana = "ana-default"
                 
-                gestor = clean_val(row.get('Gestor'), "N/D").split(' ')[0].title()
-                
-                # Tratamento Agência
-                cod_ag = str(row.get('Cód. Agência', '')).split('.')[0]
-                nome_ag_limpo = str(nome_agencia).replace(cod_ag, '').strip(' -')
-                
-                # Cor do Status
-                cor_st = utils_chamados.get_status_color(st_atual)
+                # Limpeza nome agência
+                nome_ag_limpo = str(nome_ag).replace(str(cod_ag), '').strip(' -')
 
-                # SLA
-                sla_html = ""
-                if _to_date_safe(row.get('Prazo')):
-                    dias = (_to_date_safe(row.get('Prazo')) - date.today()).days
-                    if dias < 0: sla_html = f"<span style='color:#D32F2F; font-weight:bold;'>⚠️ {abs(dias)}d atraso</span>"
-                    else: sla_html = f"<span style='color:#388E3C; font-weight:bold;'>🕒 {dias}d restantes</span>"
-
-                # --- RENDERIZAÇÃO (NOVO LAYOUT 3 LINHAS) ---
+                # --- RENDERIZAÇÃO VISUAL ---
                 
+                # 1. Linha Dourada e Nome da Agência (Cabeçalho Mantido)
                 st.markdown('<div class="gold-line"></div>', unsafe_allow_html=True)
-                
-                # LINHA 1: Nº e Nome da Agência
                 st.markdown(f"<div class='agencia-header'>🏢 {cod_ag} - {nome_ag_limpo}</div>", unsafe_allow_html=True)
                 
-                # LINHA 2: Projeto - Agendamento - Analista - Status
-                # Dividido em 4 colunas proporcionais
-                l2_c1, l2_c2, l2_c3, l2_c4 = st.columns([2, 1.5, 1.5, 1])
-                
-                with l2_c1: 
-                    st.markdown(f"<span class='meta-label'></span><br><b>{proj_nome}</b>", unsafe_allow_html=True)
-                with l2_c2:
-                    st.markdown(f"<span class='meta-label'></span><br>📅 {data_str}", unsafe_allow_html=True)
-                with l2_c3:
-                    st.markdown(f"<span class='meta-label'></span><br><span class='{css_ana}'>{nome_ana_raw}</span>", unsafe_allow_html=True)
-                with l2_c4:
-                    st.markdown(f"<span class='meta-label'></span><br><span class='status-badge' style='background-color:{cor_st};'>{st_atual}</span>", unsafe_allow_html=True)
+                # 2. Container de Informações do Projeto (Fixo)
+                with st.container():
+                    # Layout em colunas para os dados macro do projeto
+                    c_p1, c_p2, c_p3, c_p4 = st.columns([1.5, 1.2, 1.2, 1.2])
+                    
+                    with c_p1:
+                        st.markdown(f"<span class='meta-label'>PROJETO</span><br><b>{nome_proj}</b>", unsafe_allow_html=True)
+                        # ID do Projeto (Usando combinação simples para visualização)
+                        st.caption(f"ID Ref: {cod_ag}-{str(nome_proj)[:3].upper()}") 
+                    
+                    with c_p2:
+                        st.markdown(f"<span class='meta-label'>STATUS</span><br><span class='status-badge' style='background-color:{cor_st};'>{st_proj}</span>", unsafe_allow_html=True)
+                    
+                    with c_p3:
+                         st.markdown(f"<span class='meta-label'>ANALISTA</span><br><span class='{css_ana}'>{analista}</span>", unsafe_allow_html=True)
+                    
+                    with c_p4:
+                        st.markdown(f"<span class='meta-label'>EQUIPE</span><br><span style='font-size:0.85em'>👤 G: {gestor}<br>🔧 T: {tecnico}</span>", unsafe_allow_html=True)
 
-                # LINHA 3: Serviço - SLA - Gestor - Ação
-                st.markdown("<div style='margin-top: 6px;'></div>", unsafe_allow_html=True) # Espacinho
-                l3_c1, l3_c2, l3_c3, l3_c4 = st.columns([2, 1.5, 1.5, 1])
-                
-                with l3_c1:
-                    st.markdown(f"<span style='color:#1565C0; font-weight:600;'>{nome_servico}</span>", unsafe_allow_html=True)
-                with l3_c2:
-                    st.markdown(sla_html if sla_html else "-", unsafe_allow_html=True)
-                with l3_c3:
-                    st.markdown(f"<span class='gestor-bold'>👤 {gestor.upper()}</span>", unsafe_allow_html=True)
-                with l3_c4:
-                    if acao: st.markdown(f"<span class='action-text'>👉 {acao}</span>", unsafe_allow_html=True)
-                    else: st.caption("-")
-                # Expander
-                with st.expander(f"📝 Editar Detalhes - ID: {ids[0]}"):
-                    form_key = f"form_{row['ID']}"
-                    with st.form(key=form_key):
+                # 3. Expander com a Lista de Chamados
+                label_expander = f"📂 Visualizar {len(df_grupo)} Chamado(s) vinculados"
+                with st.expander(label_expander):
+                    
+                    # Tabela simples ou Lista de Botões para os chamados
+                    # Usando colunas para parecer uma lista organizada
+                    for i, row_chamado in df_grupo.iterrows():
+                        num_chamado = str(row_chamado['Nº Chamado'])
+                        servico = str(row_chamado['Serviço'])
+                        
+                        # Botão que ocupa a largura total simulando uma linha de tabela
+                        # Ao clicar, abre o Dialog definido no passo 1
+                        if st.button(f"📄 {num_chamado}  |  {servico}", key=f"btn_ch_{row_chamado['ID']}", use_container_width=True):
+                            open_chamado_dialog(row_chamado.to_dict())
+                        
                         # --- LISTAS E DADOS ---
                         try:
                             df_pj = utils.carregar_config_db("projetos_nomes"); lst_pj = [str(x) for x in df_pj.iloc[:,0].dropna().tolist()] if not df_pj.empty else []
@@ -1046,4 +1093,5 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
