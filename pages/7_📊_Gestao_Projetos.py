@@ -167,7 +167,7 @@ def open_chamado_dialog(row_dict):
             else:
                 # --- CORREÇÃO AQUI ---
                 # Substituímos o st.button por HTML/CSS para não quebrar o formulário
-                st.markdown("<div style='background:#e0e0e0; color:#999; padding:9px 12px; border-radius:4px; text-align:center; font-weight:bold;'>🚫 Sem Link</div>", unsafe_allow_html=True)
+                st.markdown("<div style='background:#e0e0e0; color:#999; padding:4px 6px; border-radius:4px; text-align:center; font-weight:bold;'>🚫 Sem Link</div>", unsafe_allow_html=True)
 
         st.markdown("<hr>", unsafe_allow_html=True)
         
@@ -842,6 +842,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
