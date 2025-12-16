@@ -84,14 +84,13 @@ def clean_val(val, default="N/A"):
 @st.dialog("📝 Editar Chamado", width="large")
 def open_chamado_dialog(row_dict):
     # --- 1. CARREGAMENTO DE LISTAS (Para Selectbox) ---
-    # Tenta carregar listas de configuração, se falhar usa listas vazias
     try:
         df_tc = utils.carregar_config_db("tecnicos")
         lista_tecnicos = df_tc.iloc[:,0].dropna().tolist()
     except: lista_tecnicos = []
     
     try:
-        df_gest = utils.carregar_config_db("gestores") # Ou puxar de usuários
+        df_gest = utils.carregar_config_db("gestores") 
         lista_gestores = df_gest.iloc[:,0].dropna().tolist()
     except: lista_gestores = []
 
@@ -138,7 +137,6 @@ def open_chamado_dialog(row_dict):
         
         # Gestor (Editável)
         novo_gestor = r2_c4.text_input("👤 Gestor", value=val_gest_atual) 
-        # (Usei text_input p/ Gestor para dar flexibilidade, mas poderia ser selectbox se preferir)
 
         # --- LINHA 3: DESCRIÇÃO (Fixo - Info Box) ---
         st.markdown("<br><b>📦 Descrição (Item e Qtd)</b>", unsafe_allow_html=True)
@@ -167,7 +165,9 @@ def open_chamado_dialog(row_dict):
             if novo_link and str(novo_link).lower() not in ['nan', 'none', '']:
                 st.markdown(f"<a href='{novo_link}' target='_blank' style='background:#1565C0; color:white; padding:9px 12px; border-radius:4px; text-decoration:none; display:block; text-align:center; font-weight:bold; margin-top:0px;'>🚀 Abrir Link</a>", unsafe_allow_html=True)
             else:
-                st.button("🚫 Sem Link", disabled=True, key=f"lk_dis_{row_dict['ID']}")
+                # --- CORREÇÃO AQUI ---
+                # Substituímos o st.button por HTML/CSS para não quebrar o formulário
+                st.markdown("<div style='background:#e0e0e0; color:#999; padding:9px 12px; border-radius:4px; text-align:center; font-weight:bold;'>🚫 Sem Link</div>", unsafe_allow_html=True)
 
         st.markdown("<hr>", unsafe_allow_html=True)
         
@@ -175,7 +175,7 @@ def open_chamado_dialog(row_dict):
         if st.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True):
             # Prepara dicionário de atualizações
             updates = {
-                "Data Agendamento": nova_reprog, # A reprogramação atualiza o agendamento
+                "Data Agendamento": nova_reprog, 
                 "Data Finalização": nova_finalizacao,
                 "Técnico": novo_tecnico,
                 "Gestor": novo_gestor,
@@ -184,9 +184,7 @@ def open_chamado_dialog(row_dict):
                 "Nº Protocolo": novo_protocolo
             }
             
-            # Se a data de finalização for preenchida, sugerimos mudar status para Concluído se não estiver
             if nova_finalizacao and row_dict.get('Status') not in ['Concluído', 'Finalizado', 'Faturado']:
-                # Opcional: Você pode forçar o status aqui se quiser, ou deixar a regra automática cuidar depois
                 updates["Status"] = "Concluído"
                 updates["Sub-Status"] = "Aguardando Faturamento"
 
@@ -844,6 +842,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
