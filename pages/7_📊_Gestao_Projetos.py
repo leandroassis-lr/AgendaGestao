@@ -678,81 +678,96 @@ else:
             for (nome_proj, cod_ag, nome_ag), df_grupo in grupos_pagina_atual:
                 row_head = df_grupo.iloc[0]
                 
-                # --- PREPARAÇÃO DE DADOS ---
-                # Status e Cores
+                # --- PREPARAÇÃO DE DADOS DO CABEÇALHO ---
                 st_proj = clean_val(row_head.get('Status'), "Não Iniciado")
                 cor_st = utils_chamados.get_status_color(st_proj)
                 
-                # Analista (CSS)
                 analista = clean_val(row_head.get('Analista'), "N/D").split(' ')[0].upper()
                 if "GIOVANA" in analista: css_ana = "ana-azul"
                 elif "MARCELA" in analista: css_ana = "ana-verde"
                 elif "MONIQUE" in analista: css_ana = "ana-rosa"
                 else: css_ana = "ana-default"
                 
-                # Outros campos
                 tecnico = clean_val(row_head.get('Técnico'), "N/D").split(' ')[0].title()
                 gestor = clean_val(row_head.get('Gestor'), "N/D").split(' ')[0].title()
                 acao_txt = clean_val(row_head.get('Sub-Status'), "-")
                 nome_ag_limpo = str(nome_ag).replace(str(cod_ag), '').strip(' -')
 
-                # CÁLCULO DE DATAS E SLA
-                # Pega a menor data de agendamento do grupo (a mais próxima)
+                # Datas SLA
                 datas_validas = pd.to_datetime(df_grupo['Agendamento'], errors='coerce').dropna()
                 data_prox = datas_validas.min() if not datas_validas.empty else None
                 
                 if data_prox:
                     data_str = data_prox.strftime('%d/%m/%Y')
-                    # SLA = Data + 5 dias
                     data_sla = data_prox + timedelta(days=5)
                     atrasado = data_sla.date() < date.today() and st_proj not in ['Concluído', 'Finalizado', 'Faturado']
-                    cor_sla = "#D32F2F" if atrasado else "#388E3C" # Vermelho se estourou, Verde se ok
+                    cor_sla = "#D32F2F" if atrasado else "#388E3C"
                     sla_html = f"<span style='color:{cor_sla}; font-weight:bold;'>Até {data_sla.strftime('%d/%m')}</span>"
                 else:
                     data_str = "-"
                     sla_html = "-"
 
-                # --- RENDERIZAÇÃO VISUAL (NOVO LAYOUT) ---
+                # --- CABEÇALHO DO PROJETO ---
                 st.markdown('<div class="gold-line"></div>', unsafe_allow_html=True)
-                
-                # Container para os dados do cabeçalho
                 with st.container():
-                    # LINHA 1: Agência | Data | Analista | STATUS
+                    # Linha 1
                     l1_c1, l1_c2, l1_c3, l1_c4 = st.columns([2.5, 1, 1, 1])
-                    
-                    with l1_c1:
-                         st.markdown(f"<span class='agencia-header'>🏢 {cod_ag} - {nome_ag_limpo}</span>", unsafe_allow_html=True)
-                    with l1_c2:
-                         st.markdown(f"<span class='meta-label'>AGENDAMENTO</span><br><b>📅 {data_str}</b>", unsafe_allow_html=True)
-                    with l1_c3:
-                         st.markdown(f"<span class='meta-label'>ANALISTA</span><br><span class='{css_ana}'>{analista}</span>", unsafe_allow_html=True)
-                    with l1_c4:
-                         st.markdown(f"<span class='status-badge' style='background-color:{cor_st}; margin-top:5px;'>{st_proj}</span>", unsafe_allow_html=True)
+                    with l1_c1: st.markdown(f"<span class='agencia-header'>🏢 {cod_ag} - {nome_ag_limpo}</span>", unsafe_allow_html=True)
+                    with l1_c2: st.markdown(f"<span class='meta-label'>AGENDAMENTO</span><br><b>📅 {data_str}</b>", unsafe_allow_html=True)
+                    with l1_c3: st.markdown(f"<span class='meta-label'>ANALISTA</span><br><span class='{css_ana}'>{analista}</span>", unsafe_allow_html=True)
+                    with l1_c4: st.markdown(f"<span class='status-badge' style='background-color:{cor_st}; margin-top:5px;'>{st_proj}</span>", unsafe_allow_html=True)
 
-                    # LINHA 2: Projeto | SLA | Gestor | Ação
+                    # Linha 2
                     l2_c1, l2_c2, l2_c3, l2_c4 = st.columns([2.5, 1, 1, 1])
-                    
-                    with l2_c1:
-                        st.markdown(f"<span class='meta-label'>PROJETO</span><br><span style='font-size:1em; font-weight:bold; color:#555'>{nome_proj}</span>", unsafe_allow_html=True)
-                    with l2_c2:
-                        st.markdown(f"<span class='meta-label'>SLA (+5d)</span><br>{sla_html}", unsafe_allow_html=True)
-                    with l2_c3:
-                        st.markdown(f"<span class='meta-label'>GESTOR</span><br><span class='gestor-bold'>👤 {gestor}</span>", unsafe_allow_html=True)
-                    with l2_c4:
-                        if acao_txt and acao_txt != "-":
-                            st.markdown(f"<span class='meta-label'>AÇÃO</span><br><span class='action-text'>👉 {acao_txt}</span>", unsafe_allow_html=True)
-                        else:
-                            st.markdown(f"<span class='meta-label'>AÇÃO</span><br><span style='color:#ccc'>-</span>", unsafe_allow_html=True)
+                    with l2_c1: st.markdown(f"<span class='meta-label'>PROJETO</span><br><span style='font-size:1em; font-weight:bold; color:#555'>{nome_proj}</span>", unsafe_allow_html=True)
+                    with l2_c2: st.markdown(f"<span class='meta-label'>SLA (+5d)</span><br>{sla_html}", unsafe_allow_html=True)
+                    with l2_c3: st.markdown(f"<span class='meta-label'>GESTOR</span><br><span class='gestor-bold'>👤 {gestor}</span>", unsafe_allow_html=True)
+                    with l2_c4: 
+                        if acao_txt and acao_txt != "-": st.markdown(f"<span class='meta-label'>AÇÃO</span><br><span class='action-text'>👉 {acao_txt}</span>", unsafe_allow_html=True)
+                        else: st.markdown(f"<span class='meta-label'>AÇÃO</span><br><span style='color:#ccc'>-</span>", unsafe_allow_html=True)
 
-                # Expander
+                # --- LISTA DE CHAMADOS (DENTRO DO EXPANDER) ---
                 label_expander = f"📂 Visualizar {len(df_grupo)} Chamado(s) vinculados"
                 with st.expander(label_expander):
+                    
+                    # Títulos das Colunas (opcional, para ficar bem tabelado)
+                    th1, th2, th3, th4, th5 = st.columns([1.2, 3, 1.2, 2, 0.8])
+                    th1.markdown("<small style='color:#999'>CHAMADO</small>", unsafe_allow_html=True)
+                    th2.markdown("<small style='color:#999'>SERVIÇO</small>", unsafe_allow_html=True)
+                    th3.markdown("<small style='color:#999'>DATA</small>", unsafe_allow_html=True)
+                    th4.markdown("<small style='color:#999'>AÇÃO NECESSÁRIA</small>", unsafe_allow_html=True)
+                    th5.markdown("") # Espaço botão
+                    
+                    st.markdown("<hr style='margin: 5px 0 10px 0; border-top: 1px solid #eee;'>", unsafe_allow_html=True)
+
+                    # Loop dos Itens
                     for i, row_chamado in df_grupo.iterrows():
-                        num_chamado = str(row_chamado['Nº Chamado'])
+                        n_chamado = str(row_chamado['Nº Chamado'])
                         servico = str(row_chamado['Serviço'])
-                        if st.button(f"📄 {num_chamado}  |  {servico}", key=f"btn_ch_{row_chamado['ID']}", use_container_width=True):
-                            open_chamado_dialog(row_chamado.to_dict())
-                            
+                        acao_ch = str(row_chamado.get('Sub-Status', ''))
+                        if acao_ch in ['nan', 'None', '', '-']: acao_ch = "Em análise"
+                        
+                        # Data formatada
+                        dt_raw = pd.to_datetime(row_chamado['Agendamento'], errors='coerce')
+                        dt_fmt = dt_raw.strftime('%d/%m') if pd.notna(dt_raw) else "-"
+
+                        # Colunas da Linha
+                        c1, c2, c3, c4, c5 = st.columns([1.2, 3, 1.2, 2, 0.8])
+                        
+                        # Renderização elegante dos dados
+                        with c1: st.markdown(f"<b>🎫 {n_chamado}</b>", unsafe_allow_html=True)
+                        with c2: st.markdown(f"<span style='color:#333'>{servico}</span>", unsafe_allow_html=True)
+                        with c3: st.markdown(f"📅 {dt_fmt}", unsafe_allow_html=True)
+                        with c4: st.markdown(f"<span style='font-size:0.85em; color:#E65100; font-weight:600;'>{acao_ch}</span>", unsafe_allow_html=True)
+                        
+                        # Botão de Ação
+                        with c5:
+                            if st.button("🔎", key=f"btn_ch_{row_chamado['ID']}", help="Ver detalhes"):
+                                open_chamado_dialog(row_chamado.to_dict())
+                                
+                        # Divisória sutil entre linhas
+                        st.markdown("<div style='border-bottom: 1px solid #f8f8f8; margin-bottom: 8px;'></div>", unsafe_allow_html=True)
+                        
     with aba_calendario:
         st.subheader("🗓️ Agenda da Semana")
         cn, _ = st.columns([1, 4])
@@ -774,6 +789,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
