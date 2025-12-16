@@ -645,8 +645,8 @@ else:
     st.markdown("<br>", unsafe_allow_html=True)
 
     aba_lista, aba_calendario = st.tabs(["📋 Lista Detalhada", "📅 Agenda Semanal"])
-
-    with aba_lista:     
+    
+with aba_lista:     
         if df_view.empty:
             st.warning("Nenhum projeto encontrado com os filtros atuais.")
         else:
@@ -655,12 +655,11 @@ else:
             grupos_projeto = list(df_view.groupby(colunas_agrupamento))
             grupos_projeto.sort(key=lambda x: x[0][2]) # Ordena por Nome da Agência
 
-            # 2. LÓGICA DE PAGINAÇÃO (NOVO)
+            # 2. PAGINAÇÃO
             ITENS_POR_PAG = 20
             total_itens = len(grupos_projeto)
             total_paginas = math.ceil(total_itens / ITENS_POR_PAG)
             
-            # Controles de Paginação no Topo
             if total_paginas > 1:
                 c_info, c_pag = st.columns([4, 1])
                 with c_info:
@@ -671,50 +670,86 @@ else:
             else:
                 pag = 1
             
-            # Define o início e fim da lista ("fatia" da página atual)
             inicio = (pag - 1) * ITENS_POR_PAG
             fim = inicio + ITENS_POR_PAG
             grupos_pagina_atual = grupos_projeto[inicio:fim]
 
-            # 3. LOOP DE RENDERIZAÇÃO (Apenas os itens da página)
+            # 3. LOOP DE RENDERIZAÇÃO
             for (nome_proj, cod_ag, nome_ag), df_grupo in grupos_pagina_atual:
                 row_head = df_grupo.iloc[0]
+                
+                # --- PREPARAÇÃO DE DADOS ---
+                # Status e Cores
                 st_proj = clean_val(row_head.get('Status'), "Não Iniciado")
                 cor_st = utils_chamados.get_status_color(st_proj)
                 
+                # Analista (CSS)
                 analista = clean_val(row_head.get('Analista'), "N/D").split(' ')[0].upper()
-                tecnico = clean_val(row_head.get('Técnico'), "N/D").split(' ')[0].title()
-                gestor = clean_val(row_head.get('Gestor'), "N/D").split(' ')[0].title()
-                
                 if "GIOVANA" in analista: css_ana = "ana-azul"
                 elif "MARCELA" in analista: css_ana = "ana-verde"
                 elif "MONIQUE" in analista: css_ana = "ana-rosa"
                 else: css_ana = "ana-default"
                 
+                # Outros campos
+                tecnico = clean_val(row_head.get('Técnico'), "N/D").split(' ')[0].title()
+                gestor = clean_val(row_head.get('Gestor'), "N/D").split(' ')[0].title()
+                acao_txt = clean_val(row_head.get('Sub-Status'), "-")
                 nome_ag_limpo = str(nome_ag).replace(str(cod_ag), '').strip(' -')
 
-                # Renderização Visual
-                st.markdown('<div class="gold-line"></div>', unsafe_allow_html=True)
-                st.markdown(f"<div class='agencia-header'>🏢 {cod_ag} - {nome_ag_limpo}</div>", unsafe_allow_html=True)
+                # CÁLCULO DE DATAS E SLA
+                # Pega a menor data de agendamento do grupo (a mais próxima)
+                datas_validas = pd.to_datetime(df_grupo['Agendamento'], errors='coerce').dropna()
+                data_prox = datas_validas.min() if not datas_validas.empty else None
                 
-                with st.container():
-                    c_p1, c_p2, c_p3, c_p4 = st.columns([1.5, 1.2, 1.2, 1.2])
-                    with c_p1:
-                        st.markdown(f"<span class='meta-label'>PROJETO</span><br><b>{nome_proj}</b>", unsafe_allow_html=True)
-                        st.caption(f"ID Ref: {cod_ag}-{str(nome_proj)[:3].upper()}") 
-                    with c_p2:
-                        st.markdown(f"<span class='meta-label'>STATUS</span><br><span class='status-badge' style='background-color:{cor_st};'>{st_proj}</span>", unsafe_allow_html=True)
-                    with c_p3:
-                         st.markdown(f"<span class='meta-label'>ANALISTA</span><br><span class='{css_ana}'>{analista}</span>", unsafe_allow_html=True)
-                    with c_p4:
-                        st.markdown(f"<span class='meta-label'>EQUIPE</span><br><span style='font-size:0.85em'>👤 G: {gestor}<br>🔧 T: {tecnico}</span>", unsafe_allow_html=True)
+                if data_prox:
+                    data_str = data_prox.strftime('%d/%m/%Y')
+                    # SLA = Data + 5 dias
+                    data_sla = data_prox + timedelta(days=5)
+                    atrasado = data_sla.date() < date.today() and st_proj not in ['Concluído', 'Finalizado', 'Faturado']
+                    cor_sla = "#D32F2F" if atrasado else "#388E3C" # Vermelho se estourou, Verde se ok
+                    sla_html = f"<span style='color:{cor_sla}; font-weight:bold;'>Até {data_sla.strftime('%d/%m')}</span>"
+                else:
+                    data_str = "-"
+                    sla_html = "-"
 
+                # --- RENDERIZAÇÃO VISUAL (NOVO LAYOUT) ---
+                st.markdown('<div class="gold-line"></div>', unsafe_allow_html=True)
+                
+                # Container para os dados do cabeçalho
+                with st.container():
+                    # LINHA 1: Agência | Data | Analista | STATUS
+                    l1_c1, l1_c2, l1_c3, l1_c4 = st.columns([2.5, 1, 1, 1])
+                    
+                    with l1_c1:
+                         st.markdown(f"<span class='agencia-header'>🏢 {cod_ag} - {nome_ag_limpo}</span>", unsafe_allow_html=True)
+                    with l1_c2:
+                         st.markdown(f"<span class='meta-label'>AGENDAMENTO</span><br><b>📅 {data_str}</b>", unsafe_allow_html=True)
+                    with l1_c3:
+                         st.markdown(f"<span class='meta-label'>ANALISTA</span><br><span class='{css_ana}'>{analista}</span>", unsafe_allow_html=True)
+                    with l1_c4:
+                         st.markdown(f"<span class='status-badge' style='background-color:{cor_st}; margin-top:5px;'>{st_proj}</span>", unsafe_allow_html=True)
+
+                    # LINHA 2: Projeto | SLA | Gestor | Ação
+                    l2_c1, l2_c2, l2_c3, l2_c4 = st.columns([2.5, 1, 1, 1])
+                    
+                    with l2_c1:
+                        st.markdown(f"<span class='meta-label'>PROJETO</span><br><span style='font-size:1em; font-weight:bold; color:#555'>{nome_proj}</span>", unsafe_allow_html=True)
+                    with l2_c2:
+                        st.markdown(f"<span class='meta-label'>SLA (+5d)</span><br>{sla_html}", unsafe_allow_html=True)
+                    with l2_c3:
+                        st.markdown(f"<span class='meta-label'>GESTOR</span><br><span class='gestor-bold'>👤 {gestor}</span>", unsafe_allow_html=True)
+                    with l2_c4:
+                        if acao_txt and acao_txt != "-":
+                            st.markdown(f"<span class='meta-label'>AÇÃO</span><br><span class='action-text'>👉 {acao_txt}</span>", unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"<span class='meta-label'>AÇÃO</span><br><span style='color:#ccc'>-</span>", unsafe_allow_html=True)
+
+                # Expander
                 label_expander = f"📂 Visualizar {len(df_grupo)} Chamado(s) vinculados"
                 with st.expander(label_expander):
                     for i, row_chamado in df_grupo.iterrows():
                         num_chamado = str(row_chamado['Nº Chamado'])
                         servico = str(row_chamado['Serviço'])
-                        # Botão que abre o Pop-up
                         if st.button(f"📄 {num_chamado}  |  {servico}", key=f"btn_ch_{row_chamado['ID']}", use_container_width=True):
                             open_chamado_dialog(row_chamado.to_dict())
                             
@@ -739,4 +774,5 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
