@@ -110,7 +110,7 @@ def open_chamado_dialog(row_dict):
 
     with st.form(key=f"form_popup_{row_dict['ID']}"):
         
-        # --- PREPARAÇÃO DE DATAS (Formato DD/MM/AAAA) ---
+        # --- PREPARAÇÃO DE DATAS ---
         dt_abertura = _to_date_safe(row_dict.get('Abertura'))
         dt_agendamento = _to_date_safe(row_dict.get('Agendamento'))
         dt_finalizacao = _to_date_safe(row_dict.get('Fechamento'))
@@ -123,8 +123,6 @@ def open_chamado_dialog(row_dict):
         c1, c2, c3, c4 = st.columns(4)
         c1.text_input("📅 Abertura", value=str_abertura, disabled=True)
         c2.text_input("📅 Agendamento Atual", value=str_agendamento, disabled=True)
-        
-        # Campos de Data com format="DD/MM/YYYY"
         nova_reprog = c3.date_input("🔄 Reprogramação", value=dt_agendamento, format="DD/MM/YYYY")
         nova_finalizacao = c4.date_input("✅ Finalização / Cancelamento", value=dt_finalizacao, format="DD/MM/YYYY")
 
@@ -141,30 +139,20 @@ def open_chamado_dialog(row_dict):
         if not itens_desc or itens_desc == "nan": itens_desc = str(row_dict.get('Descrição', '-'))
         st.info(itens_desc)
 
-        # --- LINHA 3: CAMPOS ESPECÍFICOS (Lógica Condicional) ---
+        # --- LINHA 3: CAMPOS ESPECÍFICOS ---
         st.markdown("<br>", unsafe_allow_html=True)
-        
-        # Inicializa variáveis
         nova_data_envio = dt_envio
         novo_link = row_dict.get('Link Externo', '')
         novo_protocolo = row_dict.get('Nº Protocolo', '')
 
         if is_equip:
-            # === LAYOUT EQUIPAMENTO ===
             l3_c1, l3_c2 = st.columns(2)
-            
-            # 1. Nº Chamado Btime
-            novo_link = l3_c1.text_input("🔢 Nº Pedido", value=row_dict.get('Link Externo', ''))
-            
-            # 2. Data Envio (Com formato ajustado)
+            novo_link = l3_c1.text_input("🔢 Nº do Pedido", value=row_dict.get('Link Externo', ''))
             nova_data_envio = l3_c2.date_input("🚚 Data de Envio", value=dt_envio, format="DD/MM/YYYY")
-            
         else:
-            # === LAYOUT SERVIÇO (PADRÃO) ===
             l3_c1, l3_c2, l3_c3 = st.columns([3, 1.5, 1.5])
             novo_link = l3_c1.text_input("🔗 Link Externo", value=row_dict.get('Link Externo', ''))
             novo_protocolo = l3_c2.text_input("🔢 Protocolo", value=row_dict.get('Nº Protocolo', ''))
-            
             with l3_c3:
                 st.markdown("<label style='font-size:14px;'>Acessar</label>", unsafe_allow_html=True)
                 if novo_link and str(novo_link).lower() not in ['nan', 'none', '']:
@@ -172,19 +160,21 @@ def open_chamado_dialog(row_dict):
                 else:
                     st.markdown("<div style='background:#e0e0e0; color:#999; padding:9px 12px; border-radius:4px; text-align:center; font-weight:bold;'>🚫 Sem Link</div>", unsafe_allow_html=True)
 
-        # --- NOVA ÁREA: CHECKLIST DE STATUS ---
+        # --- CHECKLIST DE STATUS ---
         st.markdown("---")
         st.markdown("### ☑️ Controle de Status & Pendências")
         
-        # Leitura dos valores atuais (Checkboxes)
-        chk_pend_eq = str(row_dict.get('chk_pendencia_equipamento', '')).upper() == 'TRUE'
-        chk_pend_infra = str(row_dict.get('chk_pendencia_infra', '')).upper() == 'TRUE'
-        chk_alteracao = str(row_dict.get('chk_alteracao_chamado', '')).upper() == 'TRUE'
-        chk_cancelado = str(row_dict.get('chk_cancelado', '')).upper() == 'TRUE'
+        # Leitura segura dos valores (evita erro se vier vazio)
+        def is_checked(key): return str(row_dict.get(key, '')).upper() == 'TRUE'
+
+        chk_pend_eq = is_checked('chk_pendencia_equipamento')
+        chk_pend_infra = is_checked('chk_pendencia_infra')
+        chk_alteracao = is_checked('chk_alteracao_chamado')
+        chk_cancelado = is_checked('chk_cancelado')
         
-        chk_followup = str(row_dict.get('chk_status_enviado', '')).upper() == 'TRUE'
-        chk_envio_parcial = str(row_dict.get('chk_envio_parcial', '')).upper() == 'TRUE'
-        chk_entregue_total = str(row_dict.get('chk_equipamento_entregue', '')).upper() == 'TRUE'
+        chk_followup = is_checked('chk_status_enviado')
+        chk_envio_parcial = is_checked('chk_envio_parcial')
+        chk_entregue_total = is_checked('chk_equipamento_entregue')
 
         col_checks_1, col_checks_2 = st.columns(2)
         
@@ -208,28 +198,23 @@ def open_chamado_dialog(row_dict):
 
         # --- OBSERVAÇÃO ---
         obs_atual = row_dict.get('Observações e Pendencias', '')
-        nova_obs = st.text_area("✍️ Observação / Pendência (Obrigatório se houver Pendência/Alteração)", value=obs_atual if pd.notna(obs_atual) else "", height=100)
+        nova_obs = st.text_area("✍️ Observação / Pendência", value=obs_atual if pd.notna(obs_atual) else "", height=100)
 
         st.markdown("<hr>", unsafe_allow_html=True)
         
+        # --- AÇÃO DE SALVAR ---
         if st.form_submit_button("💾 SALVAR E RECALCULAR", use_container_width=True):
-            # --- VALIDAÇÕES ---
+            # 1. Validações
             erro_msg = []
-            
-            if new_cancelado and not nova_finalizacao:
-                erro_msg.append("Para CANCELAR, é obrigatório informar a Data de Finalização.")
-
+            if new_cancelado and not nova_finalizacao: erro_msg.append("Para CANCELAR, é obrigatório informar a Data de Finalização.")
             tem_pendencia = new_pend_eq or new_pend_infra or new_alteracao or new_envio_parcial
-            if tem_pendencia and (not nova_obs or len(str(nova_obs).strip()) < 5):
-                erro_msg.append("Para Pendências ou Alterações, a DESCRIÇÃO é obrigatória.")
-
-            if not is_equip and new_followup and tem_pendencia:
-                erro_msg.append("Não é possível marcar 'Follow-up' se houver pendências ativas.")
+            if tem_pendencia and (not nova_obs or len(str(nova_obs).strip()) < 5): erro_msg.append("Para Pendências ou Alterações, a DESCRIÇÃO é obrigatória.")
+            if not is_equip and new_followup and tem_pendencia: erro_msg.append("Não é possível marcar 'Follow-up' se houver pendências ativas.")
 
             if erro_msg:
                 for e in erro_msg: st.error(e)
             else:
-                # Prepara updates
+                # 2. Prepara os dados para salvar
                 updates = {
                     "Data Agendamento": nova_reprog, 
                     "Data Finalização": nova_finalizacao,
@@ -239,8 +224,7 @@ def open_chamado_dialog(row_dict):
                     "Link Externo": novo_link, 
                     "Data Envio": nova_data_envio, 
                     "Nº Protocolo": novo_protocolo, 
-                    
-                    # Checkboxes
+                    # Checkboxes (Salva como string "TRUE"/"FALSE")
                     "chk_pendencia_equipamento": "TRUE" if new_pend_eq else "FALSE",
                     "chk_pendencia_infra": "TRUE" if new_pend_infra else "FALSE",
                     "chk_alteracao_chamado": "TRUE" if new_alteracao else "FALSE",
@@ -250,8 +234,31 @@ def open_chamado_dialog(row_dict):
                     "chk_status_enviado": "TRUE" if new_followup else "FALSE"
                 }
 
+                # 3. Salva no Banco
                 utils_chamados.atualizar_chamado_db(row_dict['ID'], updates)
-                st.success("Salvo! Recalculando status...")
+                
+                # 4. Limpa Cache e Recalcula Imediatamente
+                st.cache_data.clear() # Força recarregar os dados do zero
+                
+                # Recarrega o banco para pegar o dado atualizado e os vizinhos do projeto
+                df_novo = utils_chamados.carregar_chamados_db()
+                
+                # Filtra apenas os chamados DO MESMO PROJETO para recalcular o status geral
+                projeto_atual = row_dict.get('Projeto')
+                agencia_atual = row_dict.get('Cód. Agência')
+                
+                if projeto_atual and agencia_atual:
+                    grupo_projeto = df_novo[
+                        (df_novo['Projeto'] == projeto_atual) & 
+                        (df_novo['Cód. Agência'] == agencia_atual)
+                    ]
+                    
+                    if not grupo_projeto.empty:
+                        # Executa a inteligência de status
+                        ids_grupo = grupo_projeto['ID'].tolist()
+                        calcular_e_atualizar_status_projeto(grupo_projeto, ids_grupo)
+
+                st.success("Salvo e Status Atualizado!")
                 time.sleep(1)
                 st.rerun()
                 
@@ -1100,6 +1107,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
