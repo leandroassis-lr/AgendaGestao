@@ -85,7 +85,7 @@ def clean_val(val, default="N/A"):
 def open_chamado_dialog(row_dict):
     # Identifica Tipo
     n_chamado = str(row_dict.get('Nº Chamado', ''))
-    is_equip = '-e-' in n_chamado.lower()
+    is_equip = '-e-' in n_chamado.lower() or '-E-' in n_chamado
 
     # Carrega Listas
     try:
@@ -130,18 +130,39 @@ def open_chamado_dialog(row_dict):
         if not itens_desc or itens_desc == "nan": itens_desc = str(row_dict.get('Descrição', '-'))
         st.info(itens_desc)
 
-        # --- LINHA 3: LINK E PROTOCOLO ---
+        # --- LINHA 3: CAMPOS ESPECÍFICOS (Lógica Condicional) ---
         st.markdown("<br>", unsafe_allow_html=True)
-        l3_c1, l3_c2, l3_c3 = st.columns([3, 1.5, 1.5])
-        novo_link = l3_c1.text_input("🔗 Link Externo", value=row_dict.get('Link Externo', ''))
-        novo_protocolo = l3_c2.text_input("🔢 Protocolo (Pedido se Eq.)", value=row_dict.get('Nº Pedido', '') if is_equip else row_dict.get('Nº Protocolo', ''))
         
-        with l3_c3:
-            st.markdown("<label style='font-size:14px;'>Acessar</label>", unsafe_allow_html=True)
-            if novo_link and str(novo_link).lower() not in ['nan', 'none', '']:
-                st.markdown(f"<a href='{novo_link}' target='_blank' style='background:#1565C0; color:white; padding:9px 12px; border-radius:4px; text-decoration:none; display:block; text-align:center; font-weight:bold; margin-top:0px;'>🚀 Abrir Link</a>", unsafe_allow_html=True)
-            else:
-                st.markdown("<div style='background:#e0e0e0; color:#999; padding:9px 12px; border-radius:4px; text-align:center; font-weight:bold;'>🚫 Sem Link</div>", unsafe_allow_html=True)
+        # Inicializa variáveis para não dar erro de referência
+        nova_data_envio = _to_date_safe(row_dict.get('Data Envio'))
+        novo_link = row_dict.get('Link Externo', '')
+        novo_protocolo = row_dict.get('Nº Protocolo', '')
+
+        if is_equip:
+            # === LAYOUT EQUIPAMENTO ===
+            l3_c1, l3_c2 = st.columns(2)
+            
+            # 1. Em vez de Link, pede Nº Chamado Btime (Salvamos no campo Link Externo ou N Pedido)
+            # Vou salvar no Link Externo para manter consistência de onde guardar a referência
+            novo_link = l3_c1.text_input("🔢 Nº Chamado Btime (Ref)", value=row_dict.get('Link Externo', ''))
+            
+            # 2. Em vez de Protocolo, pede Data Envio
+            nova_data_envio = l3_c2.date_input("🚚 Data de Envio", value=_to_date_safe(row_dict.get('Data Envio')))
+            
+            # 3. Sem botão de Ação para Equipamento
+            
+        else:
+            # === LAYOUT SERVIÇO (PADRÃO) ===
+            l3_c1, l3_c2, l3_c3 = st.columns([3, 1.5, 1.5])
+            novo_link = l3_c1.text_input("🔗 Link Externo", value=row_dict.get('Link Externo', ''))
+            novo_protocolo = l3_c2.text_input("🔢 Protocolo", value=row_dict.get('Nº Protocolo', ''))
+            
+            with l3_c3:
+                st.markdown("<label style='font-size:14px;'>Acessar</label>", unsafe_allow_html=True)
+                if novo_link and str(novo_link).lower() not in ['nan', 'none', '']:
+                    st.markdown(f"<a href='{novo_link}' target='_blank' style='background:#1565C0; color:white; padding:9px 12px; border-radius:4px; text-decoration:none; display:block; text-align:center; font-weight:bold; margin-top:0px;'>🚀 Abrir Link</a>", unsafe_allow_html=True)
+                else:
+                    st.markdown("<div style='background:#e0e0e0; color:#999; padding:9px 12px; border-radius:4px; text-align:center; font-weight:bold;'>🚫 Sem Link</div>", unsafe_allow_html=True)
 
         # --- NOVA ÁREA: CHECKLIST DE STATUS ---
         st.markdown("---")
@@ -153,7 +174,7 @@ def open_chamado_dialog(row_dict):
         chk_alteracao = str(row_dict.get('chk_alteracao_chamado', '')).upper() == 'TRUE'
         chk_cancelado = str(row_dict.get('chk_cancelado', '')).upper() == 'TRUE'
         
-        chk_followup = str(row_dict.get('chk_status_enviado', '')).upper() == 'TRUE' # Reusando campo existente
+        chk_followup = str(row_dict.get('chk_status_enviado', '')).upper() == 'TRUE'
         chk_envio_parcial = str(row_dict.get('chk_envio_parcial', '')).upper() == 'TRUE'
         chk_entregue_total = str(row_dict.get('chk_equipamento_entregue', '')).upper() == 'TRUE'
 
@@ -171,34 +192,29 @@ def open_chamado_dialog(row_dict):
             if is_equip:
                 new_envio_parcial = st.checkbox("📦 Envio Parcial", value=chk_envio_parcial)
                 new_entregue_total = st.checkbox("✅ Equipamento Entregue Total", value=chk_entregue_total)
-                # Mantém variáveis de serviço como False para não quebrar lógica
                 new_followup = False
             else:
                 new_followup = st.checkbox("📧 Follow-up (Status Enviado)", value=chk_followup)
-                # Mantém variáveis de equipamento como False
                 new_envio_parcial = False
                 new_entregue_total = False
 
-        # --- OBSERVAÇÃO (Obrigatória em vários casos) ---
+        # --- OBSERVAÇÃO ---
         obs_atual = row_dict.get('Observações e Pendencias', '')
         nova_obs = st.text_area("✍️ Observação / Pendência (Obrigatório se houver Pendência/Alteração)", value=obs_atual if pd.notna(obs_atual) else "", height=100)
 
         st.markdown("<hr>", unsafe_allow_html=True)
         
         if st.form_submit_button("💾 SALVAR E RECALCULAR", use_container_width=True):
-            # --- VALIDAÇÕES DE REGRA DE NEGÓCIO ---
+            # --- VALIDAÇÕES ---
             erro_msg = []
             
-            # 1. Cancelado precisa de Data
             if new_cancelado and not nova_finalizacao:
                 erro_msg.append("Para CANCELAR, é obrigatório informar a Data de Finalização.")
 
-            # 2. Pendências precisam de Texto
             tem_pendencia = new_pend_eq or new_pend_infra or new_alteracao or new_envio_parcial
             if tem_pendencia and (not nova_obs or len(str(nova_obs).strip()) < 5):
                 erro_msg.append("Para Pendências ou Alterações, a DESCRIÇÃO é obrigatória.")
 
-            # 3. Follow-up travado por pendência
             if not is_equip and new_followup and tem_pendencia:
                 erro_msg.append("Não é possível marcar 'Follow-up' se houver pendências ativas.")
 
@@ -212,7 +228,9 @@ def open_chamado_dialog(row_dict):
                     "Técnico": novo_tecnico,
                     "Gestor": novo_gestor,
                     "Observações e Pendencias": nova_obs,
-                    "Link Externo": novo_link,
+                    "Link Externo": novo_link, # Salva o Nº Chamado Btime aqui se for equip
+                    "Data Envio": nova_data_envio, # Salva Data Envio
+                    "Nº Protocolo": novo_protocolo, # Salva Protocolo (se for serviço)
                     
                     # Checkboxes
                     "chk_pendencia_equipamento": "TRUE" if new_pend_eq else "FALSE",
@@ -223,10 +241,6 @@ def open_chamado_dialog(row_dict):
                     "chk_equipamento_entregue": "TRUE" if new_entregue_total else "FALSE",
                     "chk_status_enviado": "TRUE" if new_followup else "FALSE"
                 }
-                
-                # Mapeia protocolo/pedido dependendo do tipo
-                if is_equip: updates["Nº Pedido"] = novo_protocolo
-                else: updates["Nº Protocolo"] = novo_protocolo
 
                 utils_chamados.atualizar_chamado_db(row_dict['ID'], updates)
                 st.success("Salvo! Recalculando status...")
@@ -1078,4 +1092,5 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
