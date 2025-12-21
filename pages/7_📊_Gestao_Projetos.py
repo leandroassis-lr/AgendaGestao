@@ -659,6 +659,24 @@ def run_exporter_dialog(df_data_to_export):
 # --- 5. CARREGAMENTO E SIDEBAR ---
 df = utils_chamados.carregar_chamados_db()
 
+colunas_novas_obrigatorias = [
+    'chk_cancelado', 
+    'chk_pendencia_equipamento', 
+    'chk_pendencia_infra',
+    'chk_alteracao_chamado', 
+    'chk_envio_parcial', 
+    'chk_equipamento_entregue',
+    'chk_status_enviado', 
+    'chk_financeiro_banco', 
+    'Book Enviado',
+    'Sub-Status'
+]
+
+if not df.empty:
+    for col in colunas_novas_obrigatorias:
+        if col not in df.columns:
+            df[col] = "FALSE" # Cria a coluna com valor padrão se ela não existir
+
 with st.sidebar:
     st.header("Ações")
     if st.button("➕ Importar Chamados"): run_importer_dialog()
@@ -1060,3 +1078,4 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
