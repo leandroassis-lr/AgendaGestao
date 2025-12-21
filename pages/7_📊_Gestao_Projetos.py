@@ -83,7 +83,11 @@ def clean_val(val, default="N/A"):
 # --- DIALOG (POP-UP) DETALHES DO CHAMADO ---
 @st.dialog("📝 Editar Chamado", width="large")
 def open_chamado_dialog(row_dict):
-    # --- 1. CARREGAMENTO DE LISTAS (Para Selectbox) ---
+    # Identifica Tipo
+    n_chamado = str(row_dict.get('Nº Chamado', ''))
+    is_equip = '-e-' in n_chamado.lower()
+
+    # Carrega Listas
     try:
         df_tc = utils.carregar_config_db("tecnicos")
         lista_tecnicos = df_tc.iloc[:,0].dropna().tolist()
@@ -94,15 +98,13 @@ def open_chamado_dialog(row_dict):
         lista_gestores = df_gest.iloc[:,0].dropna().tolist()
     except: lista_gestores = []
 
-    # Adiciona os valores atuais às listas se não estiverem nelas
     val_tec_atual = str(row_dict.get('Técnico', '')).strip()
     val_gest_atual = str(row_dict.get('Gestor', '')).strip()
     
     if val_tec_atual and val_tec_atual not in lista_tecnicos: lista_tecnicos.insert(0, val_tec_atual)
     if val_gest_atual and val_gest_atual not in lista_gestores: lista_gestores.insert(0, val_gest_atual)
 
-    # --- INÍCIO DO FORMULÁRIO ---
-    st.markdown(f"### 🎫 {row_dict.get('Nº Chamado', '')}")
+    st.markdown(f"### 🎫 {n_chamado}")
     st.caption(f"ID: {row_dict.get('ID')}")
     st.markdown("<hr style='margin: 5px 0 15px 0'>", unsafe_allow_html=True)
 
@@ -110,172 +112,347 @@ def open_chamado_dialog(row_dict):
         
         # --- LINHA 1: DATAS ---
         c1, c2, c3, c4 = st.columns(4)
-        
-        # Abertura (Fixo)
         c1.text_input("📅 Abertura", value=_to_date_safe(row_dict.get('Abertura')), disabled=True)
-        
-        # Agendamento Atual (Fixo - Referência)
         c2.text_input("📅 Agendamento Atual", value=_to_date_safe(row_dict.get('Agendamento')), disabled=True)
-        
-        # Reprogramação (Editável - Atualiza o Agendamento)
         nova_reprog = c3.date_input("🔄 Reprogramação", value=_to_date_safe(row_dict.get('Agendamento')))
-        
-        # Finalização (Editável)
-        nova_finalizacao = c4.date_input("✅ Finalização", value=_to_date_safe(row_dict.get('Fechamento')))
+        nova_finalizacao = c4.date_input("✅ Finalização / Cancelamento", value=_to_date_safe(row_dict.get('Fechamento')))
 
-        # --- LINHA 2: PESSOAS E SISTEMA ---
+        # --- LINHA 2: PESSOAS ---
         r2_c1, r2_c2, r2_c3, r2_c4 = st.columns(4)
-        
-        # Técnico (Editável)
         novo_tecnico = r2_c1.selectbox("🔧 Técnico", options=[""] + lista_tecnicos, index=lista_tecnicos.index(val_tec_atual)+1 if val_tec_atual in lista_tecnicos else 0)
-        
-        # Sistema (Fixo)
         r2_c2.text_input("💻 Sistema", value=row_dict.get('Sistema', ''), disabled=True)
-        
-        # Serviço (Fixo)
         r2_c3.text_input("🛠️ Serviço", value=row_dict.get('Serviço', ''), disabled=True)
-        
-        # Gestor (Editável)
         novo_gestor = r2_c4.text_input("👤 Gestor", value=val_gest_atual) 
 
-        # --- LINHA 3: DESCRIÇÃO (Fixo - Info Box) ---
-        st.markdown("<br><b>📦 Descrição (Item e Qtd)</b>", unsafe_allow_html=True)
+        # --- DESCRIÇÃO ---
+        st.markdown("<br><b>📦 Descrição</b>", unsafe_allow_html=True)
         itens_desc = str(row_dict.get('Equipamento', '')).replace("|", "\n- ").replace(" | ", "\n- ")
-        if not itens_desc or itens_desc == "nan": 
-            itens_desc = str(row_dict.get('Descrição', '-'))
-        st.info(itens_desc if itens_desc else "Sem descrição.")
+        if not itens_desc or itens_desc == "nan": itens_desc = str(row_dict.get('Descrição', '-'))
+        st.info(itens_desc)
 
-        # --- LINHA 4: OBSERVAÇÃO (Editável) ---
-        obs_atual = row_dict.get('Observações e Pendencias', '')
-        nova_obs = st.text_area("✍️ Observação / Pendência", value=obs_atual if pd.notna(obs_atual) else "", height=100)
-
-        # --- LINHA 5: LINK E PROTOCOLO ---
+        # --- LINHA 3: LINK E PROTOCOLO ---
         st.markdown("<br>", unsafe_allow_html=True)
-        l5_c1, l5_c2, l5_c3 = st.columns([3, 1.5, 1.5])
+        l3_c1, l3_c2, l3_c3 = st.columns([3, 1.5, 1.5])
+        novo_link = l3_c1.text_input("🔗 Link Externo", value=row_dict.get('Link Externo', ''))
+        novo_protocolo = l3_c2.text_input("🔢 Protocolo (Pedido se Eq.)", value=row_dict.get('Nº Pedido', '') if is_equip else row_dict.get('Nº Protocolo', ''))
         
-        # Link (Editável para inserir)
-        novo_link = l5_c1.text_input("🔗 Link Externo", value=row_dict.get('Link Externo', ''))
-        
-        # Protocolo (Editável)
-        novo_protocolo = l5_c2.text_input("🔢 Protocolo", value=row_dict.get('Nº Protocolo', ''))
-        
-        # Botão de Ação (Apenas Visualização)
-        with l5_c3:
+        with l3_c3:
             st.markdown("<label style='font-size:14px;'>Acessar</label>", unsafe_allow_html=True)
             if novo_link and str(novo_link).lower() not in ['nan', 'none', '']:
                 st.markdown(f"<a href='{novo_link}' target='_blank' style='background:#1565C0; color:white; padding:9px 12px; border-radius:4px; text-decoration:none; display:block; text-align:center; font-weight:bold; margin-top:0px;'>🚀 Abrir Link</a>", unsafe_allow_html=True)
             else:
-                # --- CORREÇÃO AQUI ---
-                # Substituímos o st.button por HTML/CSS para não quebrar o formulário
-                st.markdown("<div style='background:#e0e0e0; color:#999; padding:4px 6px; border-radius:4px; text-align:center; font-weight:bold;'>🚫 Sem Link</div>", unsafe_allow_html=True)
+                st.markdown("<div style='background:#e0e0e0; color:#999; padding:9px 12px; border-radius:4px; text-align:center; font-weight:bold;'>🚫 Sem Link</div>", unsafe_allow_html=True)
+
+        # --- NOVA ÁREA: CHECKLIST DE STATUS ---
+        st.markdown("---")
+        st.markdown("### ☑️ Controle de Status & Pendências")
+        
+        # Leitura dos valores atuais (Checkboxes)
+        chk_pend_eq = str(row_dict.get('chk_pendencia_equipamento', '')).upper() == 'TRUE'
+        chk_pend_infra = str(row_dict.get('chk_pendencia_infra', '')).upper() == 'TRUE'
+        chk_alteracao = str(row_dict.get('chk_alteracao_chamado', '')).upper() == 'TRUE'
+        chk_cancelado = str(row_dict.get('chk_cancelado', '')).upper() == 'TRUE'
+        
+        chk_followup = str(row_dict.get('chk_status_enviado', '')).upper() == 'TRUE' # Reusando campo existente
+        chk_envio_parcial = str(row_dict.get('chk_envio_parcial', '')).upper() == 'TRUE'
+        chk_entregue_total = str(row_dict.get('chk_equipamento_entregue', '')).upper() == 'TRUE'
+
+        col_checks_1, col_checks_2 = st.columns(2)
+        
+        with col_checks_1:
+            st.markdown("**Geral**")
+            new_pend_eq = st.checkbox("⚠️ Pendência de Equipamento", value=chk_pend_eq)
+            new_pend_infra = st.checkbox("🏗️ Pendência de Infra", value=chk_pend_infra)
+            new_alteracao = st.checkbox("📝 Alteração do Chamado", value=chk_alteracao)
+            new_cancelado = st.checkbox("🚫 Cancelado", value=chk_cancelado)
+        
+        with col_checks_2:
+            st.markdown(f"**Específico ({'Equipamento' if is_equip else 'Serviço'})**")
+            if is_equip:
+                new_envio_parcial = st.checkbox("📦 Envio Parcial", value=chk_envio_parcial)
+                new_entregue_total = st.checkbox("✅ Equipamento Entregue Total", value=chk_entregue_total)
+                # Mantém variáveis de serviço como False para não quebrar lógica
+                new_followup = False
+            else:
+                new_followup = st.checkbox("📧 Follow-up (Status Enviado)", value=chk_followup)
+                # Mantém variáveis de equipamento como False
+                new_envio_parcial = False
+                new_entregue_total = False
+
+        # --- OBSERVAÇÃO (Obrigatória em vários casos) ---
+        obs_atual = row_dict.get('Observações e Pendencias', '')
+        nova_obs = st.text_area("✍️ Observação / Pendência (Obrigatório se houver Pendência/Alteração)", value=obs_atual if pd.notna(obs_atual) else "", height=100)
 
         st.markdown("<hr>", unsafe_allow_html=True)
         
-        # --- BOTÃO SALVAR ---
-        if st.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True):
-            # Prepara dicionário de atualizações
-            updates = {
-                "Data Agendamento": nova_reprog, 
-                "Data Finalização": nova_finalizacao,
-                "Técnico": novo_tecnico,
-                "Gestor": novo_gestor,
-                "Observações e Pendencias": nova_obs,
-                "Link Externo": novo_link,
-                "Nº Protocolo": novo_protocolo
-            }
+        if st.form_submit_button("💾 SALVAR E RECALCULAR", use_container_width=True):
+            # --- VALIDAÇÕES DE REGRA DE NEGÓCIO ---
+            erro_msg = []
             
-            if nova_finalizacao and row_dict.get('Status') not in ['Concluído', 'Finalizado', 'Faturado']:
-                updates["Status"] = "Concluído"
-                updates["Sub-Status"] = "Aguardando Faturamento"
+            # 1. Cancelado precisa de Data
+            if new_cancelado and not nova_finalizacao:
+                erro_msg.append("Para CANCELAR, é obrigatório informar a Data de Finalização.")
 
-            utils_chamados.atualizar_chamado_db(row_dict['ID'], updates)
-            st.success("Chamado atualizado com sucesso!")
-            time.sleep(1)
-            st.rerun()
+            # 2. Pendências precisam de Texto
+            tem_pendencia = new_pend_eq or new_pend_infra or new_alteracao or new_envio_parcial
+            if tem_pendencia and (not nova_obs or len(str(nova_obs).strip()) < 5):
+                erro_msg.append("Para Pendências ou Alterações, a DESCRIÇÃO é obrigatória.")
 
-# --- LÓGICA DE STATUS "TOP-DOWN" ---
+            # 3. Follow-up travado por pendência
+            if not is_equip and new_followup and tem_pendencia:
+                erro_msg.append("Não é possível marcar 'Follow-up' se houver pendências ativas.")
+
+            if erro_msg:
+                for e in erro_msg: st.error(e)
+            else:
+                # Prepara updates
+                updates = {
+                    "Data Agendamento": nova_reprog, 
+                    "Data Finalização": nova_finalizacao,
+                    "Técnico": novo_tecnico,
+                    "Gestor": novo_gestor,
+                    "Observações e Pendencias": nova_obs,
+                    "Link Externo": novo_link,
+                    
+                    # Checkboxes
+                    "chk_pendencia_equipamento": "TRUE" if new_pend_eq else "FALSE",
+                    "chk_pendencia_infra": "TRUE" if new_pend_infra else "FALSE",
+                    "chk_alteracao_chamado": "TRUE" if new_alteracao else "FALSE",
+                    "chk_cancelado": "TRUE" if new_cancelado else "FALSE",
+                    "chk_envio_parcial": "TRUE" if new_envio_parcial else "FALSE",
+                    "chk_equipamento_entregue": "TRUE" if new_entregue_total else "FALSE",
+                    "chk_status_enviado": "TRUE" if new_followup else "FALSE"
+                }
+                
+                # Mapeia protocolo/pedido dependendo do tipo
+                if is_equip: updates["Nº Pedido"] = novo_protocolo
+                else: updates["Nº Protocolo"] = novo_protocolo
+
+                utils_chamados.atualizar_chamado_db(row_dict['ID'], updates)
+                st.success("Salvo! Recalculando status...")
+                time.sleep(1)
+                st.rerun()
+                
+# --- LÓGICA DE STATUS: CHAMADO E PROJETO (NOVA VERSÃO) ---
 def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
-    row = df_projeto.iloc[0]
-    n_chamado = str(row.get('Nº Chamado', ''))
+    """
+    1. Calcula o status individual de cada chamado (Sub-Status).
+    2. Calcula o status macro do projeto baseado no conjunto.
+    """
     
-    # Identificação de Tipo
-    is_equip = '-e-' in n_chamado.lower()
+    updates_batch = {} # Dicionário para guardar updates: {id_chamado: {campos}}
     
-    # Campos Chave
-    link_presente = row.get('Link Externo') and str(row.get('Link Externo')).strip() not in ['', 'nan', 'None']
-    tecnico_presente = row.get('Técnico') and str(row.get('Técnico')).strip() not in ['', 'nan', 'None']
-    pedido_presente = row.get('Nº Pedido') and str(row.get('Nº Pedido')).strip() not in ['', 'nan', 'None']
-    envio_presente = row.get('Data Envio') and pd.notna(row.get('Data Envio'))
-    
-    # Flags Checkboxes
-    flag_banco = str(row.get('chk_financeiro_banco', '')).upper() == 'TRUE'
-    flag_book = str(row.get('chk_financeiro_book', '')).upper() == 'TRUE'
-    book_enviado_sim = str(row.get('Book Enviado', '')).upper() == 'SIM'
-    
-    chk_status_cli = str(row.get('chk_status_enviado', '')).upper() == 'TRUE'
-    chk_eq_entregue = str(row.get('chk_equipamento_entregue', '')).upper() == 'TRUE'
+    # --- PARTE A: CALCULAR STATUS DE CADA CHAMADO ---
+    chamados_calculados = [] # Lista de dicts com o estado atualizado para uso no cálculo do projeto
 
-    status_atual = str(row.get('Status', 'Não Iniciado')).strip()
-    status_manual_bloqueantes = ["Pendência de Infra", "Pendência de Equipamento", "Cancelado", "Pausado"]
+    for idx, row in df_projeto.iterrows():
+        n_chamado = str(row.get('Nº Chamado', ''))
+        is_equip = '-e-' in n_chamado.lower()
+        
+        # Leitura de Flags e Dados
+        link_presente = row.get('Link Externo') and str(row.get('Link Externo')).strip() not in ['', 'nan', 'None']
+        n_pedido = row.get('Nº Pedido') and str(row.get('Nº Pedido')).strip() not in ['', 'nan', 'None']
+        
+        # Banco de Dados (Simulando leitura de colunas financeiras/book)
+        # Assumindo que essas colunas existem no DF. Se não, considere False.
+        db_liberacao_banco = str(row.get('chk_financeiro_banco', '')).upper() == 'TRUE' # "Liberação (banco)"
+        db_book_controle_sim = str(row.get('Book Enviado', '')).upper() == 'SIM' # "Books (controle)" == SIM
+        
+        # Checkboxes UI
+        chk_cancelado = str(row.get('chk_cancelado', '')).upper() == 'TRUE'
+        chk_pend_eq = str(row.get('chk_pendencia_equipamento', '')).upper() == 'TRUE'
+        chk_pend_infra = str(row.get('chk_pendencia_infra', '')).upper() == 'TRUE'
+        chk_alteracao = str(row.get('chk_alteracao_chamado', '')).upper() == 'TRUE'
+        
+        chk_envio_parcial = str(row.get('chk_envio_parcial', '')).upper() == 'TRUE'
+        chk_entregue_total = str(row.get('chk_equipamento_entregue', '')).upper() == 'TRUE'
+        chk_followup = str(row.get('chk_status_enviado', '')).upper() == 'TRUE' # Follow-up enviado
 
-    novo_status = "Não Iniciado"
-    novo_sub_status = ""
-
-    # HIERARQUIA 1: FINANCEIRO (BANCO)
-    if flag_banco:
-        novo_status = "Finalizado"
-        novo_sub_status = "FATURADO"
-    # HIERARQUIA 2: FINANCEIRO (BOOK)
-    elif flag_book:
-        if book_enviado_sim:
-            novo_status = "Finalizado"
-            novo_sub_status = "AGUARDANDO FATURAMENTO"
+        novo_sub_status = "Em análise"
+        
+        # --- LÓGICA INDIVIDUAL ---
+        
+        if chk_cancelado:
+            novo_sub_status = "Cancelado"
+        
+        elif db_liberacao_banco:
+            novo_sub_status = "Faturado"
+        
+        elif chk_pend_eq:
+            novo_sub_status = "Pendência de equipamento"
+        
+        elif chk_pend_infra:
+            novo_sub_status = "Pendência de Infra"
+        
+        elif chk_alteracao:
+            novo_sub_status = "Alteração do chamado"
+            
         else:
-            novo_status = "Finalizado"
-            novo_sub_status = "ENVIAR BOOK"
-    # HIERARQUIA 3: STATUS MANUAL
-    elif status_atual in status_manual_bloqueantes:
-        novo_status = status_atual
-        novo_sub_status = str(row.get('Sub-Status', ''))
-    # HIERARQUIA 4: AUTOMÁTICO EQUIPAMENTO (-E-)
-    elif is_equip:
-        if chk_eq_entregue:
-            novo_status = "Concluído"
-            novo_sub_status = "Aguardando Faturamento"
-        elif envio_presente:
-            novo_status = "Em Andamento"
-            novo_sub_status = "Aguardando Entrega"
-        elif pedido_presente:
-            novo_status = "Em Andamento"
-            novo_sub_status = "Aguardando envio do equipamento"
-        else:
-            novo_status = "Não Iniciado"
-            novo_sub_status = "Solicitar Equipamento"
-    # HIERARQUIA 5: AUTOMÁTICO SERVIÇO
-    else: 
-        if chk_status_cli:
-            novo_status = "Concluído"
-            novo_sub_status = "Enviar Book"
-        elif tecnico_presente:
-            novo_status = "Em Andamento"
-            novo_sub_status = "Enviar Status Cliente"
-        elif link_presente:
-            novo_status = "Em Andamento"
-            novo_sub_status = "Acionar técnico"
-        else:
-            novo_status = "Não Iniciado"
-            novo_sub_status = "Abrir chamado Btime"
+            # Fluxo Normal (Sem pendência ou cancelamento)
+            if is_equip:
+                # LÓGICA EQUIPAMENTO (-E-)
+                if chk_entregue_total:
+                    novo_sub_status = "Equipamento entregue"
+                elif chk_envio_parcial:
+                    novo_sub_status = "Equipamento enviado Parcial"
+                elif row.get('Data Envio') and pd.notna(row.get('Data Envio')):
+                    # Assumindo que existe campo Data Envio ou usamos logica do chamado anterior
+                    novo_sub_status = "Equipamento enviado"
+                elif n_pedido:
+                    novo_sub_status = "Aguardando envio"
+                else:
+                    novo_sub_status = "Solicitar equipamento"
+            
+            else:
+                # LÓGICA SERVIÇO (SEM -E-)
+                if db_book_controle_sim:
+                    novo_sub_status = "Aguardando Faturamento"
+                elif chk_followup:
+                    novo_sub_status = "Enviar Book"
+                elif link_presente:
+                    novo_sub_status = "Acionar técnico" # Link existe -> Acionar
+                else:
+                    novo_sub_status = "Abrir chamado Btime" # Sem link
 
-    # APLICAÇÃO
-    sub_status_db = str(row.get('Sub-Status', '')).strip()
-    sub_status_novo_str = str(novo_sub_status).strip()
+        # Guarda o status calculado
+        updates_batch[row['ID']] = {"Sub-Status": novo_sub_status}
+        
+        # Cria um objeto representativo para o cálculo do projeto
+        chamado_obj = {
+            "ID": row['ID'],
+            "Tipo": "EQUIP" if is_equip else "SERV",
+            "SubStatus": novo_sub_status,
+            "Cancelado": chk_cancelado,
+            "Faturado": db_liberacao_banco
+        }
+        chamados_calculados.append(chamado_obj)
 
-    if status_atual != novo_status or sub_status_db != sub_status_novo_str:
-        updates = {"Status": novo_status, "Sub-Status": novo_sub_status}
-        for chamado_id in ids_para_atualizar:
-            utils_chamados.atualizar_chamado_db(chamado_id, updates)
-        return True
-    return False
+    # --- PARTE B: CALCULAR STATUS DO PROJETO (CABEÇALHO) ---
+    
+    total = len(chamados_calculados)
+    if total == 0: return False
+
+    cancelados = [c for c in chamados_calculados if c['Cancelado']]
+    faturados = [c for c in chamados_calculados if c['Faturado']] # "Finalizado" no conceito do projeto é Faturado?
+    # Regra: Concluído - Quando todos os chamados estiverem concluídos (Ignoramos cancelados)
+    # Definição de Concluído: Faturado, Entregue, Enviar Book? 
+    # Vou considerar "Concluído" no fluxo do projeto como: Entregue (Eq) ou Aguardando Fat ou Faturado
+    
+    ativos = [c for c in chamados_calculados if not c['Cancelado']]
+    
+    status_projeto = "Não Iniciado"
+    
+    # 1. Definição do STATUS MACRO
+    if len(cancelados) == total:
+        status_projeto = "Cancelado"
+    elif len(ativos) == 0:
+        status_projeto = "Cancelado" # Caso raro
+    else:
+        # Verifica se TODOS os ativos estão finalizados (Liberação Banco)
+        todos_finalizados_banco = all(c['Faturado'] for c in ativos)
+        
+        # Verifica se TODOS os ativos estão Concluídos (Etapa final antes do banco ou banco)
+        # Critério de Conclusão: Serviço=Aguardando Fat/Faturado | Equip=Entregue/Faturado
+        def is_concluido(c):
+            s = c['SubStatus']
+            return s in ["Faturado", "Aguardando Faturamento", "Equipamento entregue", "Enviar Book"] 
+            # Ajuste conforme sua definição exata de "Concluído" vs "Em andamento"
+        
+        todos_concluidos = all(is_concluido(c) for c in ativos)
+        
+        # Verifica se algum começou ("Em Andamento")
+        def is_nao_iniciado(c):
+            s = c['SubStatus']
+            return s in ["Solicitar equipamento", "Abrir chamado Btime"]
+        
+        todos_nao_iniciados = all(is_nao_iniciado(c) for c in ativos)
+
+        if todos_finalizados_banco:
+            status_projeto = "Finalizado"
+        elif todos_concluidos:
+            status_projeto = "Concluído"
+        elif todos_nao_iniciados:
+            status_projeto = "Não Iniciado"
+        else:
+            status_projeto = "Em Andamento"
+
+    # 2. Definição do SUB-STATUS DO PROJETO (A Etapa Atual / Gargalo)
+    # Regra: Prioridade de exibição.
+    
+    sub_status_projeto = ""
+    
+    # Lista de prioridade (do início para o fim do fluxo).
+    # O sistema vai exibir o PRIMEIRO status dessa lista que for encontrado nos chamados ATIVOS.
+    hierarquia = [
+        # 1. Pendências (Prioridade Máxima)
+        "Pendência de Infra",
+        "Pendência de equipamento",
+        "Alteração do chamado",
+        "Equipamento enviado Parcial", # Tratado como pendência/atenção
+        
+        # 2. Fluxo Equipamento
+        "Solicitar equipamento",
+        "Aguardando envio",
+        "Equipamento enviado",
+        
+        # 3. Fluxo Comum / Serviço
+        "Abrir chamado Btime",
+        "Acionar técnico",
+        "Follow-up", # Status que aparece se não tiver pendência
+        "Enviar Book",
+        "Aguardando Faturamento",
+        "Faturado",
+        "Equipamento entregue"
+    ]
+    
+    # Filtra apenas os sub-status presentes nos chamados ativos
+    status_presentes = {c['SubStatus'] for c in ativos}
+    
+    # Encontra o primeiro da hierarquia que está presente
+    found = False
+    for h in hierarquia:
+        if h in status_presentes:
+            sub_status_projeto = h
+            found = True
+            break
+    
+    if not found and ativos:
+        sub_status_projeto = ativos[0]['SubStatus'] # Fallback
+    elif not ativos:
+        sub_status_projeto = "Todos Cancelados"
+
+    # --- APLICAÇÃO DOS UPDATES ---
+    changed = False
+    
+    # Atualiza Sub-Status Individual (Calculado na Parte A)
+    for cid, data in updates_batch.items():
+        utils_chamados.atualizar_chamado_db(cid, data)
+    
+    # Atualiza Status/Sub do Projeto (Aplica a todos os chamados do projeto para ficar igual no banco)
+    # Isso garante que o agrupamento funcione e o cabeçalho mostre o dado correto
+    updates_proj = {"Status": status_projeto, "Sub-Status Projeto": sub_status_projeto} 
+    # Nota: Criei uma coluna virtual "Sub-Status Projeto" se quiser diferenciar, 
+    # mas se o seu cabeçalho lê de "Status" e "Sub-Status", precisamos ver onde salvar.
+    # Pelo seu código de visualização:
+    # Cabeçalho Status = row.get('Status') -> status_projeto
+    # Cabeçalho Ação = row.get('Sub-Status') -> sub_status_projeto? 
+    # O problema é que 'Sub-Status' é individual do chamado.
+    # VOU ASSUMIR que o Status do Projeto é salvo na coluna 'Status' de todos os itens
+    # E o Sub-Status (Ação) que aparece no cabeçalho deve ser calculado dinamicamente na visualização 
+    # OU salvamos em todos. Para simplificar e manter a performance, vou salvar em todos.
+    
+    for row in chamados_calculados:
+        # Atualiza o Status Macro em todos
+        utils_chamados.atualizar_chamado_db(row['ID'], {"Status": status_projeto}) 
+        # ATENÇÃO: Se salvar o "Sub-Status" do projeto no campo "Sub-Status" do chamado, 
+        # perdemos a informação individual do chamado (ex: um está em Btime, outro em Faturado).
+        # O ideal é NÃO sobrescrever o "Sub-Status" individual com o do projeto.
+        
+        # SOLUÇÃO: A função de visualização deve calcular o "Gargalo" do projeto em tempo real 
+        # ou usamos uma coluna auxiliar. Vou manter o update APENAS do Status Macro.
+        # O Sub-Status individual já foi salvo acima.
+        
+    return True
     
 # --- FUNÇÕES DE IMPORTAÇÃO/EXPORTAÇÃO ---
 @st.dialog("Importar Chamados (Mapeamento Fixo)", width="large")
@@ -770,7 +947,61 @@ else:
                     with l1_c3: st.markdown(f"<span class='meta-label'>ANALISTA</span><br><span class='{css_ana}'>{analista}</span>", unsafe_allow_html=True)
                     with l1_c4: st.markdown(f"<span class='status-badge' style='background-color:{cor_st}; margin-top:5px;'>{st_proj}</span>", unsafe_allow_html=True)
 
-                    # Linha 2
+                    # --- CÁLCULO DA ETAPA ATUAL (GARGALO) ---
+                # Define a prioridade do que mostrar no cabeçalho (do mais crítico para o mais avançado)
+                hierarquia_visual = [
+                    "Pendência de Infra", 
+                    "Pendência de equipamento", 
+                    "Alteração do chamado",
+                    "Equipamento enviado Parcial", 
+                    "Solicitar equipamento", 
+                    "Aguardando envio",
+                    "Equipamento enviado", 
+                    "Abrir chamado Btime", 
+                    "Acionar técnico",
+                    "Follow-up", 
+                    "Enviar Book", 
+                    "Aguardando Faturamento", 
+                    "Faturado", 
+                    "Equipamento entregue"
+                ]
+                
+                etapa_projeto_txt = "-"
+                
+                # Varre a hierarquia para encontrar o primeiro status que existe neste grupo
+                for h in hierarquia_visual:
+                    # Verifica se existe algum chamado com esse Sub-Status E que NÃO esteja cancelado
+                    existe = any(
+                        (str(r.get('Sub-Status', '')).strip() == h) and (str(r.get('chk_cancelado', '')).upper() != 'TRUE')
+                        for _, r in df_grupo.iterrows()
+                    )
+                    if existe:
+                        etapa_projeto_txt = h
+                        break
+                
+                # Se não achou nenhum da lista (fallback), pega o do primeiro chamado válido
+                if etapa_projeto_txt == "-":
+                    ativos = df_grupo[df_grupo['chk_cancelado'].astype(str).str.upper() != 'TRUE']
+                    if not ativos.empty: 
+                        etapa_projeto_txt = clean_val(ativos.iloc[0].get('Sub-Status'), "-")
+                    else:
+                        etapa_projeto_txt = "Todos Cancelados"
+
+                # --- LINHA 2 DO CABEÇALHO (VISUAL) ---
+                l2_c1, l2_c2, l2_c3, l2_c4 = st.columns([2.5, 1, 1, 1])
+                
+                with l2_c1: 
+                    st.markdown(f"<span class='meta-label'>PROJETO</span><br><span style='font-size:1em; font-weight:bold; color:#555'>{nome_proj}</span>", unsafe_allow_html=True)
+                with l2_c2: 
+                    st.markdown(f"<span class='meta-label'>SLA (+5d)</span><br>{sla_html}", unsafe_allow_html=True)
+                with l2_c3: 
+                    st.markdown(f"<span class='meta-label'>GESTOR</span><br><span class='gestor-bold'>👤 {gestor}</span>", unsafe_allow_html=True)
+                with l2_c4: 
+                    # Aqui usamos a variável 'etapa_projeto_txt' calculada acima
+                    if etapa_projeto_txt and etapa_projeto_txt not in ["-", "nan"]: 
+                        st.markdown(f"<span class='meta-label'>ETAPA ATUAL</span><br><span class='action-text'>👉 {etapa_projeto_txt}</span>", unsafe_allow_html=True)
+                    else: 
+                        st.markdown(f"<span class='meta-label'>ETAPA ATUAL</span><br><span style='color:#ccc'>-</span>", unsafe_allow_html=True)
                     l2_c1, l2_c2, l2_c3, l2_c4 = st.columns([2.5, 1, 1, 1])
                     with l2_c1: st.markdown(f"<span class='meta-label'>PROJETO</span><br><span style='font-size:1em; font-weight:bold; color:#555'>{nome_proj}</span>", unsafe_allow_html=True)
                     with l2_c2: st.markdown(f"<span class='meta-label'>SLA (+5d)</span><br>{sla_html}", unsafe_allow_html=True)
@@ -842,6 +1073,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
