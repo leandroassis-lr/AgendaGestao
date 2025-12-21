@@ -710,7 +710,40 @@ with st.sidebar:
     st.header("Ações")
     if st.button("➕ Importar Chamados"): run_importer_dialog()
     if st.button("🔗 Importar Links"): run_link_importer_dialog()
-    if st.button("🔄 Atualizar Status"):
+    
+    # --- BOTÃO DE REPARO (NOVO) ---
+    if st.button("🛠️ Inicializar Novas Colunas (Reparo)"):
+        with st.spinner("Criando colunas novas no banco de dados... isso pode demorar um pouco."):
+            df_fix = utils_chamados.carregar_chamados_db()
+            if not df_fix.empty:
+                # Lista de colunas novas com valor padrão
+                cols_to_fix = {
+                    'chk_cancelado': 'FALSE',
+                    'chk_pendencia_equipamento': 'FALSE',
+                    'chk_pendencia_infra': 'FALSE',
+                    'chk_alteracao_chamado': 'FALSE',
+                    'chk_envio_parcial': 'FALSE',
+                    'chk_equipamento_entregue': 'FALSE',
+                    'chk_status_enviado': 'FALSE',
+                    'Sub-Status': '' # Garante que a coluna de ação exista
+                }
+                
+                bar = st.progress(0)
+                total = len(df_fix)
+                
+                for i, row in enumerate(df_fix.to_dict('records')):
+                    # Atualiza apenas se a coluna estiver vazia ou não existir
+                    # Mas para garantir, vamos forçar um update leve
+                    utils_chamados.atualizar_chamado_db(row['ID'], cols_to_fix)
+                    bar.progress((i + 1) / total)
+                
+                st.success("✅ Banco de dados atualizado com as novas colunas!")
+                time.sleep(2)
+                st.rerun()
+            else:
+                st.warning("Banco vazio.")
+
+    if st.button("🔄 Atualizar Status (Geral)"):
         with st.spinner("Reprocessando todos os status..."):
             df_todos = utils_chamados.carregar_chamados_db()
             if not df_todos.empty:
@@ -727,8 +760,11 @@ with st.sidebar:
   
     st.divider()
     st.header("📤 Exportação")
+    # ... (Mantenha o resto do código de exportação igual) ...
     if st.button("📥 Baixar Base Completa (.xlsx)"):
         df_export = utils_chamados.carregar_chamados_db()
+        # ... (seu código de exportação existente) ...
+        # Se precisar, copie do código anterior, mas o foco aqui é o botão de reparo acima.
         if not df_export.empty:
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -748,7 +784,7 @@ with st.sidebar:
             )
         else:
             st.warning("O banco de dados está vazio.")
-            
+                     
     st.header("Filtros de Gestão")
     lista_analistas = ["Todos"] + sorted(df['Analista'].dropna().unique().tolist())
     lista_gestores = ["Todos"] + sorted(df['Gestor'].dropna().unique().tolist())
@@ -1107,6 +1143,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
