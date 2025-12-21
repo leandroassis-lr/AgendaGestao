@@ -1009,7 +1009,9 @@ else:
                     
                     st.markdown("<hr style='margin: 5px 0 10px 0; border-top: 1px solid #eee;'>", unsafe_allow_html=True)
 
-                    for i, row_chamado in df_grupo.iterrows():
+                    # --- CORREÇÃO DO ERRO DE CHAVE DUPLICADA ---
+                    # Usamos 'enumerate' para gerar um índice único 'loop_idx' para cada linha visualizada
+                    for loop_idx, (idx, row_chamado) in enumerate(df_grupo.iterrows()):
                         n_chamado = str(row_chamado['Nº Chamado'])
                         servico = str(row_chamado['Serviço'])
                         acao_ch = str(row_chamado.get('Sub-Status', ''))
@@ -1032,53 +1034,11 @@ else:
                             else: st.markdown(f"<span style='font-size:0.85em; color:#E65100; font-weight:600;'>{acao_ch}</span>", unsafe_allow_html=True)
                         
                         with c5:
-                            if st.button("🔎", key=f"btn_ch_{row_chamado['ID']}", help="Ver detalhes"):
+                            # Chave única garantida adicionando loop_idx
+                            if st.button("🔎", key=f"btn_ch_{row_chamado['ID']}_{loop_idx}", help="Ver detalhes"):
                                 open_chamado_dialog(row_chamado.to_dict())
                                 
-                        st.markdown("<div style='border-bottom: 1px solid #f8f8f8; margin-bottom: 8px;'></div>", unsafe_allow_html=True)
-                        
-                # --- LISTA DE CHAMADOS (DENTRO DO EXPANDER) ---
-                label_expander = f"📂 Visualizar {len(df_grupo)} Chamado(s) vinculados"
-                with st.expander(label_expander):
-                    
-                    # Títulos das Colunas (opcional, para ficar bem tabelado)
-                    th1, th2, th3, th4, th5 = st.columns([1.2, 3, 1.2, 2, 0.8])
-                    th1.markdown("<small style='color:#999'>CHAMADO</small>", unsafe_allow_html=True)
-                    th2.markdown("<small style='color:#999'>SERVIÇO</small>", unsafe_allow_html=True)
-                    th3.markdown("<small style='color:#999'>DATA</small>", unsafe_allow_html=True)
-                    th4.markdown("<small style='color:#999'>AÇÃO NECESSÁRIA</small>", unsafe_allow_html=True)
-                    th5.markdown("") # Espaço botão
-                    
-                    st.markdown("<hr style='margin: 5px 0 10px 0; border-top: 1px solid #eee;'>", unsafe_allow_html=True)
-
-                    # Loop dos Itens
-                    for i, row_chamado in df_grupo.iterrows():
-                        n_chamado = str(row_chamado['Nº Chamado'])
-                        servico = str(row_chamado['Serviço'])
-                        acao_ch = str(row_chamado.get('Sub-Status', ''))
-                        if acao_ch in ['nan', 'None', '', '-']: acao_ch = "Em análise"
-                        
-                        # Data formatada
-                        dt_raw = pd.to_datetime(row_chamado['Agendamento'], errors='coerce')
-                        dt_fmt = dt_raw.strftime('%d/%m') if pd.notna(dt_raw) else "-"
-
-                        # Colunas da Linha
-                        c1, c2, c3, c4, c5 = st.columns([1.2, 3, 1.2, 2, 0.8])
-                        
-                        # Renderização elegante dos dados
-                        with c1: st.markdown(f"<b>🎫 {n_chamado}</b>", unsafe_allow_html=True)
-                        with c2: st.markdown(f"<span style='color:#333'>{servico}</span>", unsafe_allow_html=True)
-                        with c3: st.markdown(f"📅 {dt_fmt}", unsafe_allow_html=True)
-                        with c4: st.markdown(f"<span style='font-size:0.85em; color:#E65100; font-weight:600;'>{acao_ch}</span>", unsafe_allow_html=True)
-                        
-                        # Botão de Ação
-                        with c5:
-                            if st.button("🔎", key=f"btn_ch_{row_chamado['ID']}", help="Ver detalhes"):
-                                open_chamado_dialog(row_chamado.to_dict())
-                                
-                        # Divisória sutil entre linhas
-                        st.markdown("<div style='border-bottom: 1px solid #f8f8f8; margin-bottom: 8px;'></div>", unsafe_allow_html=True)
-                        
+                        st.markdown("<div style='border-bottom: 1px solid #f8f8f8; margin-bottom: 8px;'></div>", unsafe_allow_html=True)                        
     with aba_calendario:
         st.subheader("🗓️ Agenda da Semana")
         cn, _ = st.columns([1, 4])
@@ -1100,12 +1060,3 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
-
-
-
-
-
-
-
-
-
