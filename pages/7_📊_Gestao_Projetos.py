@@ -110,12 +110,23 @@ def open_chamado_dialog(row_dict):
 
     with st.form(key=f"form_popup_{row_dict['ID']}"):
         
+        # --- PREPARAÇÃO DE DATAS (Formato DD/MM/AAAA) ---
+        dt_abertura = _to_date_safe(row_dict.get('Abertura'))
+        dt_agendamento = _to_date_safe(row_dict.get('Agendamento'))
+        dt_finalizacao = _to_date_safe(row_dict.get('Fechamento'))
+        dt_envio = _to_date_safe(row_dict.get('Data Envio'))
+
+        str_abertura = dt_abertura.strftime('%d/%m/%Y') if dt_abertura else "-"
+        str_agendamento = dt_agendamento.strftime('%d/%m/%Y') if dt_agendamento else "-"
+
         # --- LINHA 1: DATAS ---
         c1, c2, c3, c4 = st.columns(4)
-        c1.text_input("📅 Abertura", value=_to_date_safe(row_dict.get('Abertura')), disabled=True)
-        c2.text_input("📅 Agendamento Atual", value=_to_date_safe(row_dict.get('Agendamento')), disabled=True)
-        nova_reprog = c3.date_input("🔄 Reprogramação", value=_to_date_safe(row_dict.get('Agendamento')))
-        nova_finalizacao = c4.date_input("✅ Finalização / Cancelamento", value=_to_date_safe(row_dict.get('Fechamento')))
+        c1.text_input("📅 Abertura", value=str_abertura, disabled=True)
+        c2.text_input("📅 Agendamento Atual", value=str_agendamento, disabled=True)
+        
+        # Campos de Data com format="DD/MM/YYYY"
+        nova_reprog = c3.date_input("🔄 Reprogramação", value=dt_agendamento, format="DD/MM/YYYY")
+        nova_finalizacao = c4.date_input("✅ Finalização / Cancelamento", value=dt_finalizacao, format="DD/MM/YYYY")
 
         # --- LINHA 2: PESSOAS ---
         r2_c1, r2_c2, r2_c3, r2_c4 = st.columns(4)
@@ -133,8 +144,8 @@ def open_chamado_dialog(row_dict):
         # --- LINHA 3: CAMPOS ESPECÍFICOS (Lógica Condicional) ---
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # Inicializa variáveis para não dar erro de referência
-        nova_data_envio = _to_date_safe(row_dict.get('Data Envio'))
+        # Inicializa variáveis
+        nova_data_envio = dt_envio
         novo_link = row_dict.get('Link Externo', '')
         novo_protocolo = row_dict.get('Nº Protocolo', '')
 
@@ -142,14 +153,11 @@ def open_chamado_dialog(row_dict):
             # === LAYOUT EQUIPAMENTO ===
             l3_c1, l3_c2 = st.columns(2)
             
-            # 1. Em vez de Link, pede Nº Chamado Btime (Salvamos no campo Link Externo ou N Pedido)
-            # Vou salvar no Link Externo para manter consistência de onde guardar a referência
-            novo_link = l3_c1.text_input("🔢 Nº do Pedido", value=row_dict.get('Link Externo', ''))
+            # 1. Nº Chamado Btime
+            novo_link = l3_c1.text_input("🔢 Nº Pedido", value=row_dict.get('Link Externo', ''))
             
-            # 2. Em vez de Protocolo, pede Data Envio
-            nova_data_envio = l3_c2.date_input("🚚 Data de Envio", value=_to_date_safe(row_dict.get('Data Envio')))
-            
-            # 3. Sem botão de Ação para Equipamento
+            # 2. Data Envio (Com formato ajustado)
+            nova_data_envio = l3_c2.date_input("🚚 Data de Envio", value=dt_envio, format="DD/MM/YYYY")
             
         else:
             # === LAYOUT SERVIÇO (PADRÃO) ===
@@ -228,9 +236,9 @@ def open_chamado_dialog(row_dict):
                     "Técnico": novo_tecnico,
                     "Gestor": novo_gestor,
                     "Observações e Pendencias": nova_obs,
-                    "Link Externo": novo_link, # Salva o Nº Chamado Btime aqui se for equip
-                    "Data Envio": nova_data_envio, # Salva Data Envio
-                    "Nº Protocolo": novo_protocolo, # Salva Protocolo (se for serviço)
+                    "Link Externo": novo_link, 
+                    "Data Envio": nova_data_envio, 
+                    "Nº Protocolo": novo_protocolo, 
                     
                     # Checkboxes
                     "chk_pendencia_equipamento": "TRUE" if new_pend_eq else "FALSE",
@@ -1092,6 +1100,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
