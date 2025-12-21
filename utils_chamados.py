@@ -47,6 +47,7 @@ def get_valid_conn():
     return conn
 
 # --- VARIÁVEL GLOBAL DE COLUNAS ---
+# --- VARIÁVEL GLOBAL DE COLUNAS ---
 colunas_necessarias = {
     'agencia_id': 'TEXT', 'agencia_nome': 'TEXT', 'agencia_uf': 'TEXT',
     'servico': 'TEXT', 'projeto_nome': 'TEXT', 'data_agendamento': 'DATE',
@@ -68,7 +69,18 @@ colunas_necessarias = {
     'prazo': 'TEXT',
     'descricao_projeto': 'TEXT', 
     'observacao_pendencias': 'TEXT',
-    'sub_status': 'TEXT'
+    'sub_status': 'TEXT',
+    
+    # --- NOVAS COLUNAS (CHECKBOXES) ---
+    'chk_cancelado': "TEXT DEFAULT 'FALSE'",
+    'chk_pendencia_equipamento': "TEXT DEFAULT 'FALSE'",
+    'chk_pendencia_infra': "TEXT DEFAULT 'FALSE'",
+    'chk_alteracao_chamado': "TEXT DEFAULT 'FALSE'",
+    'chk_envio_parcial': "TEXT DEFAULT 'FALSE'",
+    'chk_equipamento_entregue': "TEXT DEFAULT 'FALSE'",
+    'chk_status_enviado': "TEXT DEFAULT 'FALSE'",
+    'chk_financeiro_banco': "TEXT DEFAULT 'FALSE'",
+    'book_enviado': "TEXT DEFAULT 'FALSE'"
 }
 
 # --- 2. FUNÇÃO PARA CRIAR/ATUALIZAR A TABELA ---
@@ -287,7 +299,18 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
                 'nº pedido': 'numero_pedido',
                 'obs. equipamento': 'observacao_equipamento',
                 'observações e pendencias': 'observacao_pendencias',
-                'descrição': 'descricao_projeto'
+                'descrição': 'descricao_projeto',
+
+                # --- NOVOS CHECKBOXES ---
+                'chk_cancelado': 'chk_cancelado',
+                'chk_pendencia_equipamento': 'chk_pendencia_equipamento',
+                'chk_pendencia_infra': 'chk_pendencia_infra',
+                'chk_alteracao_chamado': 'chk_alteracao_chamado',
+                'chk_envio_parcial': 'chk_envio_parcial',
+                'chk_equipamento_entregue': 'chk_equipamento_entregue',
+                'chk_status_enviado': 'chk_status_enviado',
+                'chk_financeiro_banco': 'chk_financeiro_banco',
+                'book enviado': 'book_enviado'
             }
             
             for k_orig, v in updates.items():
@@ -377,3 +400,4 @@ def resetar_tabela_chamados():
     except Exception as e:
         conn.rollback()
         return False, f"Erro ao limpar banco: {e}"
+
