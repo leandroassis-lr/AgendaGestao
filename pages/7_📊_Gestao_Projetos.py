@@ -710,7 +710,41 @@ with st.sidebar:
     st.header("Ações")
     if st.button("➕ Importar Chamados"): run_importer_dialog()
     if st.button("🔗 Importar Links"): run_link_importer_dialog()
-     
+    
+    # --- BOTÃO DE EMERGÊNCIA (ADICIONE ISTO) ---
+    if st.button("🆘 CRIAR COLUNAS NO BANCO (SQL)"):
+        import psycopg2
+        conn = utils_chamados.get_valid_conn()
+        if conn:
+            try:
+                st.info("Iniciando alteração estrutural do banco...")
+                with conn.cursor() as cur:
+                    # Lista de colunas para criar se não existirem
+                    colunas_sql = [
+                        "ADD COLUMN IF NOT EXISTS chk_cancelado TEXT DEFAULT 'FALSE'",
+                        "ADD COLUMN IF NOT EXISTS chk_pendencia_equipamento TEXT DEFAULT 'FALSE'",
+                        "ADD COLUMN IF NOT EXISTS chk_pendencia_infra TEXT DEFAULT 'FALSE'",
+                        "ADD COLUMN IF NOT EXISTS chk_alteracao_chamado TEXT DEFAULT 'FALSE'",
+                        "ADD COLUMN IF NOT EXISTS chk_envio_parcial TEXT DEFAULT 'FALSE'",
+                        "ADD COLUMN IF NOT EXISTS chk_equipamento_entregue TEXT DEFAULT 'FALSE'",
+                        "ADD COLUMN IF NOT EXISTS chk_status_enviado TEXT DEFAULT 'FALSE'",
+                        "ADD COLUMN IF NOT EXISTS chk_financeiro_banco TEXT DEFAULT 'FALSE'",
+                        "ADD COLUMN IF NOT EXISTS book_enviado TEXT DEFAULT 'FALSE'",
+                        "ADD COLUMN IF NOT EXISTS sub_status TEXT"
+                    ]
+                    
+                    for col_cmd in colunas_sql:
+                        cur.execute(f"ALTER TABLE chamados {col_cmd};")
+                        
+                conn.commit()
+                st.success("✅ Sucesso! Colunas criadas no PostgreSQL.")
+                time.sleep(2)
+                st.rerun()
+                
+            except Exception as e:
+                conn.rollback()
+                st.error(f"Erro SQL: {e}")
+
     st.divider()
     st.header("📤 Exportação")
     # ... (Mantenha o resto do código de exportação igual) ...
@@ -1096,6 +1130,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
