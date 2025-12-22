@@ -147,7 +147,7 @@ def open_chamado_dialog(row_dict):
 
         if is_equip:
             l3_c1, l3_c2 = st.columns(2)
-            novo_link = l3_c1.text_input("🔢 Nº do Pedido", value=row_dict.get('Link Externo', ''))
+            novo_link = l3_c1.text_input("🔢 Nº Chamado Btime (Ref)", value=row_dict.get('Link Externo', ''))
             nova_data_envio = l3_c2.date_input("🚚 Data de Envio", value=dt_envio, format="DD/MM/YYYY")
         else:
             l3_c1, l3_c2, l3_c3 = st.columns([3, 1.5, 1.5])
@@ -164,27 +164,23 @@ def open_chamado_dialog(row_dict):
         st.markdown("---")
         st.markdown("### ☑️ Controle de Status & Pendências")
         
-        # Leitura segura dos valores (evita erro se vier vazio)
         def is_checked(key): return str(row_dict.get(key, '')).upper() == 'TRUE'
 
         chk_pend_eq = is_checked('chk_pendencia_equipamento')
         chk_pend_infra = is_checked('chk_pendencia_infra')
         chk_alteracao = is_checked('chk_alteracao_chamado')
         chk_cancelado = is_checked('chk_cancelado')
-        
         chk_followup = is_checked('chk_status_enviado')
         chk_envio_parcial = is_checked('chk_envio_parcial')
         chk_entregue_total = is_checked('chk_equipamento_entregue')
 
         col_checks_1, col_checks_2 = st.columns(2)
-        
         with col_checks_1:
             st.markdown("**Geral**")
             new_pend_eq = st.checkbox("⚠️ Pendência de Equipamento", value=chk_pend_eq)
             new_pend_infra = st.checkbox("🏗️ Pendência de Infra", value=chk_pend_infra)
             new_alteracao = st.checkbox("📝 Alteração do Chamado", value=chk_alteracao)
             new_cancelado = st.checkbox("🚫 Cancelado", value=chk_cancelado)
-        
         with col_checks_2:
             st.markdown(f"**Específico ({'Equipamento' if is_equip else 'Serviço'})**")
             if is_equip:
@@ -199,7 +195,6 @@ def open_chamado_dialog(row_dict):
         # --- OBSERVAÇÃO ---
         obs_atual = row_dict.get('Observações e Pendencias', '')
         nova_obs = st.text_area("✍️ Observação / Pendência", value=obs_atual if pd.notna(obs_atual) else "", height=100)
-
         st.markdown("<hr>", unsafe_allow_html=True)
         
         # --- AÇÃO DE SALVAR ---
@@ -214,7 +209,7 @@ def open_chamado_dialog(row_dict):
             if erro_msg:
                 for e in erro_msg: st.error(e)
             else:
-                # 2. Prepara os dados para salvar
+                # 2. Prepara os updates
                 updates = {
                     "Data Agendamento": nova_reprog, 
                     "Data Finalização": nova_finalizacao,
@@ -224,7 +219,6 @@ def open_chamado_dialog(row_dict):
                     "Link Externo": novo_link, 
                     "Data Envio": nova_data_envio, 
                     "Nº Protocolo": novo_protocolo, 
-                    # Checkboxes (Salva como string "TRUE"/"FALSE")
                     "chk_pendencia_equipamento": "TRUE" if new_pend_eq else "FALSE",
                     "chk_pendencia_infra": "TRUE" if new_pend_infra else "FALSE",
                     "chk_alteracao_chamado": "TRUE" if new_alteracao else "FALSE",
@@ -237,30 +231,37 @@ def open_chamado_dialog(row_dict):
                 # 3. Salva no Banco
                 utils_chamados.atualizar_chamado_db(row_dict['ID'], updates)
                 
-                # 4. Limpa Cache e Recalcula Imediatamente
-                st.cache_data.clear() # Força recarregar os dados do zero
+                # 4. Limpa Cache
+                st.cache_data.clear()
                 
-                # Recarrega o banco para pegar o dado atualizado e os vizinhos do projeto
+                # 5. [CORREÇÃO] Força o cálculo usando os dados que ACABAMOS de enviar
+                # (Para não depender do delay de leitura do banco)
                 df_novo = utils_chamados.carregar_chamados_db()
-                
-                # Filtra apenas os chamados DO MESMO PROJETO para recalcular o status geral
                 projeto_atual = row_dict.get('Projeto')
                 agencia_atual = row_dict.get('Cód. Agência')
                 
-                if projeto_atual and agencia_atual:
+                if not df_novo.empty and projeto_atual and agencia_atual:
+                    # Filtra o grupo do projeto
                     grupo_projeto = df_novo[
                         (df_novo['Projeto'] == projeto_atual) & 
                         (df_novo['Cód. Agência'] == agencia_atual)
-                    ]
+                    ].copy() # .copy() é importante aqui
+
+                    # INJETAMOS MANUALMENTE OS DADOS NOVOS NO DATAFRAME
+                    # Isso garante que o cálculo 'veja' a pendência mesmo se o banco demorar 0.5s pra responder
+                    idx_row = grupo_projeto.index[grupo_projeto['ID'] == row_dict['ID']].tolist()
+                    if idx_row:
+                        i = idx_row[0]
+                        for k, v in updates.items():
+                            grupo_projeto.at[i, k] = v
                     
-                    if not grupo_projeto.empty:
-                        # Executa a inteligência de status
-                        ids_grupo = grupo_projeto['ID'].tolist()
-                        calcular_e_atualizar_status_projeto(grupo_projeto, ids_grupo)
+                    # Agora calculamos com o dado 'quente'
+                    ids_grupo = grupo_projeto['ID'].tolist()
+                    calcular_e_atualizar_status_projeto(grupo_projeto, ids_grupo)
 
                 st.success("Salvo e Status Atualizado!")
                 time.sleep(1)
-                st.rerun()
+                st.rerun()        
                 
 # --- LÓGICA DE STATUS: CHAMADO E PROJETO (NOVA VERSÃO) ---
 def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
@@ -1130,6 +1131,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
