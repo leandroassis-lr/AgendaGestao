@@ -666,6 +666,21 @@ with st.sidebar:
                 conn.rollback()
                 st.error(f"Erro SQL: {e}")
 
+    if st.button("🔄 Atualizar Status (Geral)"):
+        with st.spinner("Reprocessando todos os status..."):
+            df_todos = utils_chamados.carregar_chamados_db()
+            if not df_todos.empty:
+                count_mudou = 0
+                for num_chamado, grupo in df_todos.groupby('Nº Chamado'):
+                    ids_grupo = grupo['ID'].tolist()
+                    if calcular_e_atualizar_status_projeto(grupo, ids_grupo):
+                        count_mudou += 1
+                st.success(f"Processo finalizado! {count_mudou} projetos tiveram status alterado.")
+                time.sleep(2)
+                st.rerun()
+            else:
+                st.warning("Banco de dados vazio.")
+
     st.divider()
     st.header("📤 Exportação")
     # ... (Mantenha o resto do código de exportação igual) ...
@@ -1087,6 +1102,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
