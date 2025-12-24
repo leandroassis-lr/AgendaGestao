@@ -234,33 +234,28 @@ def open_chamado_dialog(row_dict):
                 # 4. Limpa Cache
                 st.cache_data.clear()
                 
-                # 5. [CORREÇÃO] Força o cálculo usando os dados que ACABAMOS de enviar
-                # (Para não depender do delay de leitura do banco)
+                # 5. Força o cálculo imediato
                 df_novo = utils_chamados.carregar_chamados_db()
                 projeto_atual = row_dict.get('Projeto')
                 agencia_atual = row_dict.get('Cód. Agência')
                 
                 if not df_novo.empty and projeto_atual and agencia_atual:
-                    # Filtra o grupo do projeto
                     grupo_projeto = df_novo[
                         (df_novo['Projeto'] == projeto_atual) & 
                         (df_novo['Cód. Agência'] == agencia_atual)
-                    ].copy() # .copy() é importante aqui
+                    ].copy()
 
-                    # INJETAMOS MANUALMENTE OS DADOS NOVOS NO DATAFRAME
-                    # Isso garante que o cálculo 'veja' a pendência mesmo se o banco demorar 0.5s pra responder
                     idx_row = grupo_projeto.index[grupo_projeto['ID'] == row_dict['ID']].tolist()
                     if idx_row:
                         i = idx_row[0]
                         for k, v in updates.items():
                             grupo_projeto.at[i, k] = v
                     
-                    # Agora calculamos com o dado 'quente'
                     ids_grupo = grupo_projeto['ID'].tolist()
                     calcular_e_atualizar_status_projeto(grupo_projeto, ids_grupo)
 
-                st.success("Salvo e Status Atualizado!")
-                time.sleep(1)
+                # --- MUDANÇA AQUI: Trocamos o st.success + sleep pelo st.toast + rerun imediato
+                st.toast("✅ Salvo e Atualizado com Sucesso!", icon="💾")
                 st.rerun()        
                 
 # --- LÓGICA DE STATUS: CHAMADO E PROJETO ---
@@ -1056,6 +1051,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
