@@ -535,42 +535,89 @@ def run_importer_dialog():
 
             except Exception as e: st.error(f"Erro no processamento: {e}")
 
-@st.dialog("🔗 Importar Links em Massa", width="medium")
-def run_link_importer_dialog():
-    st.info("Atualize apenas os **Links Externos** dos chamados existentes.")
-    uploaded_links = st.file_uploader("Planilha de Links (.xlsx/.csv)", type=["xlsx", "csv"], key="link_up_key")
+@st.dialog("📦 Importar Pedidos e Envios", width="medium")
+def run_pedido_importer_dialog():
+    st.info("""
+        Atualize em massa o **Nº do Pedido** e a **Data de Envio**.
+        A planilha deve ter as colunas: **CHAMADO**, **PEDIDO** e **DATA_ENVIO**.
+        
+        *Formatos de data aceitos: DD/MM/AAAA ou AAAA-MM-DD*
+    """)
     
-    if uploaded_links:
+    uploaded_pedidos = st.file_uploader("Planilha de Pedidos (.xlsx/.csv)", type=["xlsx", "csv"], key="ped_up_key")
+    
+    if uploaded_pedidos:
         try:
-            if uploaded_links.name.endswith('.csv'): 
-                df_links = pd.read_csv(uploaded_links, sep=';', header=0, dtype=str)
+            if uploaded_pedidos.name.endswith('.csv'): 
+                df_ped = pd.read_csv(uploaded_pedidos, sep=';', header=0, dtype=str)
+                if len(df_ped.columns) < 2: # Tenta vírgula se ponto e vírgula falhar
+                    uploaded_pedidos.seek(0)
+                    df_ped = pd.read_csv(uploaded_pedidos, sep=',', header=0, dtype=str)
             else: 
-                df_links = pd.read_excel(uploaded_links, header=0, dtype=str)
+                df_ped = pd.read_excel(uploaded_pedidos, header=0, dtype=str)
             
-            df_links.columns = [str(c).strip().upper() for c in df_links.columns]
+            # Normaliza colunas (Remove espaços e coloca maiúsculo)
+            df_ped.columns = [str(c).strip().upper() for c in df_ped.columns]
             
-            if 'CHAMADO' not in df_links.columns or 'LINK' not in df_links.columns:
-                st.error("Erro: A planilha precisa ter as colunas 'CHAMADO' e 'LINK'.")
+            # Validação das colunas
+            colunas_obrigatorias = ['CHAMADO']
+            tem_pedido = 'PEDIDO' in df_ped.columns
+            tem_data = 'DATA_ENVIO' in df_ped.columns
+            
+            if 'CHAMADO' not in df_ped.columns:
+                st.error("Erro: A coluna 'CHAMADO' é obrigatória.")
+            elif not (tem_pedido or tem_data):
+                st.error("Erro: A planilha precisa ter pelo menos 'PEDIDO' ou 'DATA_ENVIO'.")
             else:
-                st.dataframe(df_links.head(), use_container_width=True)
-                if st.button("🚀 Atualizar Links"):
-                    with st.spinner("Atualizando links..."):
+                st.dataframe(df_ped.head(), use_container_width=True)
+                
+                if st.button("🚀 Processar Atualização"):
+                    with st.spinner("Atualizando dados..."):
+                        # 1. Carrega banco para pegar os IDs internos
                         df_bd = utils_chamados.carregar_chamados_db()
                         if df_bd.empty: st.error("Banco de dados vazio."); st.stop()
                         
+                        # Mapa: Nome do Chamado (Excel) -> ID Interno (Banco)
                         id_map = df_bd.set_index('Nº Chamado')['ID'].to_dict()
+                        
                         count = 0
+                        total = len(df_ped)
+                        bar = st.progress(0)
                         
-                        for _, row in df_links.iterrows():
-                            chamado = row['CHAMADO']
-                            link = row['LINK']
-                            if chamado in id_map and pd.notna(link) and str(link).strip():
-                                internal_id = id_map[chamado]
-                                utils_chamados.atualizar_chamado_db(internal_id, {'Link Externo': link})
-                                count += 1
+                        for i, row in df_ped.iterrows():
+                            chamado_key = str(row['CHAMADO']).strip()
+                            
+                            if chamado_key in id_map:
+                                internal_id = id_map[chamado_key]
+                                updates = {}
+                                
+                                # Processa Pedido
+                                if tem_pedido:
+                                    val_ped = str(row['PEDIDO']).strip()
+                                    if val_ped and val_ped.lower() not in ['nan', 'none', '']:
+                                        updates['Nº Pedido'] = val_ped
+                                        
+                                # Processa Data Envio
+                                if tem_data:
+                                    val_dt = str(row['DATA_ENVIO']).strip()
+                                    if val_dt and val_dt.lower() not in ['nan', 'none', '']:
+                                        # Tenta converter a data
+                                        try:
+                                            dt_obj = pd.to_datetime(val_dt, dayfirst=True).date()
+                                            updates['Data Envio'] = dt_obj
+                                        except:
+                                            pass # Se falhar a data, ignora ou grava string se preferir
+                                
+                                # Se tiver algo para atualizar, chama o banco
+                                if updates:
+                                    utils_chamados.atualizar_chamado_db(internal_id, updates)
+                                    count += 1
+                            
+                            bar.progress((i + 1) / total)
                         
-                        st.success(f"✅ {count} links atualizados com sucesso!")
-                        st.cache_data.clear()
+                        st.success(f"✅ {count} chamados atualizados com sucesso!")
+                        time.sleep(1.5)
+                        st.cache_data.clear() 
                         st.session_state.importer_done = True
                         
         except Exception as e:
@@ -630,9 +677,10 @@ if not df.empty:
 with st.sidebar:
     st.header("Ações")
     if st.button("➕ Importar Chamados"): run_importer_dialog()
+    if st.button("📦 Importar Pedidos/Envio"): run_pedido_importer_dialog()   
     if st.button("🔗 Importar Links"): run_link_importer_dialog()
-    
-    # --- BOTÃO DE EMERGÊNCIA (ADICIONE ISTO) ---
+       
+    # --- BOTÃO DE EMERGÊNCIA ---
     if st.button("🆘 CRIAR COLUNAS NO BANCO (SQL)"):
         import psycopg2
         conn = utils_chamados.get_valid_conn()
@@ -1102,6 +1150,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
