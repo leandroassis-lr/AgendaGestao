@@ -263,30 +263,31 @@ def open_chamado_dialog(row_dict):
                 time.sleep(1)
                 st.rerun()        
                 
-# --- LÓGICA DE STATUS: CHAMADO E PROJETO (NOVA VERSÃO) ---
+# --- LÓGICA DE STATUS: CHAMADO E PROJETO ---
 def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
     """
     1. Calcula o status individual de cada chamado (Sub-Status).
     2. Calcula o status macro do projeto baseado no conjunto.
     """
     
-    updates_batch = {} # Dicionário para guardar updates: {id_chamado: {campos}}
-    
-    # --- PARTE A: CALCULAR STATUS DE CADA CHAMADO ---
-    chamados_calculados = [] # Lista de dicts com o estado atualizado para uso no cálculo do projeto
+    updates_batch = {} 
+    chamados_calculados = [] 
 
     for idx, row in df_projeto.iterrows():
         n_chamado = str(row.get('Nº Chamado', ''))
-        is_equip = '-e-' in n_chamado.lower()
+        is_equip = '-e-' in n_chamado.lower() or '-E-' in n_chamado
         
-        # Leitura de Flags e Dados
+        # --- LEITURA DE DADOS ---
+        # Verifica se campos chave estão preenchidos
         link_presente = row.get('Link Externo') and str(row.get('Link Externo')).strip() not in ['', 'nan', 'None']
         n_pedido = row.get('Nº Pedido') and str(row.get('Nº Pedido')).strip() not in ['', 'nan', 'None']
         
-        # Banco de Dados (Simulando leitura de colunas financeiras/book)
-        # Assumindo que essas colunas existem no DF. Se não, considere False.
-        db_liberacao_banco = str(row.get('chk_financeiro_banco', '')).upper() == 'TRUE' # "Liberação (banco)"
-        db_book_controle_sim = str(row.get('Book Enviado', '')).upper() == 'SIM' # "Books (controle)" == SIM
+        # Verifica se tem Técnico (NOVO CRITÉRIO)
+        tecnico_presente = row.get('Técnico') and str(row.get('Técnico')).strip() not in ['', 'nan', 'None']
+
+        # Banco de Dados
+        db_liberacao_banco = str(row.get('chk_financeiro_banco', '')).upper() == 'TRUE'
+        db_book_controle_sim = str(row.get('Book Enviado', '')).upper() == 'SIM'
         
         # Checkboxes UI
         chk_cancelado = str(row.get('chk_cancelado', '')).upper() == 'TRUE'
@@ -296,7 +297,7 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
         
         chk_envio_parcial = str(row.get('chk_envio_parcial', '')).upper() == 'TRUE'
         chk_entregue_total = str(row.get('chk_equipamento_entregue', '')).upper() == 'TRUE'
-        chk_followup = str(row.get('chk_status_enviado', '')).upper() == 'TRUE' # Follow-up enviado
+        chk_followup = str(row.get('chk_status_enviado', '')).upper() == 'TRUE'
 
         novo_sub_status = "Em análise"
         
@@ -326,7 +327,6 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
                 elif chk_envio_parcial:
                     novo_sub_status = "Equipamento enviado Parcial"
                 elif row.get('Data Envio') and pd.notna(row.get('Data Envio')):
-                    # Assumindo que existe campo Data Envio ou usamos logica do chamado anterior
                     novo_sub_status = "Equipamento enviado"
                 elif n_pedido:
                     novo_sub_status = "Aguardando envio"
@@ -339,15 +339,18 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
                     novo_sub_status = "Aguardando Faturamento"
                 elif chk_followup:
                     novo_sub_status = "Enviar Book"
+                elif tecnico_presente:
+                    # Se tem técnico mas não fez follow-up ainda -> Follow-up
+                    novo_sub_status = "Follow-up" 
                 elif link_presente:
-                    novo_sub_status = "Acionar técnico" # Link existe -> Acionar
+                    # Tem link mas não tem técnico -> Acionar técnico
+                    novo_sub_status = "Acionar técnico" 
                 else:
-                    novo_sub_status = "Abrir chamado Btime" # Sem link
+                    # Não tem link -> Abrir chamado
+                    novo_sub_status = "Abrir chamado Btime" 
 
-        # Guarda o status calculado
         updates_batch[row['ID']] = {"Sub-Status": novo_sub_status}
         
-        # Cria um objeto representativo para o cálculo do projeto
         chamado_obj = {
             "ID": row['ID'],
             "Tipo": "EQUIP" if is_equip else "SERV",
@@ -362,35 +365,23 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
     total = len(chamados_calculados)
     if total == 0: return False
 
-    cancelados = [c for c in chamados_calculados if c['Cancelado']]
-    faturados = [c for c in chamados_calculados if c['Faturado']] # "Finalizado" no conceito do projeto é Faturado?
-    # Regra: Concluído - Quando todos os chamados estiverem concluídos (Ignoramos cancelados)
-    # Definição de Concluído: Faturado, Entregue, Enviar Book? 
-    # Vou considerar "Concluído" no fluxo do projeto como: Entregue (Eq) ou Aguardando Fat ou Faturado
-    
     ativos = [c for c in chamados_calculados if not c['Cancelado']]
+    faturados_count = sum(1 for c in ativos if c['Faturado'])
     
     status_projeto = "Não Iniciado"
     
-    # 1. Definição do STATUS MACRO
-    if len(cancelados) == total:
+    if len(ativos) == 0: # Todos cancelados
         status_projeto = "Cancelado"
-    elif len(ativos) == 0:
-        status_projeto = "Cancelado" # Caso raro
     else:
-        # Verifica se TODOS os ativos estão finalizados (Liberação Banco)
+        # Definição dos critérios de Status Macro
         todos_finalizados_banco = all(c['Faturado'] for c in ativos)
         
-        # Verifica se TODOS os ativos estão Concluídos (Etapa final antes do banco ou banco)
-        # Critério de Conclusão: Serviço=Aguardando Fat/Faturado | Equip=Entregue/Faturado
         def is_concluido(c):
             s = c['SubStatus']
             return s in ["Faturado", "Aguardando Faturamento", "Equipamento entregue", "Enviar Book"] 
-            # Ajuste conforme sua definição exata de "Concluído" vs "Em andamento"
         
         todos_concluidos = all(is_concluido(c) for c in ativos)
         
-        # Verifica se algum começou ("Em Andamento")
         def is_nao_iniciado(c):
             s = c['SubStatus']
             return s in ["Solicitar equipamento", "Abrir chamado Btime"]
@@ -405,83 +396,17 @@ def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
             status_projeto = "Não Iniciado"
         else:
             status_projeto = "Em Andamento"
-
-    # 2. Definição do SUB-STATUS DO PROJETO (A Etapa Atual / Gargalo)
-    # Regra: Prioridade de exibição.
     
-    sub_status_projeto = ""
-    
-    # Lista de prioridade (do início para o fim do fluxo).
-    # O sistema vai exibir o PRIMEIRO status dessa lista que for encontrado nos chamados ATIVOS.
-    hierarquia = [
-        # 1. Pendências (Prioridade Máxima)
-        "Pendência de Infra",
-        "Pendência de equipamento",
-        "Alteração do chamado",
-        "Equipamento enviado Parcial", # Tratado como pendência/atenção
-        
-        # 2. Fluxo Equipamento
-        "Solicitar equipamento",
-        "Aguardando envio",
-        "Equipamento enviado",
-        
-        # 3. Fluxo Comum / Serviço
-        "Abrir chamado Btime",
-        "Acionar técnico",
-        "Follow-up", # Status que aparece se não tiver pendência
-        "Enviar Book",
-        "Aguardando Faturamento",
-        "Faturado",
-        "Equipamento entregue"
-    ]
-    
-    # Filtra apenas os sub-status presentes nos chamados ativos
-    status_presentes = {c['SubStatus'] for c in ativos}
-    
-    # Encontra o primeiro da hierarquia que está presente
-    found = False
-    for h in hierarquia:
-        if h in status_presentes:
-            sub_status_projeto = h
-            found = True
-            break
-    
-    if not found and ativos:
-        sub_status_projeto = ativos[0]['SubStatus'] # Fallback
-    elif not ativos:
-        sub_status_projeto = "Todos Cancelados"
-
     # --- APLICAÇÃO DOS UPDATES ---
-    changed = False
     
-    # Atualiza Sub-Status Individual (Calculado na Parte A)
+    # 1. Atualiza Sub-Status Individual
     for cid, data in updates_batch.items():
         utils_chamados.atualizar_chamado_db(cid, data)
     
-    # Atualiza Status/Sub do Projeto (Aplica a todos os chamados do projeto para ficar igual no banco)
-    # Isso garante que o agrupamento funcione e o cabeçalho mostre o dado correto
-    updates_proj = {"Status": status_projeto, "Sub-Status Projeto": sub_status_projeto} 
-    # Nota: Criei uma coluna virtual "Sub-Status Projeto" se quiser diferenciar, 
-    # mas se o seu cabeçalho lê de "Status" e "Sub-Status", precisamos ver onde salvar.
-    # Pelo seu código de visualização:
-    # Cabeçalho Status = row.get('Status') -> status_projeto
-    # Cabeçalho Ação = row.get('Sub-Status') -> sub_status_projeto? 
-    # O problema é que 'Sub-Status' é individual do chamado.
-    # VOU ASSUMIR que o Status do Projeto é salvo na coluna 'Status' de todos os itens
-    # E o Sub-Status (Ação) que aparece no cabeçalho deve ser calculado dinamicamente na visualização 
-    # OU salvamos em todos. Para simplificar e manter a performance, vou salvar em todos.
-    
+    # 2. Atualiza Status Macro em todos
     for row in chamados_calculados:
-        # Atualiza o Status Macro em todos
         utils_chamados.atualizar_chamado_db(row['ID'], {"Status": status_projeto}) 
-        # ATENÇÃO: Se salvar o "Sub-Status" do projeto no campo "Sub-Status" do chamado, 
-        # perdemos a informação individual do chamado (ex: um está em Btime, outro em Faturado).
-        # O ideal é NÃO sobrescrever o "Sub-Status" individual com o do projeto.
-        
-        # SOLUÇÃO: A função de visualização deve calcular o "Gargalo" do projeto em tempo real 
-        # ou usamos uma coluna auxiliar. Vou manter o update APENAS do Status Macro.
-        # O Sub-Status individual já foi salvo acima.
-        
+              
     return True
     
 # --- FUNÇÕES DE IMPORTAÇÃO/EXPORTAÇÃO ---
@@ -1131,6 +1056,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
