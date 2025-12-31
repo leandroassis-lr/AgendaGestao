@@ -444,3 +444,39 @@ def resetar_tabela_chamados():
     except Exception as e:
         conn.rollback()
         return False, f"Erro ao limpar banco: {e}"
+
+# --- ADICIONE ISTO NO FINAL DO ARQUIVO (APÓS A FUNÇÃO resetar_tabela_chamados) ---
+
+def recriar_banco_do_zero():
+    """
+    APAGA A TABELA 'chamados' E A RECRIIA COM O NOVO ESQUEMA DEFINIDO EM colunas_necessarias.
+    ISSO É NECESSÁRIO PARA ALTERAR A ESTRUTURA DE COLUNAS.
+    """
+    conn = get_valid_conn()
+    if not conn: return False, "Sem conexão com o banco"
+    
+    try:
+        with conn.cursor() as cur:
+            # 1. Derruba a tabela antiga (APAGA TUDO)
+            cur.execute("DROP TABLE IF EXISTS chamados;")
+            
+            # 2. Monta a query de criação baseada no dicionário 'colunas_necessarias'
+            # Isso garante que a tabela nasça com as colunas EXATAS que definimos lá em cima
+            colunas_sql = [f"{col} {tipo}" for col, tipo in colunas_necessarias.items()]
+            
+            query_create = f"""
+                CREATE TABLE chamados (
+                    id SERIAL PRIMARY KEY,
+                    {', '.join(colunas_sql)}
+                );
+            """
+            cur.execute(query_create)
+            
+        conn.commit()
+        st.cache_data.clear() # Limpa o cache do Streamlit para não ler dados velhos
+        return True, "✅ Banco recriado do ZERO com as novas colunas!"
+        
+    except Exception as e:
+        if conn: conn.rollback()
+        return False, f"Erro ao recriar banco: {e}"
+
