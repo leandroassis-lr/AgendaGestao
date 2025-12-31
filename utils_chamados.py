@@ -6,7 +6,7 @@ import html
 import psycopg2
 from psycopg2 import sql
 import numpy as np 
-import sqlite3
+import sqlite3 # Mantido caso use em outro lugar, mas o foco aqui é Postgres
 
 # --- 1. GERENCIAMENTO DE CONEXÃO ROBUSTO (POSTGRESQL) ---
 
@@ -46,7 +46,7 @@ def get_valid_conn():
         
     return conn
     
-# --- 1. DEFINIÇÃO DAS COLUNAS ---
+# --- 1. DEFINIÇÃO DAS COLUNAS (GLOBAL) ---
 colunas_necessarias = {
     # ID e Identificadores
     'id_projeto': 'INTEGER',             
@@ -100,6 +100,8 @@ colunas_necessarias = {
     'chk_envio_parcial': "TEXT DEFAULT 'FALSE'",
     'chk_equipamento_entregue': "TEXT DEFAULT 'FALSE'",
     'chk_status_enviado': "TEXT DEFAULT 'FALSE'",
+    
+    # Financeiro (Mantido)
     'chk_financeiro_banco': "TEXT DEFAULT 'FALSE'",
     'book_enviado': "TEXT DEFAULT 'FALSE'"
 }
@@ -167,7 +169,9 @@ def carregar_chamados_db(agencia_id_filtro=None):
             'observacao_equipamento': 'Obs. Equipamento',
             'prazo': 'Prazo', 'descricao_projeto': 'Descrição',
             'observacao_pendencias': 'Observações e Pendencias',
-            'sub_status': 'Sub-Status'
+            'sub_status': 'Sub-Status',
+            'id_projeto': 'ID_PROJETO',
+            'data_reagendamento': 'Reagendamento'
         }
         df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
         
@@ -196,8 +200,6 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         return False, 0
 
     # MAPEAMENTO DE IMPORTAÇÃO (Excel -> Banco Postgres)
-    # Lado Esquerdo: Nome que vem do Excel (pós-tratamento do importador)
-    # Lado Direito: Nome da coluna na tabela 'chamados' do Postgres
     MAP_IMPORT = {
         "Nº Chamado": "chamado_id",
         "Cód. Agência": "agencia_id",
@@ -215,38 +217,28 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         "Prazo": "prazo"
     }
 
-    # 1. Renomeia colunas do DF para os nomes do Postgres
     df_to_insert = df.copy()
     
     # Filtra o mapa para usar apenas colunas que existem no DF
     mapa_valido = {k: v for k, v in MAP_IMPORT.items() if k in df_to_insert.columns}
     df_to_insert = df_to_insert.rename(columns=mapa_valido)
 
-    # 2. VALIDAÇÕES BÁSICAS
     if 'chamado_id' not in df_to_insert.columns:
         st.error("Erro interno: Coluna 'Nº Chamado' se perdeu no mapeamento.")
         return False, 0
 
-    # 3. TRATA DATAS (Para formato SQL YYYY-MM-DD)
     cols_data_banco = ['data_abertura', 'data_fechamento', 'data_agendamento']
     for col in cols_data_banco:
         if col in df_to_insert.columns:
             df_to_insert[col] = pd.to_datetime(df_to_insert[col], errors='coerce').dt.date
-            # Converte NaT em None para o SQL
             df_to_insert[col] = df_to_insert[col].where(pd.notnull(df_to_insert[col]), None)
 
-    # 4. SELECIONA APENAS COLUNAS QUE EXISTEM NO BANCO
-    # Pega apenas as colunas que renomeamos e que sabemos que existem na tabela
     colunas_finais = [c for c in df_to_insert.columns if c in colunas_necessarias.keys() or c == 'chamado_id']
     df_final = df_to_insert[colunas_finais]
 
-    # 5. MONTA A QUERY (UPSERT)
-    # INSERT ... ON CONFLICT (chamado_id) DO UPDATE SET ...
-    
     cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns))
     placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
 
-    # Monta a cláusula de atualização (para atualizar se já existir)
     update_clause = sql.SQL(", ").join(
         sql.SQL("{} = EXCLUDED.{}").format(sql.Identifier(col), sql.Identifier(col))
         for col in df_final.columns if col != 'chamado_id'
@@ -257,10 +249,7 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         "ON CONFLICT (chamado_id) DO UPDATE SET {}"
     ).format(cols_sql, placeholders, update_clause)
 
-    # 6. EXECUTA
     try:
-        # Converte para lista de tuplas (formato exigido pelo psycopg2)
-        # Substitui NaN por None explicitamente para evitar erro de float no SQL
         values = [tuple(x if pd.notna(x) else None for x in row) for row in df_final.values]
         
         with conn.cursor() as cur:
@@ -275,10 +264,9 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         st.error(f"Erro ao salvar no banco: {e}")
         return False, 0
 
-# --- 5. FUNÇÃO PARA ATUALIZAR CHAMADO (CORRIGIDA) ---
+# --- 5. FUNÇÃO PARA ATUALIZAR CHAMADO ---
 
 def atualizar_chamado_db(chamado_id_interno, updates: dict):
-    
     conn = get_valid_conn()
     if not conn: return False
     
@@ -286,7 +274,7 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
     
     try:
         with conn.cursor() as cur:
-            # 1. Busca dados atuais para comparar (Log)
+            # 1. Busca dados atuais para Log
             cur.execute("""
                 SELECT 
                     data_agendamento, data_fechamento, log_chamado, 
@@ -302,7 +290,7 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
 
             db_updates = {}
 
-            # 2. Mapeamento EXATO (Chave do Form -> Coluna do Banco)
+            # 2. Mapeamento EXATO
             mapa_exato = {
                 # Mapeamento Campo da Tela -> Coluna do Banco
                 'id_projeto': 'id_projeto',
@@ -351,7 +339,7 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
                 'chk_equipamento_entregue': 'chk_equipamento_entregue',
                 'chk_status_enviado': 'chk_status_enviado',
                 
-                # Financeiro (Mantido)
+                # Financeiro
                 'chk_financeiro_banco': 'chk_financeiro_banco',
                 'book_enviado': 'book_enviado',
                 'book enviado': 'book_enviado'
@@ -363,7 +351,6 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
                 if k_lower in mapa_exato:
                     db_k = mapa_exato[k_lower]
                     
-                    # Tratamento de Valores
                     if isinstance(v, (datetime, date)): 
                         db_updates[db_k] = v.strftime('%Y-%m-%d')
                     elif v is None or pd.isna(v) or str(v).strip() == "":
@@ -431,22 +418,7 @@ def get_status_color(status):
     
     return "#9E9E9E" # Cinza Default
 
-# --- FUNÇÃO DE LIMPEZA TOTAL (PARA TESTES) ---
-def resetar_tabela_chamados():
-    conn = get_valid_conn()
-    if not conn: return False, "Erro de conexão"
-    
-    try:
-        with conn.cursor() as cur:
-            cur.execute("TRUNCATE TABLE chamados RESTART IDENTITY CASCADE;")
-        conn.commit()
-        return True, "Base de chamados zerada com sucesso!"
-    except Exception as e:
-        conn.rollback()
-        return False, f"Erro ao limpar banco: {e}"
-
-# --- ADICIONE ISTO NO FINAL DO ARQUIVO (APÓS A FUNÇÃO resetar_tabela_chamados) ---
-
+# --- FUNÇÃO DE LIMPEZA TOTAL (RESET RADICAL) ---
 def recriar_banco_do_zero():
     """
     APAGA A TABELA 'chamados' E A RECRIIA COM O NOVO ESQUEMA DEFINIDO EM colunas_necessarias.
@@ -460,8 +432,7 @@ def recriar_banco_do_zero():
             # 1. Derruba a tabela antiga (APAGA TUDO)
             cur.execute("DROP TABLE IF EXISTS chamados;")
             
-            # 2. Monta a query de criação baseada no dicionário 'colunas_necessarias'
-            # Isso garante que a tabela nasça com as colunas EXATAS que definimos lá em cima
+            # 2. Monta a query de criação baseada no dicionário global 'colunas_necessarias'
             colunas_sql = [f"{col} {tipo}" for col, tipo in colunas_necessarias.items()]
             
             query_create = f"""
@@ -473,10 +444,13 @@ def recriar_banco_do_zero():
             cur.execute(query_create)
             
         conn.commit()
-        st.cache_data.clear() # Limpa o cache do Streamlit para não ler dados velhos
+        st.cache_data.clear() # Limpa o cache
         return True, "✅ Banco recriado do ZERO com as novas colunas!"
         
     except Exception as e:
         if conn: conn.rollback()
         return False, f"Erro ao recriar banco: {e}"
 
+# Mantido para compatibilidade, caso chame a função antiga
+def resetar_tabela_chamados():
+    return recriar_banco_do_zero()
