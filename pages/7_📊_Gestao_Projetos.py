@@ -747,30 +747,116 @@ with st.sidebar:
 
     st.divider()
     st.header("📤 Exportação")
-    # ... (Mantenha o resto do código de exportação igual) ...
-    if st.button("📥 Baixar Base Completa (.xlsx)"):
-        df_export = utils_chamados.carregar_chamados_db()
-        # ... (seu código de exportação existente) ...
-        # Se precisar, copie do código anterior, mas o foco aqui é o botão de reparo acima.
-        if not df_export.empty:
-            output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                df_export.to_excel(writer, index=False, sheet_name='Base_Chamados')
-                workbook = writer.book
-                worksheet = writer.sheets['Base_Chamados']
-                format_header = workbook.add_format({'bold': True, 'bg_color': '#D3D3D3', 'border': 1})
-                for i, col in enumerate(df_export.columns):
-                    worksheet.set_column(i, i, 20)
-                    worksheet.write(0, i, col, format_header)
-            data_export = output.getvalue()
-            st.download_button(
-                label="✅ Clique aqui para salvar",
-                data=data_export,
-                file_name=f"Backup_Chamados_{date.today().strftime('%d-%m-%Y')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-        else:
-            st.warning("O banco de dados está vazio.")
+    # --- BOTÃO DE EXPORTAÇÃO ESTRUTURADA ---
+    if st.button("📥 Baixar Relatório Estruturado (.xlsx)"):
+        with st.spinner("Gerando relatório estruturado..."):
+            df_export = utils_chamados.carregar_chamados_db()
+            
+            if not df_export.empty:
+                # 1. CRIAÇÃO DO ID_PROJETO
+                # Agrupa por 'Cód. Agência' e 'Projeto' e atribui um número sequencial (1, 2, 3...)
+                # O 'dense' garante que não pule números
+                colunas_agrupadoras = ['Cód. Agência', 'Projeto']
+                df_export['ID_PROJETO'] = df_export.groupby(colunas_agrupadoras).ngroup() + 1
+                
+                # Ordena para ficar bonito no Excel (Agrupado por ID)
+                df_export = df_export.sort_values(by=['ID_PROJETO', 'Nº Chamado'])
+
+                # 2. DEFINIÇÃO DA ORDEM DAS COLUNAS (Conforme sua imagem)
+                colunas_ordenadas = [
+                    'ID_PROJETO',
+                    'Abertura',          # Data_Abertura
+                    'Status',
+                    'Cód. Agência',
+                    'Nome Agência',
+                    'UF',
+                    'Nº Chamado',
+                    'Projeto',
+                    'Sistema',
+                    'Serviço',
+                    'Cód. Equip.',       # Se existir
+                    'Equipamento',       # Se existir
+                    'Qtd.',              # Se existir
+                    'Agendamento',
+                    'Reagendamento',     # Obs: Verifique se essa coluna existe no seu DF original, senão remover
+                    'Fechamento',        # Conclusão
+                    'Gestor',
+                    'Analista',
+                    'Técnico',
+                    'Observação',
+                    'Log do Chamado',
+                    'Link Externo',
+                    'Nº Protocolo',
+                    'Nº Pedido',
+                    'Data Envio',
+                    'Obs. Equipamento',
+                    'Prazo',
+                    'Descrição',
+                    'Observações e Pendencias',
+                    'Sub-Status',
+                    
+                    # Colunas de Controle (Checkboxes)
+                    'chk_cancelado',
+                    'chk_pendencia_equipamento',
+                    'chk_pendencia_infra',
+                    'chk_alteracao_chamado',
+                    'chk_envio_parcial',
+                    'chk_equipamento_entregue',
+                    'chk_status_enviado',
+                    'chk_financeiro_banco',
+                    'book_enviado'
+                ]
+                
+                # Filtra apenas as colunas que realmente existem no DataFrame para evitar erro
+                cols_finais = [c for c in colunas_ordenadas if c in df_export.columns]
+                
+                # Cria o DF final apenas com as colunas na ordem certa
+                df_final = df_export[cols_finais]
+
+                # 3. EXPORTAÇÃO COM FORMATAÇÃO (XLSXWRITER)
+                output = io.BytesIO()
+                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                    df_final.to_excel(writer, index=False, sheet_name='Relatorio_Projetos')
+                    
+                    workbook = writer.book
+                    worksheet = writer.sheets['Relatorio_Projetos']
+                    
+                    # Formatos
+                    fmt_header = workbook.add_format({
+                        'bold': True, 
+                        'bg_color': '#D3D3D3', 
+                        'border': 1,
+                        'align': 'center',
+                        'valign': 'vcenter'
+                    })
+                    
+                    fmt_id = workbook.add_format({'bold': True, 'align': 'center', 'bg_color': '#E3F2FD'}) # Destaque para o ID
+                    
+                    # Aplica formatação no cabeçalho
+                    for col_num, value in enumerate(df_final.columns.values):
+                        worksheet.write(0, col_num, value, fmt_header)
+                        
+                        # Ajuste de largura das colunas
+                        largura = 15 # Padrão
+                        if value in ['Nome Agência', 'Projeto', 'Descrição', 'Observação', 'Link Externo']: largura = 40
+                        elif value in ['ID_PROJETO', 'UF', 'Qtd.']: largura = 8
+                        elif 'chk_' in value: largura = 12
+                        
+                        worksheet.set_column(col_num, col_num, largura)
+                    
+                    # Aplica formatação na coluna ID (Primeira coluna)
+                    worksheet.set_column(0, 0, 10, fmt_id)
+
+                data_export = output.getvalue()
+                
+                st.download_button(
+                    label="✅ Clique aqui para salvar Relatório",
+                    data=data_export,
+                    file_name=f"Relatorio_GTS_{date.today().strftime('%d-%m-%Y')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            else:
+                st.warning("O banco de dados está vazio.")
                      
     st.header("Filtros de Gestão")
     lista_analistas = ["Todos"] + sorted(df['Analista'].dropna().unique().tolist())
@@ -1166,6 +1252,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
