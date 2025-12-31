@@ -135,8 +135,26 @@ def open_chamado_dialog(row_dict):
 
         # --- DESCRIÇÃO ---
         st.markdown("<br><b>📦 Descrição</b>", unsafe_allow_html=True)
-        itens_desc = str(row_dict.get('Equipamento', '')).replace("|", "\n- ").replace(" | ", "\n- ")
-        if not itens_desc or itens_desc == "nan": itens_desc = str(row_dict.get('Descrição', '-'))
+        
+        # Lógica de visualização prioritária
+        equip_nome = str(row_dict.get('Equipamento', ''))
+        equip_qtd = str(row_dict.get('Qtd.', '')).replace('.0', '') # Remove decimal se houver
+        desc_bd = str(row_dict.get('Descrição', ''))
+        
+        itens_desc = "-"
+        
+        # 1. Tenta montar na hora se tiver os dados separados
+        if equip_nome and equip_nome.lower() not in ['nan', 'none', '', 'None']:
+            if equip_qtd and equip_qtd.lower() not in ['nan', 'none', '']:
+                itens_desc = f"{equip_qtd} - {equip_nome}"
+            else:
+                itens_desc = equip_nome
+        # 2. Se não, usa o que foi salvo no campo descrição do banco (que o importador já formatou)
+        elif desc_bd and desc_bd.lower() not in ['nan', 'none', '', 'None']:
+             itens_desc = desc_bd
+             
+        # Formatação visual
+        itens_desc = itens_desc.replace("|", "\n- ").replace(" | ", "\n- ")
         st.info(itens_desc)
 
         # --- LINHA 3: CAMPOS ESPECÍFICOS ---
@@ -779,7 +797,7 @@ with st.sidebar:
                 # 2. DEFINIÇÃO DA ORDEM DAS COLUNAS (Conforme sua imagem)
                 colunas_ordenadas = [
                     'ID_PROJETO',
-                    'Abertura',          # Data_Abertura
+                    'Abertura',         
                     'Status',
                     'Cód. Agência',
                     'Nome Agência',
@@ -788,12 +806,12 @@ with st.sidebar:
                     'Projeto',
                     'Sistema',
                     'Serviço',
-                    'Cód. Equip.',       # Se existir
-                    'Equipamento',       # Se existir
-                    'Qtd.',              # Se existir
+                    'Cód. Equip.',    
+                    'Equipamento',     
+                    'Qtd.',            
                     'Agendamento',
-                    'Reagendamento',     # Obs: Verifique se essa coluna existe no seu DF original, senão remover
-                    'Fechamento',        # Conclusão
+                    'Reagendamento',     
+                    'Fechamento',        
                     'Gestor',
                     'Analista',
                     'Técnico',
@@ -964,7 +982,7 @@ if escolha_visao == "Visão Geral (Cockpit)":
             )
 
 # --- VISÃO 2: OPERACIONAL ---
-# --- VISÃO 2: OPERACIONAL ---
+
 else:
     with st.container():
         st.markdown('<div class="filter-container">', unsafe_allow_html=True)
@@ -1266,20 +1284,3 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
