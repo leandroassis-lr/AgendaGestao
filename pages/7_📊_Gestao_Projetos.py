@@ -982,44 +982,38 @@ if escolha_visao == "Visão Geral (Cockpit)":
             )
 
 # --- VISÃO 2: OPERACIONAL ---
-
 else:
+    st.title("🔧 Detalhes do Projeto")
+
     with st.container():
         st.markdown('<div class="filter-container">', unsafe_allow_html=True)
         
-        # Linha Superior: Título e Data
-        c_tit, c_date = st.columns([4, 1.5])
-        with c_tit: st.markdown("### 🔍 Filtros & Pesquisa")
-        with c_date: 
-            df_filtrado['Agendamento'] = pd.to_datetime(df_filtrado['Agendamento'], errors='coerce')
-            d_min = df_filtrado['Agendamento'].min() if not pd.isna(df_filtrado['Agendamento'].min()) else date.today()
-            d_max = df_filtrado['Agendamento'].max() if not pd.isna(df_filtrado['Agendamento'].max()) else date.today()
-            filtro_data_range = st.date_input("Período", value=(d_min, d_max), format="DD/MM/YYYY", label_visibility="collapsed")
+        # --- LÓGICA DE RECEBIMENTO DO FILTRO (AQUI É O SEGREDO) ---
+        padrao_projetos = []
+        
+        # Verifica se veio algum projeto selecionado lá do Cockpit
+        if "sel_projeto" in st.session_state:
+            proj_vindo_do_cockpit = st.session_state["sel_projeto"]
+            
+            # Verifica se o projeto realmente existe na lista atual para evitar erros
+            if proj_vindo_do_cockpit in df_filtrado['Projeto'].unique():
+                padrao_projetos = [proj_vindo_do_cockpit]
+            
+            # (Opcional) Limpa a seleção para não travar a navegação futura
+            del st.session_state["sel_projeto"]
 
-        # --- PREPARAÇÃO DOS DADOS PARA FILTROS ---
-        # 1. Lista de Agências (Código - Nome)
+        # --- PREPARAÇÃO DAS LISTAS ---
+        # Lista de Agências
         df_filtrado['_filtro_agencia'] = df_filtrado['Cód. Agência'].astype(str) + " - " + df_filtrado['Nome Agência'].astype(str)
         opcoes_agencia = sorted(df_filtrado['_filtro_agencia'].dropna().unique().tolist())
         
-        # 2. Lista de Projetos (Carrega do banco ou do DF)
-        try:
-            df_proj_cfg = utils.carregar_config_db("projetos_nomes")
-            opcoes_projeto_db = df_proj_cfg.iloc[:, 0].tolist() if not df_proj_cfg.empty else []
-        except: opcoes_projeto_db = []
-        if not opcoes_projeto_db: opcoes_projeto_db = sorted(df_filtrado['Projeto'].dropna().unique().tolist())
+        # Lista de Projetos
+        opcoes_projeto = sorted(df_filtrado['Projeto'].dropna().unique().tolist())
         
-        # Lógica para pré-selecionar projeto vindo do Cockpit
-        padrao_projetos = []
-        if "sel_projeto" in st.session_state:
-            proj_sel = st.session_state["sel_projeto"]
-            if proj_sel in opcoes_projeto_db: padrao_projetos = [proj_sel]
-            st.session_state.pop("sel_projeto", None)
-
-        # 3. Lista de Ações (Sub-Status) - Substituindo o Status Macro
-        # Normaliza valores nulos para evitar erro
+        # Lista de Ações (Sub-Status)
         opcoes_acao = sorted([str(x) for x in df_filtrado['Sub-Status'].dropna().unique().tolist() if str(x).strip() != ''])
 
-        # --- LAYOUT DOS INPUTS (4 Colunas) ---
+        # --- CAMPOS DE FILTRO ---
         c1, c2, c3, c4 = st.columns([1.5, 1.5, 1.5, 1.5])
         
         with c1:
@@ -1029,13 +1023,14 @@ else:
             filtro_agencia_multi = st.multiselect("Agências", options=opcoes_agencia, placeholder="Filtrar Agência", label_visibility="collapsed")
             
         with c3:
-            filtro_projeto_multi = st.multiselect("Projetos", options=opcoes_projeto_db, default=padrao_projetos, placeholder="Filtrar Projeto", label_visibility="collapsed")
+            # AQUI APLICAMOS O PADRÃO (default=padrao_projetos)
+            filtro_projeto_multi = st.multiselect("Projetos", options=opcoes_projeto, default=padrao_projetos, placeholder="Filtrar Projeto", label_visibility="collapsed")
         
         with c4:
-            filtro_acao_multi = st.multiselect("Ação / Etapa", options=opcoes_acao, default=[], placeholder="Filtrar Ação/Status", label_visibility="collapsed")
+            filtro_acao_multi = st.multiselect("Ação / Etapa", options=opcoes_acao, placeholder="Filtrar Ação/Status", label_visibility="collapsed")
 
         st.markdown('</div>', unsafe_allow_html=True)
-
+        
     # --- APLICAÇÃO DOS FILTROS ---
     df_view = df_filtrado.copy()
     
@@ -1284,4 +1279,5 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
