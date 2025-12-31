@@ -7,6 +7,7 @@ import psycopg2
 from psycopg2 import sql
 import numpy as np 
 import sqlite3 # Mantido caso use em outro lugar, mas o foco aqui é Postgres
+import unicodedata
 
 # --- 1. GERENCIAMENTO DE CONEXÃO ROBUSTO (POSTGRESQL) ---
 
@@ -189,55 +190,70 @@ def carregar_chamados_db(agencia_id_filtro=None):
         st.error(f"Erro ao ler banco (tente recarregar a página): {e}")
         return pd.DataFrame()
 
+# Função auxiliar para limpar texto (remover acentos e espaços)
+def normalizar_texto(texto):
+    if not isinstance(texto, str): return str(texto)
+    # Remove acentos e joga pra maiúsculo (ex: "Cód. Agência" -> "COD. AGENCIA")
+    return ''.join(c for c in unicodedata.normalize('NFD', texto) if unicodedata.category(c) != 'Mn').upper().strip()
+
 # --- 4. FUNÇÃO PARA IMPORTAR CHAMADOS ---
-
-# --- 4. FUNÇÃO PARA IMPORTAR CHAMADOS (AJUSTADA PARA CÓDIGO/DESCRIÇÃO/QTD) ---
-
 def bulk_insert_chamados_db(df: pd.DataFrame):
     """
-    Recebe um DataFrame tratado pelo importador e salva no Banco PostgreSQL.
-    Lê colunas: 'código', 'DESCRIÇÃO EQUIPAMENTO', 'QTD'.
-    Gera descrição automática no formato: '1 - CAMERA XPTO'.
+    Recebe um DataFrame, normaliza cabeçalhos e salva no Banco.
+    Formata Descrição como: 'QTD - EQUIPAMENTO'.
     """
     conn = get_valid_conn()
-    if not conn:
-        return False, 0
+    if not conn: return False, 0
 
-    # 1. MAPEAMENTO DE IMPORTAÇÃO (Excel -> Banco Postgres)
-    # Adicionei as chaves exatas que você pediu
+    # 1. NORMALIZAÇÃO DE CABEÇALHOS DO EXCEL
+    # Converte tudo para MAIÚSCULO e SEM ACENTO para facilitar o mapeamento
+    # Ex: "Código" vira "CODIGO", "Descrição Equipamento" vira "DESCRICAO EQUIPAMENTO"
+    df.columns = [normalizar_texto(c) for c in df.columns]
+
+    # 2. MAPEAMENTO (Excel Normalizado -> Banco Postgres)
+    # Note que as chaves aqui estão em MAIÚSCULO e SEM ACENTOS
     MAP_IMPORT = {
-        "Nº Chamado": "chamado_id",
-        "Cód. Agência": "agencia_id",
-        "Nome Agência": "agencia_nome",
-        "Analista": "analista",
-        "Gestor": "gestor",
-        "Serviço": "servico",
-        "Projeto": "projeto_nome",
-        "Agendamento": "data_agendamento",
-        "Sistema": "sistema",
-        "Status": "status_chamado",
-        "Observações e Pendencias": "observacao_pendencias",
-        "Abertura": "data_abertura",
-        "Prazo": "prazo",
-        "Descrição": "descricao_projeto",
+        "Nº CHAMADO": "chamado_id",
+        "N. CHAMADO": "chamado_id", # Variação comum
         
-        # --- COLUNAS NOVAS ---
-        "código": "cod_equipamento",             # Vai pro banco, não aparece no pop-up
-        "DESCRIÇÃO EQUIPAMENTO": "nome_equipamento", 
-        "QTD": "quantidade"
+        "COD. AGENCIA": "agencia_id",
+        "CODIGO AGENCIA": "agencia_id",
+        
+        "NOME AGENCIA": "agencia_nome",
+        "AGENCIA": "agencia_nome",
+        
+        "ANALISTA": "analista",
+        "GESTOR": "gestor",
+        "SERVICO": "servico",
+        "PROJETO": "projeto_nome",
+        "AGENDAMENTO": "data_agendamento",
+        "DATA AGENDAMENTO": "data_agendamento",
+        
+        "SISTEMA": "sistema",
+        "STATUS": "status_chamado",
+        "OBSERVACOES E PENDENCIAS": "observacao_pendencias",
+        "ABERTURA": "data_abertura",
+        "DATA ABERTURA": "data_abertura",
+        "PRAZO": "prazo",
+        
+        # --- COLUNAS DO SEU TEMPLATE ---
+        "CODIGO": "cod_equipamento",           # Coluna 'código' do CSV
+        "DESCRICAO EQUIPAMENTO": "nome_equipamento", # Coluna 'DESCRIÇÃO EQUIPAMENTO'
+        "QTD": "quantidade",                   # Coluna 'QTD'
+        "QTD.": "quantidade"
     }
 
     df_to_insert = df.copy()
     
-    # Filtra o mapa para usar apenas colunas que existem no DF
+    # Renomeia usando o mapa
     mapa_valido = {k: v for k, v in MAP_IMPORT.items() if k in df_to_insert.columns}
     df_to_insert = df_to_insert.rename(columns=mapa_valido)
 
     if 'chamado_id' not in df_to_insert.columns:
-        st.error("Erro interno: Coluna 'Nº Chamado' se perdeu no mapeamento.")
+        st.error(f"Erro: Coluna 'Nº Chamado' não encontrada. Colunas lidas: {list(df.columns)}")
         return False, 0
 
-    # --- REGRA 1: DATA DE ABERTURA AUTOMÁTICA ---
+    # --- REGRA 1: DATA DE ABERTURA ---
     if 'data_abertura' not in df_to_insert.columns:
         df_to_insert['data_abertura'] = date.today()
     else:
@@ -245,47 +261,54 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         df_to_insert['data_abertura'] = df_to_insert['data_abertura'].fillna(date.today())
 
     # --- REGRA 2: DESCRIÇÃO FORMATADA (QTD - EQUIPAMENTO) ---
-    # Verifica se as colunas renomeadas existem
-    if 'quantidade' in df_to_insert.columns and 'nome_equipamento' in df_to_insert.columns:
+    # Agora procuramos pelas colunas já renomeadas ('quantidade' e 'nome_equipamento')
+    
+    # Garante que as colunas existem antes de tentar usar
+    if 'quantidade' not in df_to_insert.columns: df_to_insert['quantidade'] = None
+    if 'nome_equipamento' not in df_to_insert.columns: df_to_insert['nome_equipamento'] = None
+
+    def gerar_descricao_formatada(row):
+        equip = str(row['nome_equipamento'])
+        qtd = str(row['quantidade'])
         
-        def gerar_descricao_formatada(row):
-            equip = str(row.get('nome_equipamento', ''))
-            qtd = str(row.get('quantidade', ''))
-            
-            # Limpa '.0' se vier do Excel (ex: '1.0' vira '1')
-            if qtd.endswith('.0'): qtd = qtd[:-2]
-            
-            # Se tiver equipamento válido
-            if equip and equip.lower() not in ['nan', 'none', '', '0']:
-                if qtd and qtd.lower() not in ['nan', 'none', '']:
-                    # FORMATO DESEJADO: "1 - CÂMERA"
-                    return f"{qtd} - {equip}"
-                return equip
-            
-            # Fallback: Mantém descrição original se não tiver equipamento
-            desc_orig = row.get('descricao_projeto', '')
-            return desc_orig if pd.notna(desc_orig) else None
+        # Limpa valores nulos/estranhos
+        if equip.lower() in ['nan', 'none', '', 'nat']: equip = ""
+        if qtd.lower() in ['nan', 'none', '', 'nat']: qtd = ""
+        
+        # Limpa decimal do Excel (ex: '1.0' vira '1')
+        if qtd.endswith('.0'): qtd = qtd[:-2]
+        
+        # LÓGICA DE MONTAGEM
+        if equip:
+            if qtd and qtd != '0':
+                return f"{qtd} - {equip}" # Retorna "1 - CAMERA"
+            return equip # Retorna só "CAMERA" se qtd for vazia
+        
+        # Se não tiver equipamento na linha, retorna vazio ou descrição genérica
+        return row.get('descricao_projeto', '')
 
-        df_to_insert['descricao_projeto'] = df_to_insert.apply(gerar_descricao_formatada, axis=1)
+    df_to_insert['descricao_projeto'] = df_to_insert.apply(gerar_descricao_formatada, axis=1)
 
-    # --- TRATA OUTRAS DATAS ---
-    cols_data_banco = ['data_fechamento', 'data_agendamento']
-    for col in cols_data_banco:
+    # --- TRATAMENTO DE OUTROS CAMPOS ---
+    cols_data = ['data_fechamento', 'data_agendamento']
+    for col in cols_data:
         if col in df_to_insert.columns:
             df_to_insert[col] = pd.to_datetime(df_to_insert[col], errors='coerce').dt.date
             df_to_insert[col] = df_to_insert[col].where(pd.notnull(df_to_insert[col]), None)
 
-    # Prepara inserção
+    # Prepara inserção final
     colunas_finais = [c for c in df_to_insert.columns if c in colunas_necessarias.keys() or c == 'chamado_id']
     df_final = df_to_insert[colunas_finais]
 
-    # Monta SQL e Executa
+    # Query SQL
     cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns))
     placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
+    
     update_clause = sql.SQL(", ").join(
         sql.SQL("{} = EXCLUDED.{}").format(sql.Identifier(col), sql.Identifier(col))
         for col in df_final.columns if col != 'chamado_id'
     )
+
     query = sql.SQL(
         "INSERT INTO chamados ({}) VALUES ({}) "
         "ON CONFLICT (chamado_id) DO UPDATE SET {}"
@@ -303,7 +326,7 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         conn.rollback()
         st.error(f"Erro ao salvar no banco: {e}")
         return False, 0
-
+        
 # --- 5. FUNÇÃO PARA ATUALIZAR CHAMADO ---
 
 def atualizar_chamado_db(chamado_id_interno, updates: dict):
@@ -494,4 +517,5 @@ def recriar_banco_do_zero():
 # Mantido para compatibilidade, caso chame a função antiga
 def resetar_tabela_chamados():
     return recriar_banco_do_zero()
+
 
