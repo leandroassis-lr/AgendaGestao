@@ -45,33 +45,54 @@ def get_valid_conn():
         conn = _get_cached_connection() # Tenta criar nova
         
     return conn
-
-# --- VARIÁVEL GLOBAL DE COLUNAS ---
-# --- VARIÁVEL GLOBAL DE COLUNAS ---
-colunas_necessarias = {
-    'agencia_id': 'TEXT', 'agencia_nome': 'TEXT', 'agencia_uf': 'TEXT',
-    'servico': 'TEXT', 'projeto_nome': 'TEXT', 'data_agendamento': 'DATE',
-    'sistema': 'TEXT', 'cod_equipamento': 'TEXT', 'nome_equipamento': 'TEXT',
-    'quantidade': 'INTEGER', 'gestor': 'TEXT', 
-    'data_abertura': 'DATE', 'data_fechamento': 'DATE', 'data_faturamento': 'DATE',
-    'status_chamado': 'TEXT', 'valor_chamado': 'NUMERIC(10, 2) DEFAULT 0.00',
-    'status_financeiro': "TEXT DEFAULT 'Pendente'",
-    'observacao': 'TEXT', 
-    'log_chamado': 'TEXT',
-    'analista': 'TEXT',
-    'tecnico': 'TEXT',
-    'prioridade': "TEXT DEFAULT 'Média'",
-    'link_externo': 'TEXT',
-    'protocolo': 'TEXT',
-    'numero_pedido': 'TEXT',
-    'data_envio': 'DATE',
-    'observacao_equipamento': 'TEXT',
-    'prazo': 'TEXT',
-    'descricao_projeto': 'TEXT', 
-    'observacao_pendencias': 'TEXT',
-    'sub_status': 'TEXT',
     
-    # --- NOVAS COLUNAS (CHECKBOXES) ---
+# --- 1. DEFINIÇÃO DAS COLUNAS ---
+colunas_necessarias = {
+    # ID e Identificadores
+    'id_projeto': 'INTEGER',             
+    'chamado_id': 'TEXT UNIQUE',         
+    'agencia_id': 'TEXT',                
+    'agencia_nome': 'TEXT',              
+    'agencia_uf': 'TEXT',                
+    
+    # Projeto e Serviço
+    'projeto_nome': 'TEXT',              
+    'sistema': 'TEXT',                   
+    'servico': 'TEXT',                   
+    'status_chamado': 'TEXT',            
+    'sub_status': 'TEXT',                
+    
+    # Equipamento
+    'cod_equipamento': 'TEXT',           
+    'nome_equipamento': 'TEXT',          
+    'quantidade': 'INTEGER',             
+    'observacao_equipamento': 'TEXT',    
+    
+    # Datas
+    'data_abertura': 'DATE',             
+    'data_agendamento': 'DATE',          
+    'data_reagendamento': 'DATE',        
+    'data_fechamento': 'DATE',           
+    'data_envio': 'DATE',                
+    'prazo': 'TEXT',                     
+    
+    # Pessoas
+    'gestor': 'TEXT',                    
+    'analista': 'TEXT',                  
+    'tecnico': 'TEXT',                   
+    
+    # Detalhes
+    'observacao': 'TEXT',                
+    'log_chamado': 'TEXT',               
+    'descricao_projeto': 'TEXT',         
+    'observacao_pendencias': 'TEXT',     
+    
+    # Links e Protocolos
+    'link_externo': 'TEXT',              
+    'protocolo': 'TEXT',                 
+    'numero_pedido': 'TEXT',             
+    
+    # Checkboxes Operacionais
     'chk_cancelado': "TEXT DEFAULT 'FALSE'",
     'chk_pendencia_equipamento': "TEXT DEFAULT 'FALSE'",
     'chk_pendencia_infra': "TEXT DEFAULT 'FALSE'",
@@ -164,7 +185,7 @@ def carregar_chamados_db(agencia_id_filtro=None):
         st.error(f"Erro ao ler banco (tente recarregar a página): {e}")
         return pd.DataFrame()
 
-# --- 4. FUNÇÃO PARA IMPORTAR CHAMADOS (CORRIGIDA) ---
+# --- 4. FUNÇÃO PARA IMPORTAR CHAMADOS ---
 
 def bulk_insert_chamados_db(df: pd.DataFrame):
     """
@@ -283,25 +304,45 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
 
             # 2. Mapeamento EXATO (Chave do Form -> Coluna do Banco)
             mapa_exato = {
-                # Datas
-                'data finalização': 'data_fechamento', 'finalização': 'data_fechamento', 'fechamento': 'data_fechamento',
-                'data abertura': 'data_abertura', 'abertura': 'data_abertura',
-                'data agendamento': 'data_agendamento', 'agendamento': 'data_agendamento',
-                'data envio': 'data_envio',
+                # Mapeamento Campo da Tela -> Coluna do Banco
+                'id_projeto': 'id_projeto',
+                'nº chamado': 'chamado_id',
+                'cód. agência': 'agencia_id',
+                'nome agência': 'agencia_nome',
+                'uf': 'agencia_uf',
                 
-                # Campos Texto
-                'status': 'status_chamado', 'sub-status': 'sub_status',
-                'sistema': 'sistema', 'serviço': 'servico',
-                'analista': 'analista', 'técnico': 'tecnico',
-                'agência': 'agencia_id', 'projeto': 'projeto_nome',
-                'gestor': 'gestor', 'prazo': 'prazo',
-                'link externo': 'link_externo', 'nº protocolo': 'protocolo',
-                'nº pedido': 'numero_pedido',
+                'status': 'status_chamado',
+                'sub-status': 'sub_status',
+                'projeto': 'projeto_nome',
+                'sistema': 'sistema',
+                'serviço': 'servico',
+                
+                'cód. equip.': 'cod_equipamento',
+                'equipamento': 'nome_equipamento',
+                'qtd.': 'quantidade',
                 'obs. equipamento': 'observacao_equipamento',
-                'observações e pendencias': 'observacao_pendencias',
+                
+                'abertura': 'data_abertura', 'data abertura': 'data_abertura',
+                'agendamento': 'data_agendamento', 'data agendamento': 'data_agendamento',
+                'reagendamento': 'data_reagendamento', 'data reagendamento': 'data_reagendamento',
+                'conclusão': 'data_fechamento', 'fechamento': 'data_fechamento', 'finalização': 'data_fechamento', 'data finalização': 'data_fechamento',
+                'data envio': 'data_envio',
+                'prazo': 'prazo',
+                
+                'gestor': 'gestor',
+                'analista': 'analista',
+                'técnico': 'tecnico',
+                
+                'observação': 'observacao',
+                'log do chamado': 'log_chamado',
                 'descrição': 'descricao_projeto',
-
-                # --- NOVOS CHECKBOXES ---
+                'observações e pendencias': 'observacao_pendencias',
+                
+                'link externo': 'link_externo',
+                'nº protocolo': 'protocolo',
+                'nº pedido': 'numero_pedido',
+                
+                # Checkboxes
                 'chk_cancelado': 'chk_cancelado',
                 'chk_pendencia_equipamento': 'chk_pendencia_equipamento',
                 'chk_pendencia_infra': 'chk_pendencia_infra',
@@ -309,7 +350,10 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
                 'chk_envio_parcial': 'chk_envio_parcial',
                 'chk_equipamento_entregue': 'chk_equipamento_entregue',
                 'chk_status_enviado': 'chk_status_enviado',
+                
+                # Financeiro (Mantido)
                 'chk_financeiro_banco': 'chk_financeiro_banco',
+                'book_enviado': 'book_enviado',
                 'book enviado': 'book_enviado'
             }
             
@@ -400,4 +444,3 @@ def resetar_tabela_chamados():
     except Exception as e:
         conn.rollback()
         return False, f"Erro ao limpar banco: {e}"
-
