@@ -191,15 +191,20 @@ def carregar_chamados_db(agencia_id_filtro=None):
 
 # --- 4. FUNÇÃO PARA IMPORTAR CHAMADOS ---
 
+# --- 4. FUNÇÃO PARA IMPORTAR CHAMADOS (AJUSTADA PARA CÓDIGO/DESCRIÇÃO/QTD) ---
+
 def bulk_insert_chamados_db(df: pd.DataFrame):
     """
     Recebe um DataFrame tratado pelo importador e salva no Banco PostgreSQL.
+    Lê colunas: 'código', 'DESCRIÇÃO EQUIPAMENTO', 'QTD'.
+    Gera descrição automática no formato: '1 - CAMERA XPTO'.
     """
     conn = get_valid_conn()
     if not conn:
         return False, 0
 
-    # MAPEAMENTO DE IMPORTAÇÃO (Excel -> Banco Postgres)
+    # 1. MAPEAMENTO DE IMPORTAÇÃO (Excel -> Banco Postgres)
+    # Adicionei as chaves exatas que você pediu
     MAP_IMPORT = {
         "Nº Chamado": "chamado_id",
         "Cód. Agência": "agencia_id",
@@ -210,11 +215,16 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         "Projeto": "projeto_nome",
         "Agendamento": "data_agendamento",
         "Sistema": "sistema",
-        "Qtd": "quantidade",
         "Status": "status_chamado",
         "Observações e Pendencias": "observacao_pendencias",
         "Abertura": "data_abertura",
-        "Prazo": "prazo"
+        "Prazo": "prazo",
+        "Descrição": "descricao_projeto",
+        
+        # --- COLUNAS NOVAS ---
+        "código": "cod_equipamento",             # Vai pro banco, não aparece no pop-up
+        "DESCRIÇÃO EQUIPAMENTO": "nome_equipamento", 
+        "QTD": "quantidade"
     }
 
     df_to_insert = df.copy()
@@ -227,23 +237,55 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
         st.error("Erro interno: Coluna 'Nº Chamado' se perdeu no mapeamento.")
         return False, 0
 
-    cols_data_banco = ['data_abertura', 'data_fechamento', 'data_agendamento']
+    # --- REGRA 1: DATA DE ABERTURA AUTOMÁTICA ---
+    if 'data_abertura' not in df_to_insert.columns:
+        df_to_insert['data_abertura'] = date.today()
+    else:
+        df_to_insert['data_abertura'] = pd.to_datetime(df_to_insert['data_abertura'], errors='coerce').dt.date
+        df_to_insert['data_abertura'] = df_to_insert['data_abertura'].fillna(date.today())
+
+    # --- REGRA 2: DESCRIÇÃO FORMATADA (QTD - EQUIPAMENTO) ---
+    # Verifica se as colunas renomeadas existem
+    if 'quantidade' in df_to_insert.columns and 'nome_equipamento' in df_to_insert.columns:
+        
+        def gerar_descricao_formatada(row):
+            equip = str(row.get('nome_equipamento', ''))
+            qtd = str(row.get('quantidade', ''))
+            
+            # Limpa '.0' se vier do Excel (ex: '1.0' vira '1')
+            if qtd.endswith('.0'): qtd = qtd[:-2]
+            
+            # Se tiver equipamento válido
+            if equip and equip.lower() not in ['nan', 'none', '', '0']:
+                if qtd and qtd.lower() not in ['nan', 'none', '']:
+                    # FORMATO DESEJADO: "1 - CÂMERA"
+                    return f"{qtd} - {equip}"
+                return equip
+            
+            # Fallback: Mantém descrição original se não tiver equipamento
+            desc_orig = row.get('descricao_projeto', '')
+            return desc_orig if pd.notna(desc_orig) else None
+
+        df_to_insert['descricao_projeto'] = df_to_insert.apply(gerar_descricao_formatada, axis=1)
+
+    # --- TRATA OUTRAS DATAS ---
+    cols_data_banco = ['data_fechamento', 'data_agendamento']
     for col in cols_data_banco:
         if col in df_to_insert.columns:
             df_to_insert[col] = pd.to_datetime(df_to_insert[col], errors='coerce').dt.date
             df_to_insert[col] = df_to_insert[col].where(pd.notnull(df_to_insert[col]), None)
 
+    # Prepara inserção
     colunas_finais = [c for c in df_to_insert.columns if c in colunas_necessarias.keys() or c == 'chamado_id']
     df_final = df_to_insert[colunas_finais]
 
+    # Monta SQL e Executa
     cols_sql = sql.SQL(", ").join(map(sql.Identifier, df_final.columns))
     placeholders = sql.SQL(", ").join([sql.Placeholder()] * len(df_final.columns))
-
     update_clause = sql.SQL(", ").join(
         sql.SQL("{} = EXCLUDED.{}").format(sql.Identifier(col), sql.Identifier(col))
         for col in df_final.columns if col != 'chamado_id'
     )
-
     query = sql.SQL(
         "INSERT INTO chamados ({}) VALUES ({}) "
         "ON CONFLICT (chamado_id) DO UPDATE SET {}"
@@ -251,10 +293,8 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
 
     try:
         values = [tuple(x if pd.notna(x) else None for x in row) for row in df_final.values]
-        
         with conn.cursor() as cur:
             cur.executemany(query, values)
-        
         conn.commit()
         st.cache_data.clear()
         return True, len(values)
@@ -454,3 +494,4 @@ def recriar_banco_do_zero():
 # Mantido para compatibilidade, caso chame a função antiga
 def resetar_tabela_chamados():
     return recriar_banco_do_zero()
+
