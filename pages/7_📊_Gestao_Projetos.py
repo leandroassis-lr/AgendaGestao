@@ -141,15 +141,28 @@ def open_chamado_dialog(row_dict):
 
         # --- LINHA 3: CAMPOS ESPECÍFICOS ---
         st.markdown("<br>", unsafe_allow_html=True)
+        
+        # Inicializa variáveis padrão
         nova_data_envio = dt_envio
         novo_link = row_dict.get('Link Externo', '')
         novo_protocolo = row_dict.get('Nº Protocolo', '')
+        novo_pedido = row_dict.get('Nº Pedido', '') # Variável para guardar o pedido
 
         if is_equip:
-            l3_c1, l3_c2 = st.columns(2)
+            # === MUDANÇA AQUI: Layout de 3 colunas para Equipamento ===
+            l3_c1, l3_c2, l3_c3 = st.columns([2, 1.5, 1.5])
+            
+            # Coluna 1: Ref Btime
             novo_link = l3_c1.text_input("🔢 Nº Chamado Btime (Ref)", value=row_dict.get('Link Externo', ''))
-            nova_data_envio = l3_c2.date_input("🚚 Data de Envio", value=dt_envio, format="DD/MM/YYYY")
+            
+            # Coluna 2: Pedido (CAMPO NOVO QUE FALTAVA)
+            novo_pedido = l3_c2.text_input("📦 Nº Pedido", value=row_dict.get('Nº Pedido', ''))
+            
+            # Coluna 3: Data Envio
+            nova_data_envio = l3_c3.date_input("🚚 Data de Envio", value=dt_envio, format="DD/MM/YYYY")
+            
         else:
+            # Layout Serviço (Padrão)
             l3_c1, l3_c2, l3_c3 = st.columns([3, 1.5, 1.5])
             novo_link = l3_c1.text_input("🔗 Link Externo", value=row_dict.get('Link Externo', ''))
             novo_protocolo = l3_c2.text_input("🔢 Protocolo", value=row_dict.get('Nº Protocolo', ''))
@@ -217,8 +230,12 @@ def open_chamado_dialog(row_dict):
                     "Gestor": novo_gestor,
                     "Observações e Pendencias": nova_obs,
                     "Link Externo": novo_link, 
-                    "Data Envio": nova_data_envio, 
+                    "Data Envio": nova_data_envio,
+                    
+                    # Salva corretamente baseado no tipo
                     "Nº Protocolo": novo_protocolo, 
+                    "Nº Pedido": novo_pedido, # <--- IMPORTANTE: Adicionado ao Update
+                    
                     "chk_pendencia_equipamento": "TRUE" if new_pend_eq else "FALSE",
                     "chk_pendencia_infra": "TRUE" if new_pend_infra else "FALSE",
                     "chk_alteracao_chamado": "TRUE" if new_alteracao else "FALSE",
@@ -254,9 +271,8 @@ def open_chamado_dialog(row_dict):
                     ids_grupo = grupo_projeto['ID'].tolist()
                     calcular_e_atualizar_status_projeto(grupo_projeto, ids_grupo)
 
-                # --- MUDANÇA AQUI: Trocamos o st.success + sleep pelo st.toast + rerun imediato
                 st.toast("✅ Salvo e Atualizado com Sucesso!", icon="💾")
-                st.rerun()        
+                st.rerun()    
                 
 # --- LÓGICA DE STATUS: CHAMADO E PROJETO ---
 def calcular_e_atualizar_status_projeto(df_projeto, ids_para_atualizar):
@@ -1150,6 +1166,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
