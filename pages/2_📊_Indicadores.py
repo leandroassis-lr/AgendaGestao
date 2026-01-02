@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
-import utils # Importa nosso arquivo de utilidades
-from datetime import date, timedelta, datetime # <--- CORREÇÃO AQUI
+import utils  # Importa arquivo de utilidades (CSS)
+import utils_chamados # <--- IMPORTANTE: Conexão com a Pag 7
+from datetime import date, timedelta, datetime
 
 # Dependência opcional
 try:
@@ -13,9 +14,10 @@ st.set_page_config(page_title="Indicadores - GESTÃO", page_icon="📊", layout=
 utils.load_css()
 
 def tela_dashboard():
-    st.markdown("<div class='section-title-center'>INDICADORES</div>", unsafe_allow_html=True)
-    df_original = utils.carregar_projetos_db()
-    df_sla_config = utils.carregar_config_db("sla")
+    st.markdown("<div class='section-title-center'>DASHBOARD DE INDICADORES</div>", unsafe_allow_html=True)
+    
+    # 1. CARREGA DA MESMA FONTE DA PAG 7
+    df_original = utils_chamados.carregar_chamados_db()
 
     if df_original.empty:
         st.info("Nenhum projeto cadastrado para exibir o dashboard.")
@@ -26,14 +28,17 @@ def tela_dashboard():
         st.code("pip install plotly")
         return
 
-    # --- CORREÇÃO CENTRAL: Padronizar colunas de data ---
-    # Converte colunas para datetime, tratando erros e valores nulos (gerando NaT)
+    # 2. PADRONIZAÇÃO DE COLUNAS (Nomes usados na Pag 7)
+    # A Pag 7 usa: 'Agendamento', 'Fechamento', 'Abertura', 'Status'
     df_original['Agendamento'] = pd.to_datetime(df_original['Agendamento'], errors='coerce')
-    df_original['Data de Finalização'] = pd.to_datetime(df_original['Data de Finalização'], errors='coerce')
-    df_original['Data de Abertura'] = pd.to_datetime(df_original['Data de Abertura'], errors='coerce')
+    df_original['Fechamento'] = pd.to_datetime(df_original['Fechamento'], errors='coerce')
+    df_original['Abertura'] = pd.to_datetime(df_original['Abertura'], errors='coerce')
+    
+    # Lista de status considerados "Finalizados" (Igual à Pag 7)
+    status_fim = ['concluído', 'finalizado', 'faturado', 'fechado', 'equipamento entregue']
     
     # --- FILTRO DE DATA (POR DATA DE AGENDAMENTO) ---
-    st.markdown("#### Filtro de Período (por Data de Agendamento)")
+    st.markdown("#### 📅 Filtro de Período")
     col_data1, col_data2 = st.columns(2)
     
     df_com_agendamento = df_original.dropna(subset=['Agendamento'])
@@ -41,17 +46,16 @@ def tela_dashboard():
     if df_com_agendamento.empty:
         st.warning("Nenhum projeto com data de agendamento para filtrar.")
         df_filtrado = df_original.copy()
-        # Define um período padrão caso não haja datas
         data_inicio = date.today() - timedelta(days=30)
         data_fim = date.today()
     else:
         data_min_geral = df_com_agendamento['Agendamento'].min().date()
-        data_max_geral = date.today()
+        data_max_geral = date.today() + timedelta(days=30) # Permite ver futuro
         
         with col_data1:
-            data_inicio = st.date_input("De", value=data_min_geral, min_value=data_min_geral, max_value=data_max_geral, format="DD/MM/YYYY")
+            data_inicio = st.date_input("De", value=date.today().replace(day=1), format="DD/MM/YYYY")
         with col_data2:
-            data_fim = st.date_input("Até", value=data_max_geral, min_value=data_min_geral, max_value=data_max_geral, format="DD/MM/YYYY")
+            data_fim = st.date_input("Até", value=date.today(), format="DD/MM/YYYY")
 
         # Filtra usando as datas padronizadas
         df_filtrado = df_original[
@@ -61,19 +65,27 @@ def tela_dashboard():
     
     # --- MÉTRICAS PRINCIPAIS ---
     total_projetos_periodo = len(df_filtrado)
-    finalizados_periodo = len(df_filtrado[df_filtrado["Status"].str.contains("Finalizada|Finalizado", na=False, case=False)])
+    
+    # Lógica de contagem baseada na lista oficial de status
+    finalizados_periodo = len(df_filtrado[df_filtrado["Status"].str.lower().isin(status_fim)])
+    
+    # Pendência e Pausado (Busca texto parcial)
     pendencia_periodo = len(df_filtrado[df_filtrado["Status"].str.contains("Pendencia|Pendência", na=False, case=False)])
-    pausados_periodo = len(df_filtrado[df_filtrado["Status"].str.contains("Pausada|Pausado", na=False, case=False)])
+    pausados_periodo = len(df_filtrado[df_filtrado["Status"].str.contains("Pausada|Pausado|Cancelado", na=False, case=False)])
 
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric(label="Projetos no Período", value=total_projetos_periodo)
-    col2.metric(label="Finalizados no Período", value=finalizados_periodo)
+    col1.metric(label="Total no Período", value=total_projetos_periodo)
+    col2.metric(label="Finalizados / Faturados", value=finalizados_periodo)
     col3.metric(label="Com Pendência", value=pendencia_periodo)
-    col4.metric(label="Pausados", value=pausados_periodo)
+    col4.metric(label="Pausados / Cancelados", value=pausados_periodo)
 
     st.divider()
     
-    df_ativos = df_filtrado[~df_filtrado["Status"].str.contains("Finalizada|Cancelada|Finalizado|Cancelado", na=False, case=False)].copy()
+    # Define DF de Ativos (Tudo que não está na lista de fim nem cancelado)
+    df_ativos = df_filtrado[
+        ~df_filtrado["Status"].str.lower().isin(status_fim) & 
+        ~df_filtrado["Status"].str.lower().contains("cancelado")
+    ].copy()
 
     # --- GRÁFICOS ---
     col_graf_1, col_graf_2 = st.columns(2)
@@ -81,86 +93,108 @@ def tela_dashboard():
     with col_graf_1:
         st.subheader("1. SLA dos Projetos Ativos")
         if not df_ativos.empty:
-            df_ativos['sla_categoria'] = df_ativos.apply(lambda row: utils.calcular_sla(row, df_sla_config)[0], axis=1)
-            def categorizar_sla(status_sla):
-                if "Atrasado" in status_sla: return "Fora do Prazo"
-                if " restantes" in status_sla or "Vence Hoje" in status_sla: return "Dentro do Prazo"
-                return "N/A"
-            df_ativos['sla_categoria_simples'] = df_ativos['sla_categoria'].apply(categorizar_sla)
+            # Lógica Simplificada de SLA: Se Agendamento < Hoje = Atrasado
+            hoje = pd.Timestamp.today().normalize()
             
-            sla_counts = df_ativos['sla_categoria_simples'].value_counts().reset_index()
+            def definir_sla(row):
+                if pd.isna(row['Agendamento']): return "Sem Data"
+                if row['Agendamento'] < hoje: return "Fora do Prazo (Atrasado)"
+                return "Dentro do Prazo"
+
+            df_ativos['sla_categoria'] = df_ativos.apply(definir_sla, axis=1)
             
-            fig_sla = px.pie(sla_counts, names='sla_categoria_simples', values='count', 
-                             color='sla_categoria_simples',
-                             color_discrete_map={'Dentro do Prazo':'#66BB6A', 'Fora do Prazo':'#EF5350', 'N/A':'#B0BEC5'},
-                             hole=.3, title="Projetos Ativos Dentro vs. Fora do Prazo")
+            sla_counts = df_ativos['sla_categoria'].value_counts().reset_index()
+            sla_counts.columns = ['Categoria', 'Qtd']
+            
+            fig_sla = px.pie(sla_counts, names='Categoria', values='Qtd', 
+                             color='Categoria',
+                             color_discrete_map={
+                                 'Dentro do Prazo':'#66BB6A', 
+                                 'Fora do Prazo (Atrasado)':'#EF5350', 
+                                 'Sem Data':'#B0BEC5'
+                             },
+                             hole=.4)
             st.plotly_chart(fig_sla, use_container_width=True)
         else:
-            st.info("Nenhum projeto ativo no período para análise de SLA.")
+            st.info("Nenhum projeto ativo no período.")
 
     with col_graf_2:
-        st.subheader("2. SLA por Analista (Projetos Ativos)")
-        if not df_ativos.empty and 'sla_categoria_simples' in df_ativos.columns and 'Analista' in df_ativos.columns:
-            sla_por_analista = df_ativos.groupby(['Analista', 'sla_categoria_simples']).size().reset_index(name='Contagem')
-            fig_sla_analista = px.bar(sla_por_analista, x='Analista', y='Contagem', color='sla_categoria_simples',
+        st.subheader("2. SLA por Analista (Ativos)")
+        if not df_ativos.empty and 'Analista' in df_ativos.columns:
+            sla_por_analista = df_ativos.groupby(['Analista', 'sla_categoria']).size().reset_index(name='Contagem')
+            
+            fig_sla_analista = px.bar(sla_por_analista, x='Analista', y='Contagem', color='sla_categoria',
                                       text='Contagem', barmode='stack',
-                                      title="Desempenho de SLA por Analista",
-                                      color_discrete_map={'Dentro do Prazo':'#66BB6A', 'Fora do Prazo':'#EF5350', 'N/A':'#B0BEC5'})
+                                      color_discrete_map={
+                                         'Dentro do Prazo':'#66BB6A', 
+                                         'Fora do Prazo (Atrasado)':'#EF5350', 
+                                         'Sem Data':'#B0BEC5'
+                                      })
             st.plotly_chart(fig_sla_analista, use_container_width=True)
         else:
-            st.info("Nenhum projeto ativo no período para análise de SLA por analista.")
+            st.info("Dados insuficientes para gráfico por analista.")
 
     st.divider()
     col_graf_3, col_graf_4, col_graf_5 = st.columns(3)
 
     with col_graf_3:
-        st.subheader("3. Projetos por Status")
-        status_counts = df_filtrado['Status'].value_counts().reset_index()
-        fig_status = px.pie(status_counts, names='Status', values='count', 
-                            color='Status',
-                            color_discrete_map={status: utils.get_status_color(status) for status in status_counts['Status']},
-                            hole=.3, title="Distribuição Geral de Status")
-        st.plotly_chart(fig_status, use_container_width=True)
+        st.subheader("3. Distribuição de Status")
+        if not df_filtrado.empty:
+            status_counts = df_filtrado['Status'].value_counts().reset_index()
+            status_counts.columns = ['Status', 'count']
+            
+            # Tenta pegar cores do utils_chamados
+            cores_map = {stt: utils_chamados.get_status_color(stt) for stt in status_counts['Status']}
+            
+            fig_status = px.pie(status_counts, names='Status', values='count', 
+                                color='Status',
+                                color_discrete_map=cores_map,
+                                hole=.4)
+            st.plotly_chart(fig_status, use_container_width=True)
+        else:
+            st.info("Sem dados.")
 
     with col_graf_4:
-        st.subheader("4. Aging de Projetos Ativos")
-        df_aging = df_ativos.dropna(subset=['Agendamento']).copy()
+        st.subheader("4. Aging (Dias em Aberto)")
+        # Aging baseado na Data de Abertura
+        df_aging = df_ativos.dropna(subset=['Abertura']).copy()
         if not df_aging.empty:
-            df_aging['dias_em_aberto'] = (datetime.now() - df_aging['Agendamento']).dt.days
+            df_aging['dias_em_aberto'] = (datetime.now() - df_aging['Abertura']).dt.days
             
-            bins = [-float('inf'), 0, 30, 60, 90, 120, float('inf')]
-            labels = ['Agend. Futuro','0-30 dias', '31-60 dias', '61-90 dias', '91-120 dias', '120+ dias']
+            bins = [-float('inf'), 0, 15, 30, 60, float('inf')]
+            labels = ['Futuro/Hoje','1-15 dias', '16-30 dias', '31-60 dias', '+60 dias']
             df_aging['aging'] = pd.cut(df_aging['dias_em_aberto'], bins=bins, labels=labels, right=False)
             
             aging_counts = df_aging['aging'].value_counts().sort_index().reset_index()
+            aging_counts.columns = ['Faixa', 'Qtd']
             
-            fig_aging = px.bar(aging_counts, x='aging', y='count', text='count', title="Tempo dos Projetos em Aberto")
-            fig_aging.update_traces(textposition='outside')
-            fig_aging.update_xaxes(title_text="Faixa de Dias desde o Agendamento")
+            fig_aging = px.bar(aging_counts, x='Faixa', y='Qtd', text='Qtd', title="Tempo desde Abertura")
+            fig_aging.update_traces(marker_color='#42A5F5')
             st.plotly_chart(fig_aging, use_container_width=True)
         else:
-            st.info("Nenhum projeto ativo e agendado no período para análise de Aging.")
+            st.info("Sem datas de abertura válidas para cálculo.")
 
     with col_graf_5:
-        st.subheader("5. Projetos Finalizados por Mês")
-        # Usa o df_original para pegar todos os finalizados, depois filtra pelo período
-        df_finalizados_geral = df_original[df_original['Status'].str.contains("Finalizada|Finalizado", na=False, case=False)].copy()
+        st.subheader("5. Entregas por Mês")
+        # Pega todos os finalizados da base (independente do filtro de agendamento inicial para mostrar histórico)
+        df_finalizados_geral = df_original[df_original['Status'].str.lower().isin(status_fim)].copy()
         
-        # Filtra os finalizados que estão dentro do período selecionado
+        # Filtra pelo período selecionado no topo, mas usando a data de FECHAMENTO
         df_finalizados_filtrado = df_finalizados_geral[
-            (df_finalizados_geral['Data de Finalização'].dt.date >= data_inicio) &
-            (df_finalizados_geral['Data de Finalização'].dt.date <= data_fim)
+            (df_finalizados_geral['Fechamento'].dt.date >= data_inicio) &
+            (df_finalizados_geral['Fechamento'].dt.date <= data_fim)
         ]
+        
         if not df_finalizados_filtrado.empty:
-            df_finalizados_filtrado['MesFinalizacao'] = df_finalizados_filtrado['Data de Finalização'].dt.to_period('M').astype(str)
+            df_finalizados_filtrado['MesFinalizacao'] = df_finalizados_filtrado['Fechamento'].dt.strftime('%Y-%m')
             finalizados_counts = df_finalizados_filtrado['MesFinalizacao'].value_counts().sort_index().reset_index()
+            finalizados_counts.columns = ['Mês', 'Qtd']
             
-            fig_finalizados = px.bar(finalizados_counts, x='MesFinalizacao', y='count', text='count', title="Volume de Entregas Mensais")
-            fig_finalizados.update_traces(textposition='outside')
-            fig_finalizados.update_xaxes(title_text="Mês de Finalização")
+            fig_finalizados = px.bar(finalizados_counts, x='Mês', y='Qtd', text='Qtd')
+            fig_finalizados.update_traces(marker_color='#66BB6A')
             st.plotly_chart(fig_finalizados, use_container_width=True)
         else:
-            st.info("Nenhum projeto finalizado no período selecionado.")
+            st.info("Nenhuma entrega (Fechamento) neste período.")
 
 # --- Controle Principal da Página ---
 if "logado" not in st.session_state or not st.session_state.logado:
@@ -169,10 +203,7 @@ if "logado" not in st.session_state or not st.session_state.logado:
 
 st.sidebar.title(f"Bem-vindo(a), {st.session_state.get('usuario', 'Visitante')}")
 st.sidebar.divider()
-st.sidebar.divider()
-st.sidebar.title("Sistema")
-if st.sidebar.button("Logout", use_container_width=True, key="logout_dashboard"):
+if st.sidebar.button("Logout", use_container_width=True, key="logout_dashboard_indicadores"):
     st.session_state.clear(); st.rerun()
     
 tela_dashboard()
-
