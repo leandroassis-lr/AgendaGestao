@@ -1,15 +1,17 @@
 import streamlit as st
 import pandas as pd
-from datetime import date, datetime, timedelta # Adicionado datetime
+from datetime import date, datetime, timedelta
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-import utils
-import html # Importar html para escapar
+import utils          # Para CSS e estilos gerais
+import utils_chamados # <--- IMPORTANTE: Conexão com os dados da Pag 7
+import html
 
 st.set_page_config(page_title="Relatórios - GESTÃO", page_icon="📧", layout="wide")
+utils.load_css()
 
-# (Função enviar_email - sem alterações)
+# --- FUNÇÃO ENVIAR EMAIL (Padrão) ---
 def enviar_email(destinatario, assunto, corpo_html):
     """Envia um email usando as credenciais dos Secrets."""
     try:
@@ -18,11 +20,13 @@ def enviar_email(destinatario, assunto, corpo_html):
         senha = email_config["password"]
         smtp_server = email_config["smtp_server"]
         smtp_port = email_config["smtp_port"]
+        
         msg = MIMEMultipart()
         msg["From"] = remetente
         msg["To"] = destinatario
         msg["Subject"] = assunto
         msg.attach(MIMEText(corpo_html, "html", "utf-8"))
+        
         with smtplib.SMTP(smtp_server, smtp_port) as server:
             server.starttls()
             server.login(remetente, senha)
@@ -33,203 +37,176 @@ def enviar_email(destinatario, assunto, corpo_html):
     except Exception as e:
         return False, f"Erro ao enviar email: {e}"
 
-# --- 1. FUNÇÃO DE ESTILO ATUALIZADA (com Formatação Condicional) ---
+# --- 1. FUNÇÃO DE ESTILO (Adaptada) ---
 def formatar_df_para_html(df, titulo, hoje):
-    """
-    Formata um DataFrame como uma tabela HTML estilizada com CSS INLINE
-    para máxima compatibilidade com clientes de email (Gmail, Outlook).
-    
-    Inclui formatação condicional para Prioridade, Aging e Agendamento.
-    """
     if df.empty:
-        return f"<h4 style='color:#34495E; font-family: Arial, sans-serif;'>{titulo}</h4><p style='font-family:Arial, sans-serif; color: #555;'>Nenhum projeto encontrado.</p>"
+        return f"<h4 style='color:#34495E; font-family: Arial, sans-serif;'>{titulo}</h4><p style='font-family:Arial, sans-serif; color: #555;'>Nenhum chamado encontrado.</p>"
 
-    # --- Estilos Inline ---
-    cor_header_bg = "#004D38"      # Verde Escuro
+    # Cores
+    cor_header_bg = "#1565C0"      # Azul (Identidade da Pág 7)
     cor_header_texto = "#FFFFFF"
-    cor_borda_header = "#006A4E"     # Verde Principal
+    cor_borda_header = "#0D47A1"
     cor_linha_par = "#f3f3f3"
     cor_linha_impar = "#ffffff"
     cor_borda_linha = "#dddddd"
-    cor_titulo_h4 = "#34495E"         # Cinza-ardósia
+    cor_titulo_h4 = "#34495E"
     familia_fonte = "'Arial', sans-serif"
     
-    # --- Cores de Destaque ---
-    cor_fundo_prioridade_alta = "#ffebee" # Rosa/Vermelho claro
-    cor_texto_critico = "#D32F2F"       # Vermelho escuro
+    cor_texto_critico = "#D32F2F"
 
-    # --- Título ---
     html_output = f"<h4 style='color:{cor_titulo_h4}; font-family: {familia_fonte};'>{titulo}</h4>"
+    html_output += f"""<table style='border-collapse: collapse; width: 100%; font-family: {familia_fonte}; font-size: 0.85em; min-width: 600px; box-shadow: 0 0 10px rgba(0,0,0,0.1);'>"""
     
-    # --- Tabela ---
-    html_output += f"""
-    <table style='border-collapse: collapse; width: 100%; font-family: {familia_fonte}; font-size: 0.9em; min-width: 400px; box-shadow: 0 0 10px rgba(0,0,0,0.1);'>
-    """
-    
-    # --- Cabeçalho (th) ---
+    # Cabeçalho
     html_output += "<thead><tr>"
     for col in df.columns:
-        col_escapada = html.escape(str(col))
-        html_output += f"<th style='background-color: {cor_header_bg}; color: {cor_header_texto}; text-align: left; padding: 12px 15px; border-bottom: 2px solid {cor_borda_header};'>{col_escapada}</th>"
-    html_output += "</tr></thead>"
+        html_output += f"<th style='background-color: {cor_header_bg}; color: {cor_header_texto}; text-align: left; padding: 10px; border-bottom: 2px solid {cor_borda_header};'>{html.escape(str(col))}</th>"
+    html_output += "</tr></thead><tbody>"
     
-    # --- Corpo (td) ---
-    html_output += "<tbody>"
+    # Linhas
     for i, row in df.iterrows():
-        
-        # --- Lógica de Estilo da Linha ---
         current_row_style = cor_linha_par if i % 2 == 0 else cor_linha_impar
-        # 1. Destaque de Prioridade Alta (linha inteira)
-        if row.get('Prioridade') == 'Alta':
-            current_row_style = cor_fundo_prioridade_alta
-        
         html_output += f"<tr style='background-color: {current_row_style};'>"
         
         for col in df.columns:
             val = row[col]
-            display_val = html.escape(str(val)) if pd.notna(val) and val is not None else "N/A"
+            display_val = html.escape(str(val)) if pd.notna(val) and val is not None else ""
             
-            # --- Lógica de Estilo da Célula ---
-            cell_style = f"padding: 12px 15px; text-align: left; border-bottom: 1px solid {cor_borda_linha};"
+            cell_style = f"padding: 10px; text-align: left; border-bottom: 1px solid {cor_borda_linha};"
             
-            # 2. Destaque de Aging > 30 dias
-            if col == 'Aging (Dias)' and isinstance(val, int) and val > 30:
+            # Destaques Condicionais
+            if col == 'Aging (Dias)' and isinstance(val, (int, float)) and val > 15:
                 cell_style += f" color: {cor_texto_critico}; font-weight: bold;"
             
-            # 3. Destaque de Agendamento = HOJE
             if col == 'Agendamento' and val == hoje.strftime('%d/%m/%Y'):
                  cell_style += f" color: {cor_texto_critico}; font-weight: bold;"
-
-            # 4. Destaque de Prioridade (apenas o texto)
-            if col == 'Prioridade' and val == 'Alta':
-                 cell_style += f" color: {cor_texto_critico}; font-weight: bold;"
-            # --- Fim do Estilo da Célula ---
 
             html_output += f"<td style='{cell_style}'>{display_val}</td>"
         html_output += "</tr>"
     
     html_output += "</tbody></table><br>" 
-    
     return html_output
 
-# --- 2. TELA DE RELATÓRIOS --- #
-
+# --- 2. TELA DE RELATÓRIOS ---
 def tela_relatorios():
     st.markdown("<div class='section-title-center'>RELATÓRIOS POR EMAIL</div>", unsafe_allow_html=True)
-    st.info("Gere e envie um relatório por analista, com os projetos vencidos e os agendados para a próxima semana.")
+    st.info("Gere e envie um relatório por analista baseado na base da Gestão de Projetos (Página 7).")
 
-    destinatario_default = st.session_state.get('usuario_email', '') # 
+    destinatario_default = st.session_state.get('usuario_email', '') 
     
-    # --- MUDANÇA 1: st.text_input -> st.text_area ---
     destinatarios_input = st.text_area(
         "Enviar para o(s) email(s):", 
         value=destinatario_default,
-        placeholder="Separe múltiplos emails por vírgula (,) ou ponto e vírgula (;)",
-        height=100
+        placeholder="Separe múltiplos emails por vírgula (,)",
+        height=70
     )
 
     if st.button("🚀 Gerar e Enviar Relatório Diário", use_container_width=True):
         
-        # --- MUDANÇA 2: Lógica de Validação e Limpeza ---
+        # Validação de Emails
         if not destinatarios_input:
-            st.error("Por favor, insira pelo menos um email de destinatário.")
-            return
+            st.error("Insira pelo menos um email."); return
 
-        # Limpa a entrada: substitui ';' por ',', remove espaços extras
-        emails_sujos = destinatarios_input.replace(';', ',').split(',')
-        
-        emails_limpos = []
-        emails_invalidos = []
-        
-        for email in emails_sujos:
-            email_limpo = email.strip() # Remove espaços em branco
-            if email_limpo and '@' in email_limpo: # Validação simples
-                emails_limpos.append(email_limpo)
-            elif email_limpo: # Se não estava em branco mas não tinha @
-                emails_invalidos.append(email_limpo)
-        
+        emails_limpos = [e.strip() for e in destinatarios_input.replace(';', ',').split(',') if '@' in e]
         if not emails_limpos:
-            st.error("Nenhum email válido foi inserido.")
-            if emails_invalidos:
-                st.warning(f"Emails com formato inválido: {', '.join(emails_invalidos)}")
-            return
+            st.error("Nenhum email válido."); return
         
-        if emails_invalidos:
-             st.warning(f"Emails com formato inválido ignorados: {', '.join(emails_invalidos)}")
-        
-        # Converte a lista de emails limpos em uma única string separada por vírgula
         destinatarios_finais = ", ".join(emails_limpos)
-        
-        st.info(f"Enviando relatório para: {destinatarios_finais}") # Feedback
-        # --- FIM DA MUDANÇA 2 ---
+        st.toast(f"Enviando para: {destinatarios_finais}")
 
-        with st.spinner("Gerando relatório e enviando email..."):
-            df = utils.carregar_projetos_db()
-            df_backlog = utils.carregar_projetos_sem_agendamento_db() 
+        with st.spinner("Processando dados da Gestão de Projetos..."):
+            # 1. CARREGA DADOS DA PAG 7
+            df = utils_chamados.carregar_chamados_db()
             
-            if df.empty and df_backlog.empty:
-                st.error("Não há dados de projetos para gerar o relatório."); return
+            if df.empty:
+                st.error("Base de dados vazia."); return
 
-            # Cálculo do Aging
+            # 2. TRATAMENTO DE DATAS E COLUNAS
             hoje = date.today()
+            
+            # Converte colunas vitais
             df['Agendamento'] = pd.to_datetime(df['Agendamento'], errors='coerce').dt.date
-            df['Data de Abertura'] = pd.to_datetime(df['Data de Abertura'], errors='coerce').dt.date
-            df['Aging (Dias)'] = (hoje - df['Data de Abertura']).apply(lambda x: x.days if pd.notna(x) else 0).astype(int)
-            df['Analista'] = df['Analista'].fillna('Sem Analista Definido')
+            df['Abertura'] = pd.to_datetime(df['Abertura'], errors='coerce').dt.date
             
-            proxima_segunda = hoje + timedelta(days=(7 - hoje.weekday()))
-            
-            # Filtros
-            df_vencidos = df[(df['Agendamento'] < hoje) & (~df['Status'].str.contains("Finalizada|Cancelada", na=False, case=False))].copy()
-            df_proxima_semana = df[(df['Agendamento'] >= hoje) & (df['Agendamento'] <= proxima_segunda)].copy()
-            lista_analistas = sorted(pd.concat([df_vencidos['Analista'], df_proxima_semana['Analista']]).unique())
-            colunas_relatorio = ['Projeto', 'Agência', 'Agendamento', 'Status', 'Prioridade', 'Aging (Dias)']
+            # Preenche Analista Vazio
+            if 'Analista' not in df.columns: df['Analista'] = 'Não Definido'
+            df['Analista'] = df['Analista'].fillna('Sem Analista')
 
+            # Cálculo do Aging (Baseado na Abertura)
+            df['Aging (Dias)'] = (hoje - df['Abertura']).apply(lambda x: x.days if pd.notna(x) else 0).astype(int)
+            
+            # 3. FILTROS (Vencidos vs Próxima Semana)
+            proxima_segunda = hoje + timedelta(days=(7 - hoje.weekday()))
+            status_fim = ["finalizado", "concluído", "faturado", "fechado", "cancelado"]
+            
+            # Backlog (Sem data de agendamento e não finalizado)
+            df_backlog = df[
+                (pd.isna(df['Agendamento'])) & 
+                (~df['Status'].str.lower().isin(status_fim))
+            ]
+
+            # Vencidos (Data < Hoje e não finalizado)
+            df_vencidos = df[
+                (df['Agendamento'] < hoje) & 
+                (~df['Status'].str.lower().isin(status_fim))
+            ].copy()
+            
+            # Próxima Semana (Hoje <= Data <= Prox Segunda)
+            df_proxima_semana = df[
+                (df['Agendamento'] >= hoje) & 
+                (df['Agendamento'] <= proxima_segunda)
+            ].copy()
+            
+            # Lista de Analistas envolvidos
+            lista_analistas = sorted(pd.concat([df_vencidos['Analista'], df_proxima_semana['Analista']]).unique())
+            
+            # DEFINIÇÃO DAS COLUNAS DO RELATÓRIO (Nomes da Pag 7)
+            colunas_relatorio = ['Nº Chamado', 'Projeto', 'Nome Agência', 'Agendamento', 'Status', 'Aging (Dias)']
+
+            # 4. GERAÇÃO DO HTML
             familia_fonte_segura = "'Arial', sans-serif" 
             
-            # HTML para o Resumo de KPIs
             kpi_html = f"""
             <h3 style="color: #2C3E50; font-family: {familia_fonte_segura};">Resumo Geral da Operação</h3>
-            <table style="font-family: {familia_fonte_segura}; width: 100%; border-collapse: collapse;">
-                <tr style="background-color: #f3f3f3;"><td style="padding: 10px; border-bottom: 1px solid #ddd;">🚨 Projetos Vencidos (Total):</td><td style="padding: 10px; border-bottom: 1px solid #ddd; font-weight: bold; color: #D32F2F; text-align: right;">{len(df_vencidos)}</td></tr>
-                <tr><td style="padding: 10px; border-bottom: 1px solid #ddd;">🗓️ Agendados para Próxima Semana:</td><td style="padding: 10px; border-bottom: 1px solid #ddd; font-weight: bold; text-align: right;">{len(df_proxima_semana)}</td></tr>
-                <tr style="background-color: #f3f3f3;"><td style="padding: 10px; border-bottom: 1px solid #ddd;">🗃️ Ativos no Backlog (Sem Data):</td><td style="padding: 10px; border-bottom: 1px solid #ddd; font-weight: bold; text-align: right;">{len(df_backlog)}</td></tr>
+            <table style="font-family: {familia_fonte_segura}; width: 100%; border-collapse: collapse; border: 1px solid #ddd;">
+                <tr style="background-color: #f9f9f9;"><td style="padding: 10px;">🚨 Chamados Vencidos:</td><td style="padding: 10px; font-weight: bold; color: #D32F2F; text-align: right;">{len(df_vencidos)}</td></tr>
+                <tr><td style="padding: 10px;">🗓️ Agendados (Semana):</td><td style="padding: 10px; font-weight: bold; text-align: right;">{len(df_proxima_semana)}</td></tr>
+                <tr style="background-color: #f9f9f9;"><td style="padding: 10px;">🗃️ Backlog (Sem Data):</td><td style="padding: 10px; font-weight: bold; text-align: right;">{len(df_backlog)}</td></tr>
             </table><br>
             """
             
-            # Corpo do Email
             corpo_html = f"""
             <html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head>
             <body style="font-family: {familia_fonte_segura}; line-height: 1.6;">
-                <h2 style="color: #004D38; border-bottom: 2px solid #006A4E; padding-bottom: 10px;">
-                    Relatório diário de Projetos - {hoje.strftime('%d/%m/%Y')}
+                <h2 style="color: #1565C0; border-bottom: 2px solid #1565C0;">
+                    Relatório de Gestão - {hoje.strftime('%d/%m/%Y')}
                 </h2>{kpi_html} 
             """
             
-            # Loop por cada analista
-            if not lista_analistas: corpo_html += "<p>Nenhum projeto vencido ou agendado para a próxima semana encontrado.</p>"
-            for analista in lista_analistas:
-                analista_html = html.escape(analista)
-                corpo_html += f"<hr><h3 style='background-color: #F0F2F5; padding: 10px; border-radius: 5px; color: #2C3E50;'>Analista: {analista_html}</h3>"
-                
-                df_vencidos_analista = df_vencidos[df_vencidos['Analista'] == analista]
-                df_proxima_semana_analista = df_proxima_semana[df_proxima_semana['Analista'] == analista]
-                
-                df_vencidos_html = df_vencidos_analista[colunas_relatorio].copy()
-                df_vencidos_html['Agendamento'] = df_vencidos_html['Agendamento'].apply(lambda x: x.strftime('%d/%m/%Y') if x else 'N/D')
-                df_proxima_semana_html = df_proxima_semana_analista[colunas_relatorio].copy()
-                df_proxima_semana_html['Agendamento'] = df_proxima_semana_html['Agendamento'].apply(lambda x: x.strftime('%d/%m/%Y') if x else 'N/D')
-
-                corpo_html += formatar_df_para_html(df_vencidos_html, f"🚨 Projetos Vencidos ({len(df_vencidos_html)})", hoje)
-                corpo_html += formatar_df_para_html(df_proxima_semana_html, f"🗓️ Projetos Agendados até {proxima_segunda.strftime('%d/%m/%Y')} ({len(df_proxima_semana_html)})", hoje)
+            if not lista_analistas: corpo_html += "<p>Sem pendências críticas ou agendamentos próximos.</p>"
             
-            corpo_html += """
-                    <br><p style="color: #777; font-size: 0.8em;"><em>Relatório gerado pelo Sistema de Gestão de Projetos.</em></p>
-                </body></html>
-            """
+            for analista in lista_analistas:
+                analista_html = html.escape(str(analista))
+                corpo_html += f"<hr><h3 style='background-color: #E3F2FD; padding: 10px; border-radius: 4px; color: #0D47A1;'>👤 {analista_html}</h3>"
+                
+                # Prepara DF Vencidos
+                df_v_html = df_vencidos[df_vencidos['Analista'] == analista].copy()
+                if not df_v_html.empty:
+                    df_v_html = df_v_html[colunas_relatorio]
+                    df_v_html['Agendamento'] = df_v_html['Agendamento'].apply(lambda x: x.strftime('%d/%m/%Y') if x else '-')
+                    corpo_html += formatar_df_para_html(df_v_html, f"🚨 Vencidos ({len(df_v_html)})", hoje)
+                
+                # Prepara DF Semana
+                df_p_html = df_proxima_semana[df_proxima_semana['Analista'] == analista].copy()
+                if not df_p_html.empty:
+                    df_p_html = df_p_html[colunas_relatorio]
+                    df_p_html['Agendamento'] = df_p_html['Agendamento'].apply(lambda x: x.strftime('%d/%m/%Y') if x else '-')
+                    corpo_html += formatar_df_para_html(df_p_html, f"🗓️ Próximos Agendamentos ({len(df_p_html)})", hoje)
+            
+            corpo_html += "<br><p style='color: #777; font-size: 0.8em;'><em>Gerado automaticamente pelo Sistema de Gestão.</em></p></body></html>"
 
-            # --- MUDANÇA 3: Passa a string final de emails ---
-            sucesso, mensagem = enviar_email(destinatarios_finais, f"Relatório diário de Projetos - {hoje.strftime('%d/%m/%Y')}", corpo_html)
+            # 5. ENVIO
+            sucesso, mensagem = enviar_email(destinatarios_finais, f"Relatório Gestão - {hoje.strftime('%d/%m/%Y')}", corpo_html)
 
             if sucesso:
                 st.success(mensagem); st.balloons()
@@ -237,15 +214,8 @@ def tela_relatorios():
                 st.error(mensagem)
 
 # --- Controle Principal ---
-if "logado" not in st.session_state:
-    try:
-        if st.query_params.get("user_email"):
-            st.session_state.logado = True
-            st.session_state.usuario_email = st.query_params.get("user_email")
-    except: pass
-
-if not st.session_state.get("logado", False):
-    st.warning("Por favor, faça o login na página principal.")
+if "logado" not in st.session_state or not st.session_state.logado:
+    st.warning("Faça login na página principal.")
     st.stop()
 
 tela_relatorios()
