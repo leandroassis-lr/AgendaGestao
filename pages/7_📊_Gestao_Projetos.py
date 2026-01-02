@@ -982,116 +982,116 @@ if escolha_visao == "Visão Geral (Cockpit)":
             )
 
 # --- VISÃO 2: OPERACIONAL ---
-else:
-    st.title("🔧 Detalhes do Projeto")
-
-    with st.container():
-        st.markdown('<div class="filter-container">', unsafe_allow_html=True)
-        
-        # --- LÓGICA DE RECEBIMENTO DO FILTRO (AQUI É O SEGREDO) ---
-        padrao_projetos = []
-        
-        # Verifica se veio algum projeto selecionado lá do Cockpit
-        if "sel_projeto" in st.session_state:
-            proj_vindo_do_cockpit = st.session_state["sel_projeto"]
+    else:
+        st.title("🔧 Detalhes do Projeto")
+    
+        with st.container():
+            st.markdown('<div class="filter-container">', unsafe_allow_html=True)
             
-            # Verifica se o projeto realmente existe na lista atual para evitar erros
-            if proj_vindo_do_cockpit in df_filtrado['Projeto'].unique():
-                padrao_projetos = [proj_vindo_do_cockpit]
+            # --- LÓGICA DE RECEBIMENTO DO FILTRO (AQUI É O SEGREDO) ---
+            padrao_projetos = []
             
-            # (Opcional) Limpa a seleção para não travar a navegação futura
-            del st.session_state["sel_projeto"]
-
-        # --- PREPARAÇÃO DAS LISTAS ---
-        # Lista de Agências
-        df_filtrado['_filtro_agencia'] = df_filtrado['Cód. Agência'].astype(str) + " - " + df_filtrado['Nome Agência'].astype(str)
-        opcoes_agencia = sorted(df_filtrado['_filtro_agencia'].dropna().unique().tolist())
-        
-        # Lista de Projetos
-        opcoes_projeto = sorted(df_filtrado['Projeto'].dropna().unique().tolist())
-        
-        # Lista de Ações (Sub-Status)
-        opcoes_acao = sorted([str(x) for x in df_filtrado['Sub-Status'].dropna().unique().tolist() if str(x).strip() != ''])
-
-        # --- CAMPOS DE FILTRO ---
-        c1, c2, c3, c4 = st.columns([1.5, 1.5, 1.5, 1.5])
-        
-        with c1:
-            busca_geral = st.text_input("Busca", placeholder="🔎 ID, Nome, Serviço...", label_visibility="collapsed")
-        
-        with c2:
-            filtro_agencia_multi = st.multiselect("Agências", options=opcoes_agencia, placeholder="Filtrar Agência", label_visibility="collapsed")
+            # Verifica se veio algum projeto selecionado lá do Cockpit
+            if "sel_projeto" in st.session_state:
+                proj_vindo_do_cockpit = st.session_state["sel_projeto"]
+                
+                # Verifica se o projeto realmente existe na lista atual para evitar erros
+                if proj_vindo_do_cockpit in df_filtrado['Projeto'].unique():
+                    padrao_projetos = [proj_vindo_do_cockpit]
+                
+                # (Opcional) Limpa a seleção para não travar a navegação futura
+                del st.session_state["sel_projeto"]
+    
+            # --- PREPARAÇÃO DAS LISTAS ---
+            # Lista de Agências
+            df_filtrado['_filtro_agencia'] = df_filtrado['Cód. Agência'].astype(str) + " - " + df_filtrado['Nome Agência'].astype(str)
+            opcoes_agencia = sorted(df_filtrado['_filtro_agencia'].dropna().unique().tolist())
             
-        with c3:
-            # AQUI APLICAMOS O PADRÃO (default=padrao_projetos)
-            filtro_projeto_multi = st.multiselect("Projetos", options=opcoes_projeto, default=padrao_projetos, placeholder="Filtrar Projeto", label_visibility="collapsed")
+            # Lista de Projetos
+            opcoes_projeto = sorted(df_filtrado['Projeto'].dropna().unique().tolist())
+            
+            # Lista de Ações (Sub-Status)
+            opcoes_acao = sorted([str(x) for x in df_filtrado['Sub-Status'].dropna().unique().tolist() if str(x).strip() != ''])
+    
+            # --- CAMPOS DE FILTRO ---
+            c1, c2, c3, c4 = st.columns([1.5, 1.5, 1.5, 1.5])
+            
+            with c1:
+                busca_geral = st.text_input("Busca", placeholder="🔎 ID, Nome, Serviço...", label_visibility="collapsed")
+            
+            with c2:
+                filtro_agencia_multi = st.multiselect("Agências", options=opcoes_agencia, placeholder="Filtrar Agência", label_visibility="collapsed")
+                
+            with c3:
+                # AQUI APLICAMOS O PADRÃO (default=padrao_projetos)
+                filtro_projeto_multi = st.multiselect("Projetos", options=opcoes_projeto, default=padrao_projetos, placeholder="Filtrar Projeto", label_visibility="collapsed")
+            
+            with c4:
+                filtro_acao_multi = st.multiselect("Ação / Etapa", options=opcoes_acao, placeholder="Filtrar Ação/Status", label_visibility="collapsed")
+    
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+        # --- APLICAÇÃO DOS FILTROS ---
+        df_view = df_filtrado.copy()
         
-        with c4:
-            filtro_acao_multi = st.multiselect("Ação / Etapa", options=opcoes_acao, placeholder="Filtrar Ação/Status", label_visibility="collapsed")
-
-        st.markdown('</div>', unsafe_allow_html=True)
+        # 1. Busca Texto
+        if busca_geral:
+            termo = busca_geral.lower()
+            df_view = df_view[df_view.astype(str).apply(lambda x: x.str.lower()).apply(lambda x: x.str.contains(termo)).any(axis=1)]
         
-    # --- APLICAÇÃO DOS FILTROS ---
-    df_view = df_filtrado.copy()
+        # 2. Filtro de Agência (Novo)
+        if filtro_agencia_multi:
+            df_view = df_view[df_view['_filtro_agencia'].isin(filtro_agencia_multi)]
     
-    # 1. Busca Texto
-    if busca_geral:
-        termo = busca_geral.lower()
-        df_view = df_view[df_view.astype(str).apply(lambda x: x.str.lower()).apply(lambda x: x.str.contains(termo)).any(axis=1)]
+        # 3. Filtro de Projeto
+        if filtro_projeto_multi: 
+            df_view = df_view[df_view['Projeto'].isin(filtro_projeto_multi)]
+            
+        # 4. Filtro de Ação/Sub-Status (Alterado)
+        if filtro_acao_multi:
+            # Converte para string para garantir comparação
+            df_view = df_view[df_view['Sub-Status'].astype(str).isin(filtro_acao_multi)]
+            
+        # 5. Filtro de Data
+        if len(filtro_data_range) == 2:
+            d_inicio, d_fim = filtro_data_range
+            df_view = df_view[(df_view['Agendamento'] >= pd.to_datetime(d_inicio)) & (df_view['Agendamento'] <= pd.to_datetime(d_fim))]
     
-    # 2. Filtro de Agência (Novo)
-    if filtro_agencia_multi:
-        df_view = df_view[df_view['_filtro_agencia'].isin(filtro_agencia_multi)]
-
-    # 3. Filtro de Projeto
-    if filtro_projeto_multi: 
-        df_view = df_view[df_view['Projeto'].isin(filtro_projeto_multi)]
+        # KPIS DE VISÃO (Mantidos)
+        status_fim = ['concluído', 'finalizado', 'faturado', 'fechado']
+        qtd_total = len(df_view)
+        qtd_fim = len(df_view[df_view['Status'].str.lower().isin(status_fim)])
         
-    # 4. Filtro de Ação/Sub-Status (Alterado)
-    if filtro_acao_multi:
-        # Converte para string para garantir comparação
-        df_view = df_view[df_view['Sub-Status'].astype(str).isin(filtro_acao_multi)]
+        if not df_view.empty:
+            gr = df_view.groupby('Projeto')
+            proj_total = gr.ngroups
+            proj_concluidos = sum(1 for _, d in gr if d['Status'].str.lower().isin(status_fim).all())
+            proj_abertos = proj_total - proj_concluidos
+        else: proj_total=0; proj_concluidos=0; proj_abertos=0
+    
+        k1, k2, k3, k4 = st.columns(4)
+        with k1: st.markdown(f"""<div class="kpi-card kpi-blue"><div class="kpi-title">Chamados (Filtro)</div><div class="kpi-value">{qtd_total}</div></div>""", unsafe_allow_html=True)
+        with k2: st.markdown(f"""<div class="kpi-card kpi-orange"><div class="kpi-title">Projetos Abertos</div><div class="kpi-value">{proj_abertos}</div></div>""", unsafe_allow_html=True)
+        with k3: st.markdown(f"""<div class="kpi-card kpi-green"><div class="kpi-title">Projetos Finalizados</div><div class="kpi-value">{proj_concluidos}</div></div>""", unsafe_allow_html=True)
+        with k4: st.markdown(f"""<div class="kpi-card kpi-purple"><div class="kpi-title">Tarefas Concluídas</div><div class="kpi-value">{qtd_fim}</div></div>""", unsafe_allow_html=True)
         
-    # 5. Filtro de Data
-    if len(filtro_data_range) == 2:
-        d_inicio, d_fim = filtro_data_range
-        df_view = df_view[(df_view['Agendamento'] >= pd.to_datetime(d_inicio)) & (df_view['Agendamento'] <= pd.to_datetime(d_fim))]
-
-    # KPIS DE VISÃO (Mantidos)
-    status_fim = ['concluído', 'finalizado', 'faturado', 'fechado']
-    qtd_total = len(df_view)
-    qtd_fim = len(df_view[df_view['Status'].str.lower().isin(status_fim)])
+        st.markdown("<br>", unsafe_allow_html=True)
     
-    if not df_view.empty:
-        gr = df_view.groupby('Projeto')
-        proj_total = gr.ngroups
-        proj_concluidos = sum(1 for _, d in gr if d['Status'].str.lower().isin(status_fim).all())
-        proj_abertos = proj_total - proj_concluidos
-    else: proj_total=0; proj_concluidos=0; proj_abertos=0
-
-    k1, k2, k3, k4 = st.columns(4)
-    with k1: st.markdown(f"""<div class="kpi-card kpi-blue"><div class="kpi-title">Chamados (Filtro)</div><div class="kpi-value">{qtd_total}</div></div>""", unsafe_allow_html=True)
-    with k2: st.markdown(f"""<div class="kpi-card kpi-orange"><div class="kpi-title">Projetos Abertos</div><div class="kpi-value">{proj_abertos}</div></div>""", unsafe_allow_html=True)
-    with k3: st.markdown(f"""<div class="kpi-card kpi-green"><div class="kpi-title">Projetos Finalizados</div><div class="kpi-value">{proj_concluidos}</div></div>""", unsafe_allow_html=True)
-    with k4: st.markdown(f"""<div class="kpi-card kpi-purple"><div class="kpi-title">Tarefas Concluídas</div><div class="kpi-value">{qtd_fim}</div></div>""", unsafe_allow_html=True)
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # --- BARRA DE RESUMO (Agora mostra os Sub-Status filtrados) ---
-    if not df_view.empty:
-        # Agora contamos o Sub-Status (Ação) para refletir o filtro novo
-        counts = df_view['Sub-Status'].value_counts()
-        top_status = counts.head(5) 
-        if len(top_status) > 0:
-            cols = st.columns(len(top_status))
-            for i, (status, count) in enumerate(top_status.items()):
-                # Tenta pegar cor baseada no nome (se tiver lógica para substatus) ou usa padrão
-                try: cor = utils_chamados.get_status_color(status)
-                except: cor = "#ccc"
-                with cols[i]:
-                    st.markdown(f"""<div class="status-summary-box" style="border-left: 5px solid {cor}; background: white; border: 1px solid #eee; border-radius: 6px; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center;"><span class="status-label" style="font-size: 0.75em; font-weight: bold; color: #555; text-transform: uppercase;">{str(status)[:15]}</span><span class="status-val" style="font-size: 1.1em; font-weight: 800; color: #333;">{count}</span></div>""", unsafe_allow_html=True)
-    
-    st.markdown("<br>", unsafe_allow_html=True)
+        # --- BARRA DE RESUMO (Agora mostra os Sub-Status filtrados) ---
+        if not df_view.empty:
+            # Agora contamos o Sub-Status (Ação) para refletir o filtro novo
+            counts = df_view['Sub-Status'].value_counts()
+            top_status = counts.head(5) 
+            if len(top_status) > 0:
+                cols = st.columns(len(top_status))
+                for i, (status, count) in enumerate(top_status.items()):
+                    # Tenta pegar cor baseada no nome (se tiver lógica para substatus) ou usa padrão
+                    try: cor = utils_chamados.get_status_color(status)
+                    except: cor = "#ccc"
+                    with cols[i]:
+                        st.markdown(f"""<div class="status-summary-box" style="border-left: 5px solid {cor}; background: white; border: 1px solid #eee; border-radius: 6px; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center;"><span class="status-label" style="font-size: 0.75em; font-weight: bold; color: #555; text-transform: uppercase;">{str(status)[:15]}</span><span class="status-val" style="font-size: 1.1em; font-weight: 800; color: #333;">{count}</span></div>""", unsafe_allow_html=True)
+        
+        st.markdown("<br>", unsafe_allow_html=True)
 
     aba_lista, aba_calendario = st.tabs(["📋 Lista Detalhada", "📅 Agenda Semanal"])
     
@@ -1279,5 +1279,6 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
