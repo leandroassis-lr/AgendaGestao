@@ -17,64 +17,87 @@ def tela_dashboard():
     st.markdown("<div class='section-title-center'>DASHBOARD DE INDICADORES</div>", unsafe_allow_html=True)
     
     # 1. CARREGA DA MESMA FONTE DA PAG 7
-    df_original = utils_chamados.carregar_chamados_db()
+    df_raw = utils_chamados.carregar_chamados_db()
 
-    if df_original.empty:
+    if df_raw.empty:
         st.info("Nenhum projeto cadastrado para exibir o dashboard.")
         return
     
     if px is None:
-        st.error("ERRO: A biblioteca de gráficos não está instalada. Adicione 'plotly' ao seu requirements.txt")
-        st.code("pip install plotly")
+        st.error("ERRO: A biblioteca de gráficos não está instalada.")
         return
 
-    # 2. PADRONIZAÇÃO DE COLUNAS (Nomes usados na Pag 7)
-    # A Pag 7 usa: 'Agendamento', 'Fechamento', 'Abertura', 'Status'
-    df_original['Agendamento'] = pd.to_datetime(df_original['Agendamento'], errors='coerce')
-    df_original['Fechamento'] = pd.to_datetime(df_original['Fechamento'], errors='coerce')
-    df_original['Abertura'] = pd.to_datetime(df_original['Abertura'], errors='coerce')
+    # 2. PADRONIZAÇÃO DE DATAS
+    df_raw['Agendamento'] = pd.to_datetime(df_raw['Agendamento'], errors='coerce')
+    df_raw['Fechamento'] = pd.to_datetime(df_raw['Fechamento'], errors='coerce')
+    df_raw['Abertura'] = pd.to_datetime(df_raw['Abertura'], errors='coerce')
+
+    # --- 3. APLICAÇÃO DA REGRA DA AGENDA (AGRUPAMENTO) ---
+    # Aqui transformamos linhas de equipamentos em linhas de PROJETOS ÚNICOS
+    # Agrupamos por Data + Agência + Projeto (igual à Agenda)
     
-    # Lista de status considerados "Finalizados" (Igual à Pag 7)
+    # Preenche nulos para não perder dados no agrupamento
+    df_raw['Nome Agência'] = df_raw['Nome Agência'].fillna('N/A')
+    df_raw['Projeto'] = df_raw['Projeto'].fillna('N/A')
+    
+    # Definimos como agregar cada coluna
+    agg_rules = {
+        'Status': 'first',      # Pega o status principal
+        'Sub-Status': 'first',
+        'Analista': 'first',
+        'Fechamento': 'first',
+        'Abertura': 'first',
+        'Nº Chamado': 'first',  # Pega um dos chamados como referência
+        'ID': 'first'
+    }
+    
+    # Se houverem colunas extras que queremos manter, adicionamos aqui
+    # Realiza o agrupamento (Mantendo Agendamento como coluna, não índice)
+    df_projetos_unicos = df_raw.groupby(['Agendamento', 'Nome Agência', 'Projeto'], dropna=False).agg(agg_rules).reset_index()
+
+    # --- FIM DO AGRUPAMENTO ---
+
+    # Lista de status considerados "Finalizados"
     status_fim = ['concluído', 'finalizado', 'faturado', 'fechado', 'equipamento entregue']
     
     # --- FILTRO DE DATA (POR DATA DE AGENDAMENTO) ---
     st.markdown("#### 📅 Filtro de Período")
     col_data1, col_data2 = st.columns(2)
     
-    df_com_agendamento = df_original.dropna(subset=['Agendamento'])
+    df_com_agendamento = df_projetos_unicos.dropna(subset=['Agendamento'])
     
     if df_com_agendamento.empty:
         st.warning("Nenhum projeto com data de agendamento para filtrar.")
-        df_filtrado = df_original.copy()
+        df_filtrado = df_projetos_unicos.copy()
         data_inicio = date.today() - timedelta(days=30)
         data_fim = date.today()
     else:
+        # Pega datas min/max da base agrupada
         data_min_geral = df_com_agendamento['Agendamento'].min().date()
-        data_max_geral = date.today() + timedelta(days=30) # Permite ver futuro
         
         with col_data1:
             data_inicio = st.date_input("De", value=date.today().replace(day=1), format="DD/MM/YYYY")
         with col_data2:
             data_fim = st.date_input("Até", value=date.today(), format="DD/MM/YYYY")
 
-        # Filtra usando as datas padronizadas
-        df_filtrado = df_original[
-            (df_original['Agendamento'].dt.date >= data_inicio) & 
-            (df_original['Agendamento'].dt.date <= data_fim)
+        # Filtra a base JÁ AGRUPADA
+        df_filtrado = df_projetos_unicos[
+            (df_projetos_unicos['Agendamento'].dt.date >= data_inicio) & 
+            (df_projetos_unicos['Agendamento'].dt.date <= data_fim)
         ].copy()
     
     # --- MÉTRICAS PRINCIPAIS ---
     total_projetos_periodo = len(df_filtrado)
     
-    # Lógica de contagem baseada na lista oficial de status
+    # Contagem baseada na lista oficial de status
     finalizados_periodo = len(df_filtrado[df_filtrado["Status"].str.lower().isin(status_fim)])
     
-    # Pendência e Pausado (Busca texto parcial)
+    # CORREÇÃO DO ERRO ANTERIOR: .str.contains com case=False trata o lower internamente
     pendencia_periodo = len(df_filtrado[df_filtrado["Status"].str.contains("Pendencia|Pendência", na=False, case=False)])
     pausados_periodo = len(df_filtrado[df_filtrado["Status"].str.contains("Pausada|Pausado|Cancelado", na=False, case=False)])
 
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric(label="Total no Período", value=total_projetos_periodo)
+    col1.metric(label="Projetos (Visitas)", value=total_projetos_periodo)
     col2.metric(label="Finalizados / Faturados", value=finalizados_periodo)
     col3.metric(label="Com Pendência", value=pendencia_periodo)
     col4.metric(label="Pausados / Cancelados", value=pausados_periodo)
@@ -84,7 +107,7 @@ def tela_dashboard():
     # Define DF de Ativos (Tudo que não está na lista de fim nem cancelado)
     df_ativos = df_filtrado[
         ~df_filtrado["Status"].str.lower().isin(status_fim) & 
-        ~df_filtrado["Status"].str.lower().contains("cancelado")
+        ~df_filtrado["Status"].str.contains("Cancelado", na=False, case=False)
     ].copy()
 
     # --- GRÁFICOS ---
@@ -93,7 +116,6 @@ def tela_dashboard():
     with col_graf_1:
         st.subheader("1. SLA dos Projetos Ativos")
         if not df_ativos.empty:
-            # Lógica Simplificada de SLA: Se Agendamento < Hoje = Atrasado
             hoje = pd.Timestamp.today().normalize()
             
             def definir_sla(row):
@@ -156,7 +178,7 @@ def tela_dashboard():
 
     with col_graf_4:
         st.subheader("4. Aging (Dias em Aberto)")
-        # Aging baseado na Data de Abertura
+        # Aging baseado na Data de Abertura (usando o df_ativos já agrupado)
         df_aging = df_ativos.dropna(subset=['Abertura']).copy()
         if not df_aging.empty:
             df_aging['dias_em_aberto'] = (datetime.now() - df_aging['Abertura']).dt.days
@@ -176,10 +198,10 @@ def tela_dashboard():
 
     with col_graf_5:
         st.subheader("5. Entregas por Mês")
-        # Pega todos os finalizados da base (independente do filtro de agendamento inicial para mostrar histórico)
-        df_finalizados_geral = df_original[df_original['Status'].str.lower().isin(status_fim)].copy()
+        # Pega todos os finalizados da BASE AGRUPADA (sem filtro de período inicial)
+        df_finalizados_geral = df_projetos_unicos[df_projetos_unicos['Status'].str.lower().isin(status_fim)].copy()
         
-        # Filtra pelo período selecionado no topo, mas usando a data de FECHAMENTO
+        # Filtra os que foram fechados DENTRO do período selecionado
         df_finalizados_filtrado = df_finalizados_geral[
             (df_finalizados_geral['Fechamento'].dt.date >= data_inicio) &
             (df_finalizados_geral['Fechamento'].dt.date <= data_fim)
