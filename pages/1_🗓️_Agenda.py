@@ -1,7 +1,9 @@
 import streamlit as st
-import utils # Importa nosso arquivo de utilidades
+import utils  # Mantemos para o CSS
+import utils_chamados # <--- IMPORTANTE: O arquivo da Pag 7
 import html
 import pandas as pd
+from datetime import date
 
 # Dependência opcional
 try:
@@ -13,15 +15,18 @@ st.set_page_config(page_title="Agenda - GESTÃO", page_icon="🗓️", layout="w
 utils.load_css()
 
 def tela_calendario():
-    st.markdown("<div class='section-title-center'>AGENDA</div>", unsafe_allow_html=True)
-    df = utils.carregar_projetos_db()
+    st.markdown("<div class='section-title-center'>AGENDA DE PROJETOS</div>", unsafe_allow_html=True)
     
-    # Garante que o DataFrame não está vazio antes de prosseguir
-    if df.empty or 'Analista' not in df.columns:
+    # 1. CARREGA DA MESMA FONTE DA PAG 7
+    df = utils_chamados.carregar_chamados_db()
+    
+    # Garante que o DataFrame não está vazio
+    if df.empty:
         st.info("Nenhum projeto encontrado para exibir na agenda.")
         return
 
-    lista_analistas = ["Todos"] + df['Analista'].dropna().unique().tolist()
+    # Filtro de Analista
+    lista_analistas = ["Todos"] + sorted(df['Analista'].dropna().unique().tolist())
     analista_selecionado = st.selectbox("Filtrar por Analista:", lista_analistas)
 
     if analista_selecionado != "Todos":
@@ -31,12 +36,10 @@ def tela_calendario():
     
     st.divider()
     
-    # --- CORREÇÃO APLICADA AQUI ---
-    # 1. Converte a coluna 'Agendamento' para um formato de data seguro.
-    #    Valores que não são datas (nulos, em branco) se tornarão 'NaT' (Not a Time).
+    # 2. TRATAMENTO DE DATAS (Coluna 'Agendamento' vem do utils_chamados)
     df_filtrado['Agendamento'] = pd.to_datetime(df_filtrado['Agendamento'], errors='coerce')
 
-    # 2. Agora, removemos com segurança todas as linhas onde o agendamento é nulo (NaT).
+    # Remove agendamentos vazios
     df_calendario = df_filtrado.dropna(subset=['Agendamento'])
 
     if df_calendario.empty:
@@ -44,53 +47,74 @@ def tela_calendario():
         return
         
     if calendar is None:
-        st.error("ERRO: O componente de calendário não está instalado. Adicione 'streamlit-calendar' ao seu requirements.txt")
-        st.code("pip install streamlit-calendar")
+        st.error("ERRO: O componente de calendário não está instalado.")
         return
 
+    # 3. MONTAGEM DOS EVENTOS (Mapeando as colunas certas do utils_chamados)
     eventos = []
     for _, row in df_calendario.iterrows():
-        # A verificação 'dropna' acima garante que 'Agendamento' é uma data válida aqui.
+        # Definição de cores usando a função do utils_chamados
+        cor_evento = utils_chamados.get_status_color(row.get('Status'))
+        
+        # Monta o título: "Agência - Projeto"
+        nome_agencia = row.get('Nome Agência', 'N/A')
+        nome_projeto = row.get('Projeto', 'N/A')
+        
         eventos.append({
-            "title": f"{row.get('Agência', 'N/A')} - {row.get('Projeto', 'N/A')}",
-            "color": utils.get_status_color(row.get('Status')),
+            "title": f"{nome_agencia} - {nome_projeto}",
+            "color": cor_evento,
             "start": row['Agendamento'].strftime('%Y-%m-%d'),
             "end": row['Agendamento'].strftime('%Y-%m-%d'),
+            "allDay": True,
+            # Passamos todos os dados relevantes para o Popup
             "extendedProps": {
-                "Projeto": row.get('Projeto', 'N/A'), "Agência": row.get('Agência', 'N/A'),
-                "Analista": row.get('Analista', 'N/A'), "Status": row.get('Status', 'N/A'),
-                "Descrição": row.get('Descrição', 'N/A')
+                "ID": str(row.get('ID', '')),
+                "Chamado": str(row.get('Nº Chamado', '')),
+                "Projeto": nome_projeto,
+                "Agência": nome_agencia,
+                "Analista": str(row.get('Analista', '')),
+                "Técnico": str(row.get('Técnico', '')),
+                "Status": str(row.get('Status', '')),
+                "Sub-Status": str(row.get('Sub-Status', '')),
+                "Descrição": str(row.get('Descrição', ''))
             }
         })
     
     opcoes_calendario = {
         "headerToolbar": {"left": "prev,next today", "center": "title", "right": "dayGridMonth,listWeek"},
-        "initialView": "dayGridMonth", "locale": "pt-br",
-        "buttonText": {"today": "hoje", "month": "mês", "week": "semana", "list": "lista"}
+        "initialView": "dayGridMonth", 
+        "locale": "pt-br",
+        "buttonText": {"today": "hoje", "month": "mês", "week": "semana", "list": "lista"},
+        "navLinks": True,
+        "selectable": True
     }
     
-    state = calendar(events=eventos, options=opcoes_calendario, key="calendario")
+    state = calendar(events=eventos, options=opcoes_calendario, key="calendario_geral")
     
-    # Lógica para exibir detalhes do evento clicado
+    # 4. EXIBIÇÃO DOS DETALHES AO CLICAR
     if state and state.get("eventClick"):
         st.session_state.evento_clicado = state["eventClick"]["event"]
 
     if "evento_clicado" in st.session_state and st.session_state.evento_clicado:
         evento = st.session_state.evento_clicado
-        
-        st.divider()
-        st.subheader(f"Detalhes de: {html.escape(evento['title'])}")
-        
         props = evento.get('extendedProps', {})
         
-        col1, col2 = st.columns(2)
-        col1.markdown(f"**Projeto:** {html.escape(props.get('Projeto', ''))}")
-        col2.markdown(f"**Agência:** {html.escape(props.get('Agência', ''))}")
-        col1.markdown(f"**Analista:** {html.escape(props.get('Analista', ''))}")
-        col2.markdown(f"**Status:** {html.escape(props.get('Status', ''))}")
+        st.divider()
+        st.markdown(f"### 🎫 {props.get('Chamado', 'Detalhes')}")
         
-        st.markdown(f"**Descrição:**")
-        st.info(f"{html.escape(props.get('Descrição', 'Nenhuma descrição.'))}")
+        # Cards de Informação
+        c1, c2, c3 = st.columns(3)
+        c1.info(f"**Projeto:**\n{props.get('Projeto')}")
+        c2.info(f"**Agência:**\n{props.get('Agência')}")
+        c3.warning(f"**Status:**\n{props.get('Status')} ({props.get('Sub-Status')})")
+        
+        c4, c5 = st.columns(2)
+        c4.markdown(f"**👤 Analista:** {props.get('Analista')}")
+        c5.markdown(f"**🔧 Técnico:** {props.get('Técnico')}")
+        
+        if props.get('Descrição') and props.get('Descrição') != 'nan':
+            st.markdown("**📝 Descrição:**")
+            st.text(props.get('Descrição'))
 
 # --- Controle Principal da Página ---
 if "logado" not in st.session_state or not st.session_state.logado:
@@ -99,10 +123,7 @@ if "logado" not in st.session_state or not st.session_state.logado:
 
 st.sidebar.title(f"Bem-vindo(a), {st.session_state.get('usuario', 'Visitante')}")
 st.sidebar.divider()
-st.sidebar.divider()
-st.sidebar.title("Sistema")
-if st.sidebar.button("Logout", use_container_width=True, key="logout_agenda"):
+if st.sidebar.button("Logout", key="logout_agenda_geral"):
     st.session_state.clear(); st.rerun()
 
 tela_calendario()
-
