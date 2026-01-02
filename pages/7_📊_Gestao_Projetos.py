@@ -1307,3 +1307,4 @@ if escolha_visao == "Visão Geral (Cockpit)":
 
 
 
+
