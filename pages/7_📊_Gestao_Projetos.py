@@ -661,6 +661,69 @@ def run_pedido_importer_dialog():
         st.session_state.importer_done = False; st.rerun()
     if st.button("Fechar"): st.rerun()
 
+# --- IMPORTADOR DE LINKS (FALTAVA ESSA FUNÇÃO) ---
+@st.dialog("🔗 Importar Links Externos", width="medium")
+def run_link_importer_dialog():
+    st.info("""
+        Atualize em massa a coluna **Link Externo**.
+        A planilha deve ter as colunas: **CHAMADO** e **LINK**.
+    """)
+    
+    uploaded_links = st.file_uploader("Planilha de Links (.xlsx/.csv)", type=["xlsx", "csv"], key="link_up_key")
+    
+    if uploaded_links:
+        try:
+            # Leitura do arquivo (lógica padrão)
+            if uploaded_links.name.endswith('.csv'): 
+                df_link = pd.read_csv(uploaded_links, sep=';', header=0, dtype=str)
+                if len(df_link.columns) < 2: 
+                    uploaded_links.seek(0)
+                    df_link = pd.read_csv(uploaded_links, sep=',', header=0, dtype=str)
+            else: 
+                df_link = pd.read_excel(uploaded_links, header=0, dtype=str)
+            
+            # Normaliza colunas para Maiúsculo
+            df_link.columns = [str(c).strip().upper() for c in df_link.columns]
+            
+            # Validação
+            if 'CHAMADO' not in df_link.columns or 'LINK' not in df_link.columns:
+                st.error("Erro: A planilha precisa das colunas 'CHAMADO' e 'LINK'.")
+            else:
+                st.dataframe(df_link.head(), use_container_width=True)
+                
+                if st.button("🚀 Processar Links"):
+                    with st.spinner("Atualizando links..."):
+                        # Carrega banco para pegar IDs internos
+                        df_bd = utils_chamados.carregar_chamados_db()
+                        if df_bd.empty: st.error("Banco vazio."); st.stop()
+                        
+                        # Mapa: Chamado -> ID Interno
+                        id_map = df_bd.set_index('Nº Chamado')['ID'].to_dict()
+                        
+                        count = 0
+                        total = len(df_link)
+                        bar = st.progress(0)
+                        
+                        for i, row in df_link.iterrows():
+                            chamado_key = str(row['CHAMADO']).strip()
+                            link_val = str(row['LINK']).strip()
+                            
+                            # Só atualiza se achou o chamado e o link não for vazio
+                            if chamado_key in id_map and link_val and link_val.lower() not in ['nan', 'none', '']:
+                                internal_id = id_map[chamado_key]
+                                # Chama o atualizador do banco
+                                utils_chamados.atualizar_chamado_db(internal_id, {'Link Externo': link_val})
+                                count += 1
+                            
+                            bar.progress((i + 1) / total)
+                        
+                        st.success(f"✅ {count} links atualizados!")
+                        time.sleep(1.5)
+                        st.rerun()
+                        
+        except Exception as e:
+            st.error(f"Erro ao ler arquivo: {e}")
+
 @st.dialog("⬇️ Exportar Dados Filtrados", width="small")
 def run_exporter_dialog(df_data_to_export):
     st.info(f"Preparando {len(df_data_to_export)} linhas para download.")
@@ -1254,6 +1317,7 @@ else:
                         an = str(r.get('Analista', 'N/D')).split(' ')[0].upper()
                         ag = str(r.get('Cód. Agência', '')).split('.')[0]
                         st.markdown(f"""<div style="background:white; border-left:4px solid {cc}; padding:6px; margin-bottom:6px; box-shadow:0 1px 2px #eee; font-size:0.8em;"><b>{sv}</b><br><div style="display:flex; justify-content:space-between; margin-top:4px;"><span>🏠 {ag}</span><span style="background:#E3F2FD; color:#1565C0; padding:1px 4px; border-radius:3px; font-weight:bold;">{an}</span></div></div>""", unsafe_allow_html=True)
+
 
 
 
