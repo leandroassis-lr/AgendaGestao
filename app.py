@@ -528,9 +528,11 @@ def tela_cadastro_projeto():
 
 # ----------------- MAIN -----------------
 def main():
+
     if "logado" not in st.session_state: st.session_state.logado = False
     if "boas_vindas" not in st.session_state: st.session_state.boas_vindas = False
     if "tela_cadastro_proj" not in st.session_state: st.session_state.tela_cadastro_proj = False
+    if "tela_configuracoes" not in st.session_state: st.session_state.tela_configuracoes = False # <--- Faltava inicializar
         
     if not st.session_state.logado:
         tela_login()
@@ -539,25 +541,32 @@ def main():
         tela_boas_vindas()
         
     else:
+        # --- SIDEBAR (Menu Lateral) ---
         with st.sidebar:
             st.title(f"Olá, {st.session_state.get('usuario','User')}")
-            st.sidebar.divider()
+            st.divider()
+            
             st.header("📥 Importações")
             if st.button("📂 Planilha Padrão", use_container_width=True): run_importer_dialog()
             if st.button("🚚 Pedidos", use_container_width=True): run_pedido_importer_dialog()
             if st.button("🔗 Links", use_container_width=True): run_link_importer_dialog()
+            
             st.divider()
+            
             st.header("📝 Cadastros")
             
             if st.button("➕ Novo Chamado Manual", use_container_width=True):
                 st.session_state.tela_cadastro_proj = True
+                st.session_state.tela_configuracoes = False # Garante que sai da config
                 st.rerun()
                 
-             st.sidebar.title("Sistema")
-             if st.sidebar.button("➕ Usuários", use_container_width=True):
-                 st.session_state.tela_configuracoes = True
-                 st.session_state.tela_cadastro_proj = False 
-                 st.rerun()     
+            st.divider()
+            st.header("⚙️ Sistema") # Use header em vez de title dentro da sidebar para hierarquia
+            
+            if st.button("👥 Usuários", use_container_width=True):
+                st.session_state.tela_configuracoes = True
+                st.session_state.tela_cadastro_proj = False 
+                st.rerun()      
                  
             st.divider()
             if st.button("Logout", type="primary", use_container_width=True):
@@ -566,11 +575,13 @@ def main():
 
         if st.session_state.get("tela_cadastro_proj"):
             tela_cadastro_projeto()
+            
+        elif st.session_state.get("tela_configuracoes"): # <--- ADICIONEI ISSO
+            tela_configuracoes() # Certifique-se de ter essa função importada ou definida
+            
         else:
             tela_cockpit()
 
 if __name__ == "__main__":
     utils.criar_tabelas_iniciais() 
     main()
-
-
