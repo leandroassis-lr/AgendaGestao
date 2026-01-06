@@ -8,6 +8,7 @@ import io # <--- Importante para a exportação
 from datetime import date
 
 st.set_page_config(page_title="Gestão Financeira", page_icon="💸", layout="wide")
+utils.load_css()
 
 # --- CSS PERSONALIZADO ---
 st.markdown("""
@@ -415,3 +416,4 @@ for nome_agencia, df_ag in agencias_view:
 if total_paginas > 1:
     st.divider()
     nav_controls("bottom")
+
