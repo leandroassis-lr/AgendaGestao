@@ -92,40 +92,229 @@ def run_link_importer_dialog():
 
 # ----------------- Função: Tela de Login -----------------
 def tela_login():
-    
+    # --- CSS exclusivo da tela de login ---
     st.markdown("""
     <style>
-    [data-testid="stSidebar"] { display: none; }
-    [data-testid="stAppViewContainer"] { background: linear-gradient(90deg, #e8f5e9 0%, #e8f5e9 50%, #1b5e20 50%, #1b5e20 100%); }
-    section.main > div { display: flex; align-items: stretch; justify-content: center; height: 100vh; }
-    div[data-testid="stForm"] { background-color: rgba(255, 255, 255, 0.95); padding: 2.5rem; border-radius: 16px; box-shadow: 0 0 20px rgba(0,0,0,0.15); width: 380px; margin: auto; }
-    .stButton > button { background-color: #43a047 !important; color: white !important; width: 100%; }
-    .login-logo-container img { max-width:15%; border-radius: 30%; display: block; margin: auto; }
+    /* ... (Todo o seu CSS da tela_login fica aqui) ... */
+    
+    /* Remove a sidebar SÓ na tela de login */
+    [data-testid="stSidebar"] {
+        display: none;
+    }
+
+    /* Fundo dividido para a tela de login */
+    [data-testid="stAppViewContainer"] {
+        background: linear-gradient(90deg, #e8f5e9 0%, #e8f5e9 50%, #1b5e20 50%, #1b5e20 100%);
+    }
+
+    section.main > div {
+        display: flex; 
+        align-items: stretch;
+        justify-content: center;
+        height: 100vh;
+    }
+
+    div[data-testid="stHorizontalBlock"] > div[data-testid^="stVerticalBlock"] {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        height: 100vh;
+    }
+
+    div[data-testid="stForm"] {
+        background-color: rgba(255, 255, 255, 0.95);
+        padding: 2.5rem;
+        border-radius: 16px;
+        box-shadow: 0 0 20px rgba(0,0,0,0.15);
+        width: 380px;
+        margin: auto;
+    }
+
+    .stButton > button {
+        background-color: #43a047 !important;
+        color: white !important;
+        border: none;
+        border-radius: 8px;
+        padding: 0.6rem;
+        font-weight: bold;
+    }
+
+    .stButton > button:hover {
+        background-color: #2e7d32 !important;
+    }
+
+    .stTextInput > div > div > input {
+        border-radius: 8px;
+        border: 1px solid #ccc;
+    }
+
+    /* Títulos */
+    div[data-testid="stHorizontalBlock"] > div:nth-child(1) h1, 
+    div[data-testid="stHorizontalBlock"] > div:nth-child(1) h2,
+    div[data-testid="stHorizontalBlock"] > div:nth-child(1) h3,
+    div[data-testid="stHorizontalBlock"] > div:nth-child(1) .stSubheader {
+        color: #1b5e20 !important;
+        text-align: center;
+    }
+
+    /* Centraliza o logotipo na direita */
+    .login-logo-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height:0vh !important; 
+        width: 300%;
+        text-align: center;
+    }
+
+    .login-logo-container img {
+        max-width:15%; /* Mantido */
+        height: auto;
+        border-radius: 30%;
+        -webkit-mask-image: -webkit-radial-gradient(white, black);
+        mask-image: radial-gradient(white, black);
+        filter: brightness(1.2) contrast(1.1);
+        box-shadow: 0 0 15px rgba(0,0,0,0.3);
+        display: block; /* Adicionado para garantir centralização */
+        margin: auto; /* Adicionado para garantir centralização */
+    }
     </style>
     """, unsafe_allow_html=True)
 
-    try: imagem_principal = Image.open("Foto 2.jpg")
-    except: imagem_principal = None
+    # --- IMAGEM PRINCIPAL ---
+    try:
+        imagem_principal = Image.open("Foto 2.jpg")
+    except Exception:
+        st.error("Não foi possível carregar 'Foto 2.jpg'.")
+        imagem_principal = None
 
+    # --- Layout (duas colunas) ---
     col1, col2 = st.columns([1, 1], gap="small") 
+
+    # --- Coluna esquerda (Login) ---
     with col1:
-        st.subheader("Gestão de Projetos Allarmi")      
+        st.subheader("Seja bem vindo à plataforma de gestão de projetos Allarmi")     
+        st.subheader("Acesse sua conta")
         st.write("") 
+
         with st.form("form_login"):
             nome = st.text_input("Nome", key="login_nome")
             email = st.text_input("E-mail", key="login_email")
+            
+            # Lógica de validação simples (funcional do usuário)
             if st.form_submit_button("Entrar"):
+                # Validação usando a função utils
                 if utils.validar_usuario(nome.strip(), email.strip()):
-                    st.session_state.update(usuario=nome.strip(), logado=True, boas_vindas=True, tela_principal=True)
-                    time.sleep(1); st.rerun()
+                    st.session_state["autenticado"] = True # Pode remover se não usar em outro lugar
+                    st.success(f"Acesso liberado! Bem-vindo, {nome.strip()} 👋")
+                    
+                    # Define os estados para a próxima tela
+                    st.session_state.update(
+                        usuario=nome.strip(), 
+                        logado=True, 
+                        boas_vindas=True, 
+                        tela_principal=False
+                    )
+                    # Adiciona a pausa antes do rerun (importante!)
+                    time.sleep(1) 
+                    st.rerun()
                 else:
-                    st.error("Acesso negado.")
+                    st.error("Acesso negado, tente novamente")
+                
+    # --- Coluna direita (Logo) ---
     with col2:
-        if imagem_principal: st.image(imagem_principal, use_container_width=True) 
+        # Envolve a imagem no div para aplicar o CSS
+        st.markdown('<div class="login-logo-container">', unsafe_allow_html=True)
+        if imagem_principal:
+            # st.image agora dentro do div
+            st.image(imagem_principal, use_container_width=True) 
+        else:
+             st.warning("Não foi possível carregar a imagem do logo.")
+        st.markdown('</div>', unsafe_allow_html=True) # Fecha o div
 
-# ----------------- Tela de Boas-Vindas -----------------
+# ----------------- Função: Tela de Cadastro de Usuário -----------------#
+def tela_cadastro_usuario():
+    st.subheader("Cadastrar Novo Usuário")
+
+    # Usar colunas para limitar a largura do formulário
+    col1, col2 = st.columns([1, 2]) 
+    with col1:
+        # Adicionado clear_on_submit=True para limpar o form após o cadastro
+        with st.form("form_cadastro_usuario", clear_on_submit=True): 
+            nome = st.text_input("Nome", key="cad_nome")
+            email = st.text_input("Email", key="cad_email")
+            senha = st.text_input("Senha (opcional)", type="password", key="cad_senha")
+            
+            if st.form_submit_button("Cadastrar"):
+                if not nome or not email:
+                    st.error("Preencha Nome e Email.")
+                    return
+                
+                df = utils.carregar_usuarios_db() 
+
+                # Padroniza os nomes das colunas para "Capitalized" (ex: "email" -> "Email")
+                if not df.empty:
+                    df.columns = [col.capitalize() for col in df.columns]
+
+                # Agora verificamos se o email existe na coluna padronizada "Email"
+                email_check_list = []
+                if not df.empty and "Email" in df.columns:
+                    email_check_list = df["Email"].astype(str).str.lower().values
+
+                if email.lower() in email_check_list:
+                
+                    st.error("Email já cadastrado!")
+                else:
+                    nova_linha = pd.DataFrame([[nome, email, senha]], columns=["Nome", "Email", "Senha"]) 
+                    df_novo = pd.concat([df, nova_linha], ignore_index=True)
+
+                    if utils.salvar_usuario_db(df_novo): 
+                        st.success("Usuário cadastrado com sucesso!")
+                        st.rerun() # Adicionado para atualizar a lista de usuários abaixo
+                    else:
+                        st.error("Erro ao salvar usuário no banco de dados.")
+    with col2:
+        st.empty()
+
+# ----------------- Função: Tela de Configurações -----------------
+def tela_configuracoes():
+    
+    if st.button("⬅️ Voltar para Projetos"):
+        st.session_state.tela_configuracoes = False
+        st.rerun()
+        
+    st.title("Configurações do Sistema")
+        
+    tela_cadastro_usuario() 
+    
+    st.divider()
+    
+    # 2. Adicionar a visualização de usuários
+    st.subheader("Visualizar Usuários Cadastrados")
+    try:
+        df_users = utils.carregar_usuarios_db()
+        if not df_users.empty:
+            
+            # Padroniza as colunas (ex: "nome" -> "Nome", "email" -> "Email")
+            df_users.columns = [col.capitalize() for col in df_users.columns]
+            
+            # Colunas que queremos mostrar (ignora "Senha" e outras)
+            cols_to_show = [col for col in ["Nome", "Email"] if col in df_users.columns]
+            
+            if not cols_to_show:
+                st.warning("O arquivo de usuários existe, mas não contém as colunas 'Nome' ou 'Email'.")
+            else:
+                st.dataframe(df_users[cols_to_show], use_container_width=True)
+            
+        else:
+            st.info("Nenhum usuário cadastrado ainda.")
+    except Exception as e:
+        st.error(f"Não foi possível carregar usuários: {e}")
+        
+# ----------------- Função: Tela de Boas-Vindas -----------------
 def tela_boas_vindas():
-     [  "Que seu dia seja produtivo e cheio de conquistas!",
+    mensagens = [
+        "Que seu dia seja produtivo e cheio de conquistas!",
         "Acredite no seu potencial e siga firme rumo aos resultados!",
         "Grandes projetos nascem de pequenas ações consistentes!",
         "Transforme desafios em oportunidades hoje!",
@@ -133,14 +322,17 @@ def tela_boas_vindas():
         "Siga com foco, energia e propósito neste novo dia!"
     ]
     msg = random.choice(mensagens)
+
     st.markdown("""
     <style>
     [data-testid="stSidebar"], [data-testid="stToolbar"] {
         display: none;
     }
+
     body, [data-testid="stAppViewContainer"], section.main, [data-testid="stVerticalBlock"], [data-testid="stHorizontalBlock"] > div {
         background-color: #e8f5e9 !important;
     }
+
     .welcome-screen-container { 
         display: flex;
         flex-direction: column; 
@@ -152,15 +344,18 @@ def tela_boas_vindas():
         animation: fadeIn 1s ease-in-out;
         color: #1b5e20; 
     }
+
     @keyframes fadeIn {
         from { opacity: 0; }
         to { opacity: 1; }
     }
+
     .welcome-screen-container h1 {
         font-size: 3rem;
         margin-bottom: 25px;
         color: #1b5e20; 
     }
+
     .welcome-screen-container p {
         font-size: 1.4rem;
         opacity: 0.9;
@@ -168,18 +363,20 @@ def tela_boas_vindas():
     }
     </style>
     """, unsafe_allow_html=True)
+
     st.markdown(f"""
         <div class="welcome-screen-container">
             <h1>Seja bem-vindo, {st.session_state.usuario} 👋</h1>
             <p>{msg}</p>
         </div>
     """, unsafe_allow_html=True)
+
     time.sleep(5)
     st.session_state.boas_vindas = False
     st.session_state.tela_principal = True
     st.rerun()
 
-# ----------------- COCKPIT (Antiga Pág 7) -----------------
+# ----------------- COCKPIT -----------------
 def tela_cockpit():
     # Sidebar de Ações
     st.sidebar.title(f"Olá, {st.session_state.get('usuario','User')}")
@@ -268,3 +465,4 @@ def main():
 if __name__ == "__main__":
     utils.criar_tabelas_iniciais() 
     main()
+
