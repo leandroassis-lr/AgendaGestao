@@ -423,7 +423,7 @@ def tela_cockpit():
         with cols[i % 3]:
             # HTML Card
             st.markdown(f"""
-            <div style="padding: 15px; background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 15px;">
+            <div style="border-left: 5px solid {cor}; padding: 15px; background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 15px;">
                 <h4 style="margin:0; color:#333; font-size:1.1em;">{proj}</h4>
                 <div style="display:flex; justify-content:space-between; font-size:0.8em; color:#666; margin-top:5px;">
                     <span>Progresso</span><span>{perc}%</span>
@@ -575,6 +575,7 @@ def main():
 if __name__ == "__main__":
     utils.criar_tabelas_iniciais() 
     main()
+
 
 
 
