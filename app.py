@@ -526,7 +526,7 @@ def tela_cadastro_projeto():
             else:
                 st.error("Erro ao salvar no banco de dados.")
 
-# ----------------- MAIN (CORRIGIDO) -----------------
+# ----------------- MAIN -----------------
 def main():
     if "logado" not in st.session_state: st.session_state.logado = False
     if "boas_vindas" not in st.session_state: st.session_state.boas_vindas = False
@@ -572,4 +572,5 @@ def main():
 if __name__ == "__main__":
     utils.criar_tabelas_iniciais() 
     main()
+
 
