@@ -450,6 +450,82 @@ def tela_cockpit():
                 st.session_state["sel_projeto"] = proj
                 st.switch_page("pages/1_📊_Gestao_Projetos.py")
 
+# --- FUNÇÃO TELA DE CADASTRO DE PROJETOS ---
+def tela_cadastro_projeto():
+    st.markdown("### ➕ Novo Chamado")
+    
+    # Botão de Voltar
+    if st.button("⬅️ Cancelar / Voltar"):
+        st.session_state.tela_cadastro_proj = False
+        st.rerun()
+
+    with st.form("form_novo_chamado"):
+        c1, c2 = st.columns(2)
+        with c1:
+            novo_chamado = st.text_input("Nº Chamado *", placeholder="Ex: GTS-123456")
+            novo_projeto = st.text_input("Nome do Projeto *", placeholder="Ex: MODERNIZAÇÃO CFTV")
+            nova_agencia_cod = st.text_input("Cód. Agência *", placeholder="Ex: 1234")
+            nova_agencia_nome = st.text_input("Nome Agência", placeholder="Ex: AGENCIA CENTRO")
+            novo_analista = st.text_input("Analista Responsável", value=st.session_state.get('usuario', ''))
+        
+        with c2:
+            novo_servico = st.text_input("Tipo de Serviço", placeholder="Ex: Instalação, Vistoria...")
+            novo_sistema = st.text_input("Sistema", placeholder="Ex: CFTV, Alarme...")
+            nova_data_abertura = st.date_input("Data de Abertura", value=date.today())
+            novo_agendamento = st.date_input("Data Agendamento (Opcional)", value=None)
+            novo_link = st.text_input("Link Externo (Monday/Trello)", placeholder="https://...")
+
+        st.markdown("---")
+        st.markdown("**Detalhes do Equipamento (Opcional)**")
+        c3, c4, c5 = st.columns([1, 3, 1])
+        with c3: qtd_eq = st.number_input("Qtd", min_value=1, value=1)
+        with c4: desc_eq = st.text_input("Descrição Equipamento / Item")
+        with c5: cod_eq = st.text_input("Cód. Item")
+
+        observacao = st.text_area("Observações Iniciais", height=80)
+
+        submitted = st.form_submit_button("💾 Salvar Chamado", use_container_width=True, type="primary")
+
+        if submitted:
+            # Validação Básica
+            if not novo_chamado or not novo_projeto or not nova_agencia_cod:
+                st.error("Campos obrigatórios: Nº Chamado, Projeto e Cód. Agência.")
+                return
+
+            # Monta o dicionário de dados
+            dados_novo = {
+                "Nº Chamado": novo_chamado,
+                "Projeto": novo_projeto,
+                "Cód. Agência": nova_agencia_cod,
+                "Nome Agência": nova_agencia_nome,
+                "Analista": novo_analista,
+                "Serviço": novo_servico,
+                "Sistema": novo_sistema,
+                "Data Abertura": nova_data_abertura,
+                "Agendamento": novo_agendamento,
+                "Link Externo": novo_link,
+                "Qtd.": str(qtd_eq),
+                "Equipamento": desc_eq,
+                "Descrição": f"{qtd_eq} - {desc_eq}" if desc_eq else "",
+                "Cód. Equip.": cod_eq,
+                "Observação": observacao,
+                "Status": "AGENDADO" if novo_agendamento else "PENDÊNCIA", # Define status inicial
+                "Sub-Status": "Aguardando início"
+            }
+            
+            df_salvar = pd.DataFrame([dados_novo])
+            
+            # Adiciona colunas faltantes vazias para não quebrar o bulk_insert
+            sucesso, qtd = utils_chamados.bulk_insert_chamados_db(df_salvar)
+            
+            if sucesso:
+                st.success(f"Chamado {novo_chamado} cadastrado com sucesso!")
+                time.sleep(1.5)
+                st.session_state.tela_cadastro_proj = False
+                st.rerun()
+            else:
+                st.error("Erro ao salvar no banco de dados.")
+
 # ----------------- MAIN -----------------
 def main():
     if "logado" not in st.session_state: st.session_state.logado = False
@@ -459,9 +535,22 @@ def main():
         tela_login()
     elif st.session_state.boas_vindas:
         tela_boas_vindas()
+
+    # Sidebar com Ações
+    with st.sidebar:
+        
+        st.divider()
+        # BOTÃO PARA ACIONAR O CADASTRO
+        if st.button("➕ Novo Chamado Manual", use_container_width=True):
+            st.session_state.tela_cadastro_proj = True
+            st.rerun()
+
+    if st.session_state.get("tela_cadastro_proj"):
+        tela_cadastro_projeto()
     else:
         tela_cockpit()
 
 if __name__ == "__main__":
     utils.criar_tabelas_iniciais() 
     main()
+
