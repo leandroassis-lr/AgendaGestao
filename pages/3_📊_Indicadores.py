@@ -27,7 +27,7 @@ def tela_dashboard():
         st.error("Erro: Plotly não instalado.")
         return
 
-    # --- 2. TRATAMENTO DE DATAS (CRUCIAL) ---
+    # --- 2. TRATAMENTO DE DATAS ---
     # Converte tudo para datetime do Pandas e força erros virarem NaT
     for col in ['Agendamento', 'Fechamento', 'Abertura']:
         if col in df_raw.columns:
@@ -46,6 +46,7 @@ def tela_dashboard():
         'Analista': 'first',
         'Fechamento': 'first',
         'Abertura': 'first',
+        'Nº Chamado': 'first',
         'ID': 'first'
     }
     
@@ -63,21 +64,17 @@ def tela_dashboard():
     with c2: 
         d_fim_input = st.date_input("Até:", value=hoje + timedelta(days=30))
     
-    # --- CORREÇÃO DO ERRO TYPEERROR ---
     # Convertemos os inputs (date) para Timestamps (datetime64[ns])
     ts_inicio = pd.to_datetime(d_inicio_input)
     # Ajustamos o fim para pegar o final do dia (23:59:59)
     ts_fim = pd.to_datetime(d_fim_input) + timedelta(hours=23, minutes=59, seconds=59)
 
     # Filtra DataFrame Principal (Baseado no Agendamento)
-    # A comparação agora é Timestamp vs Timestamp (Seguro)
     mask_periodo = (df_proj['Agendamento'] >= ts_inicio) & (df_proj['Agendamento'] <= ts_fim)
     df_filtrado = df_proj[mask_periodo].copy()
     
     if df_filtrado.empty:
         st.warning("Nenhum projeto encontrado neste período de agendamento.")
-        # Não damos return aqui para permitir ver os gráficos gerais se quiser, 
-        # ou paramos. Vamos deixar continuar mas com dados vazios.
 
     # --- 5. CÁLCULO DE SLA E STATUS ---
     status_fim = ['concluído', 'finalizado', 'faturado', 'fechado', 'equipamento entregue']
@@ -91,7 +88,6 @@ def tela_dashboard():
         if status in status_fim:
             # Se tem data de fechamento e ela foi depois do agendamento -> Atrasou
             if pd.notna(fechamento) and pd.notna(agendamento):
-                # Compara timestamps
                 if fechamento > agendamento + timedelta(days=1): # Tolerância de 1 dia
                     return "Finalizado com Atraso"
             return "Finalizado no Prazo"
@@ -113,8 +109,16 @@ def tela_dashboard():
     else:
         df_filtrado['Situacao_SLA'] = []
 
-    # Separação
-    df_abertos = df_filtrado[~df_filtrado['Status'].str.lower().isin(status_fim) & ~df_filtrado['Status'].str.lower().contains('cancelado')]
+    # --- CORREÇÃO DO ERRO AQUI ---
+    # Separação dos DataFrames para KPIs
+    
+    # Abertos: Não Finalizados E Não Cancelados
+    # Usamos case=False dentro do contains em vez de .str.lower().contains
+    df_abertos = df_filtrado[
+        (~df_filtrado['Status'].str.lower().isin(status_fim)) & 
+        (~df_filtrado['Status'].str.contains('cancelado', case=False, na=False))
+    ]
+    
     df_finalizados = df_filtrado[df_filtrado['Status'].str.lower().isin(status_fim)]
     
     # --- 6. CARTÕES (KPIs) ---
@@ -122,6 +126,8 @@ def tela_dashboard():
     
     qtd_total = len(df_filtrado)
     qtd_abertos = len(df_abertos)
+    
+    # Pendência (Busca texto parcial)
     qtd_pendencia = len(df_filtrado[df_filtrado['Status'].str.contains("Pendencia|Pendência", na=False, case=False)])
     
     # SLA Global
@@ -214,7 +220,7 @@ def tela_dashboard():
 
     st.divider()
     
-    # LINHA 3: HISTÓRICO DE ENTREGAS (CORREÇÃO FINAL AQUI)
+    # LINHA 3: HISTÓRICO DE ENTREGAS
     st.subheader("📅 Histórico de Entregas (Data de Fechamento)")
     
     # Filtra projetos finalizados da base total (df_proj) que tenham data de fechamento
