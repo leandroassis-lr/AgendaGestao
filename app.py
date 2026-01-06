@@ -382,7 +382,7 @@ def tela_cockpit():
     st.sidebar.title(f"Olá, {st.session_state.get('usuario','User')}")
     st.sidebar.divider()
     st.sidebar.header("📥 Importações")
-    if st.sidebar.button("📂 Planilha Padrão"): run_importer_dialog()
+    if st.sidebar.button("📂 Chamados"): run_importer_dialog()
     if st.sidebar.button("🚚 Pedidos"): run_pedido_importer_dialog()
     if st.sidebar.button("🔗 Links"): run_link_importer_dialog()
     st.sidebar.divider()
@@ -448,7 +448,7 @@ def tela_cockpit():
             # BOTÃO DE AÇÃO
             if st.button(f"🔍 Ver Detalhes", key=f"btn_{i}", use_container_width=True):
                 st.session_state["sel_projeto"] = proj
-                st.switch_page("pages/1_🔧_Detalhes_Projetos.py")
+                st.switch_page("pages/1_📊_Gestao_Projetos.py")
 
 # ----------------- MAIN -----------------
 def main():
@@ -465,4 +465,3 @@ def main():
 if __name__ == "__main__":
     utils.criar_tabelas_iniciais() 
     main()
-
