@@ -7,7 +7,7 @@ from PIL import Image
 import re
 import html
 import utils 
-import utils_chamados # <--- IMPORTANTE: Conexão com a base de chamados
+import utils_chamados
 
 # ----------------- Configuração da Página e CSS -----------------
 st.set_page_config(page_title="Projetos - GESTÃO", page_icon="📋", layout="wide")
@@ -585,3 +585,4 @@ def main():
 if __name__ == "__main__":
     utils.criar_tabelas_iniciais() 
     main()
+
