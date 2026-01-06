@@ -378,17 +378,7 @@ def tela_boas_vindas():
 
 # ----------------- COCKPIT -----------------
 def tela_cockpit():
-    # Sidebar de Ações
-    st.sidebar.title(f"Olá, {st.session_state.get('usuario','User')}")
-    st.sidebar.divider()
-    st.sidebar.header("📥 Importações")
-    if st.sidebar.button("📂 Chamados"): run_importer_dialog()
-    if st.sidebar.button("🚚 Pedidos"): run_pedido_importer_dialog()
-    if st.sidebar.button("🔗 Links"): run_link_importer_dialog()
-    st.sidebar.divider()
-    if st.sidebar.button("Logout", type="primary"): st.session_state.clear(); st.rerun()
-
-    # Conteúdo Principal
+   
     st.title("📌 Visão Geral (Cockpit)")
     
     df = utils_chamados.carregar_chamados_db()
@@ -543,11 +533,11 @@ def main():
     else:
         # --- SIDEBAR (Menu Lateral) ---
         with st.sidebar:
-            st.title(f"Olá, {st.session_state.get('usuario','User')}")
+            st.title(f"Seja bem vindo(a), {st.session_state.get('usuario','User')}")
             st.divider()
             
             st.header("📥 Importações")
-            if st.button("📂 Planilha Padrão", use_container_width=True): run_importer_dialog()
+            if st.button("📂 Chamados", use_container_width=True): run_importer_dialog()
             if st.button("🚚 Pedidos", use_container_width=True): run_pedido_importer_dialog()
             if st.button("🔗 Links", use_container_width=True): run_link_importer_dialog()
             
@@ -555,7 +545,7 @@ def main():
             
             st.header("📝 Cadastros")
             
-            if st.button("➕ Novo Chamado Manual", use_container_width=True):
+            if st.button("➕ Chamado", use_container_width=True):
                 st.session_state.tela_cadastro_proj = True
                 st.session_state.tela_configuracoes = False # Garante que sai da config
                 st.rerun()
@@ -576,8 +566,8 @@ def main():
         if st.session_state.get("tela_cadastro_proj"):
             tela_cadastro_projeto()
             
-        elif st.session_state.get("tela_configuracoes"): # <--- ADICIONEI ISSO
-            tela_configuracoes() # Certifique-se de ter essa função importada ou definida
+        elif st.session_state.get("tela_configuracoes"):
+            tela_configuracoes()
             
         else:
             tela_cockpit()
@@ -585,4 +575,3 @@ def main():
 if __name__ == "__main__":
     utils.criar_tabelas_iniciais() 
     main()
-
