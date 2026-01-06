@@ -526,31 +526,46 @@ def tela_cadastro_projeto():
             else:
                 st.error("Erro ao salvar no banco de dados.")
 
-# ----------------- MAIN -----------------
+# ----------------- MAIN (CORRIGIDO) -----------------
 def main():
     if "logado" not in st.session_state: st.session_state.logado = False
-    if "boas_vindas" not in st.session_state: st.session_state.boas_vindas = False 
-
+    if "boas_vindas" not in st.session_state: st.session_state.boas_vindas = False
+    if "tela_cadastro_proj" not in st.session_state: st.session_state.tela_cadastro_proj = False
+        
     if not st.session_state.logado:
         tela_login()
+        
     elif st.session_state.boas_vindas:
         tela_boas_vindas()
-
-    # Sidebar com Ações
-    with st.sidebar:
         
-        st.divider()
-        # BOTÃO PARA ACIONAR O CADASTRO
-        if st.button("➕ Novo Chamado Manual", use_container_width=True):
-            st.session_state.tela_cadastro_proj = True
-            st.rerun()
-
-    if st.session_state.get("tela_cadastro_proj"):
-        tela_cadastro_projeto()
     else:
-        tela_cockpit()
+        with st.sidebar:
+            st.title(f"Olá, {st.session_state.get('usuario','User')}")
+            st.sidebar.divider()
+            
+            st.header("📥 Importações")
+            if st.button("📂 Planilha Padrão", use_container_width=True): run_importer_dialog()
+            if st.button("🚚 Pedidos", use_container_width=True): run_pedido_importer_dialog()
+            if st.button("🔗 Links", use_container_width=True): run_link_importer_dialog()
+            
+            st.divider()
+            
+            st.header("📝 Cadastros")
+            # Botão que ativa a tela de cadastro manual
+            if st.button("➕ Novo Chamado Manual", use_container_width=True):
+                st.session_state.tela_cadastro_proj = True
+                st.rerun()
+                
+            st.divider()
+            if st.button("Logout", type="primary", use_container_width=True):
+                st.session_state.clear()
+                st.rerun()
+
+        if st.session_state.get("tela_cadastro_proj"):
+            tela_cadastro_projeto()
+        else:
+            tela_cockpit()
 
 if __name__ == "__main__":
     utils.criar_tabelas_iniciais() 
     main()
-
