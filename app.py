@@ -548,16 +548,17 @@ def main():
             if st.button("🔗 Links", use_container_width=True): run_link_importer_dialog()
             st.divider()
             st.header("📝 Cadastros")
-            # Botão que ativa a tela de cadastro manual
+            
             if st.button("➕ Novo Chamado Manual", use_container_width=True):
                 st.session_state.tela_cadastro_proj = True
                 st.rerun()
-             st.sidebar.divider() 
+                
              st.sidebar.title("Sistema")
              if st.sidebar.button("➕ Usuários", use_container_width=True):
                  st.session_state.tela_configuracoes = True
                  st.session_state.tela_cadastro_proj = False 
-                 st.rerun()               
+                 st.rerun()     
+                 
             st.divider()
             if st.button("Logout", type="primary", use_container_width=True):
                 st.session_state.clear()
@@ -571,3 +572,4 @@ def main():
 if __name__ == "__main__":
     utils.criar_tabelas_iniciais() 
     main()
+
