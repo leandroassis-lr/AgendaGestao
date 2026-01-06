@@ -63,7 +63,7 @@ def carregar_dados_fin():
 def calcular_valor_linha(row, lpu_f, lpu_s, lpu_e):
     serv = str(row.get('Serviço', '')).strip().lower()
     equip = str(row.get('Equipamento', '')).strip().lower()
-    qtd = pd.to_numeric(row.get('Qtd.'), errors='coerce')
+    qtd = pd.to_numeric(row.get('Qtd.', errors='coerce'))
     if pd.isna(qtd) or qtd == 0: qtd = 1
     
     if serv in lpu_f: return lpu_f[serv]
@@ -98,20 +98,16 @@ def definir_status_financeiro(row, dict_books_info, set_liberados):
 
 # --- SIDEBAR COM EXPORTAÇÃO FINANCEIRA ---
 with st.sidebar:
-    st.header("📤 Exportação")
+    st.header("📤 Exportação Relatórios")
     
-    # Botão ÚNICO: Relatório Financeiro Calculado
+    # 1. Relatório Financeiro Calculado (Principal)
     if st.button("📊 Baixar Relatório Financeiro (.xlsx)"):
         with st.spinner("Gerando planilha financeira..."):
-            
-            # Recarrega dados para exportação
             df_raw, lpu_f, lpu_s, lpu_e, df_books, df_lib = carregar_dados_fin()
             
             if not df_raw.empty:
-                # Calcula Valores
                 df_raw['Valor_Total'] = df_raw.apply(lambda x: calcular_valor_linha(x, lpu_f, lpu_s, lpu_e), axis=1)
                 
-                # Prepara dados auxiliares para KPI
                 set_liberados = set(df_lib['chamado'].astype(str).str.strip()) if not df_lib.empty else set()
                 dict_books_info = {}
                 if not df_books.empty:
@@ -122,12 +118,10 @@ with st.sidebar:
                         dt_env = row_b.get('DATA ENVIO', row_b.get('ENVIO', ''))
                         dict_books_info[ch] = {'book_pronto': pronto, 'data_envio': dt_env}
                 
-                # Aplica Status KPI
                 df_raw['Status_KPI_Fin'] = df_raw.apply(
                     lambda x: definir_status_financeiro(x, dict_books_info, set_liberados)[0], axis=1
                 )
                 
-                # Seleciona Colunas
                 colunas_fin = [
                     'Nº Chamado', 'Status_KPI_Fin', 'Valor_Total', 
                     'Agencia_Combinada', 'Serviço', 'Projeto', 'Sistema',
@@ -139,16 +133,13 @@ with st.sidebar:
                 cols_finais = [c for c in colunas_fin if c in df_raw.columns]
                 df_export = df_raw[cols_finais].copy()
                 
-                # Gera Excel
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                     df_export.to_excel(writer, index=False, sheet_name='Financeiro_Detalhado')
-                    
                     workbook = writer.book
                     worksheet = writer.sheets['Financeiro_Detalhado']
                     fmt_money = workbook.add_format({'num_format': 'R$ #,##0.00'})
                     fmt_header = workbook.add_format({'bold': True, 'bg_color': '#2E7D32', 'font_color': 'white', 'border': 1})
-                    
                     for i, col in enumerate(df_export.columns):
                         width = 18
                         if col == 'Valor_Total': width = 15
@@ -157,7 +148,7 @@ with st.sidebar:
                         worksheet.write(0, i, col, fmt_header)
 
                 st.download_button(
-                    label="✅ Clique aqui para Salvar",
+                    label="✅ Clique aqui para Salvar Relatório",
                     data=output.getvalue(),
                     file_name=f"Relatorio_Financeiro_{date.today().strftime('%d-%m-%Y')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -165,11 +156,49 @@ with st.sidebar:
             else:
                 st.warning("Sem dados para gerar relatório.")
 
+    # --- NOVA SEÇÃO: DADOS BRUTOS ---
+    st.divider()
+    st.header("💾 Bases de Dados Brutas")
+    
+    # 2. Download Base Books
+    df_books_raw = utils_financeiro.carregar_books_db()
+    if not df_books_raw.empty:
+        buffer_books = io.BytesIO()
+        with pd.ExcelWriter(buffer_books, engine='xlsxwriter') as writer:
+            df_books_raw.to_excel(writer, index=False, sheet_name='Books')
+        
+        st.download_button(
+            label="📂 Baixar Base Books (.xlsx)",
+            data=buffer_books.getvalue(),
+            file_name=f"Base_Books_{date.today()}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
+    else:
+        st.info("Base de Books vazia.")
+
+    # 3. Download Base Liberação
+    df_lib_raw = utils_financeiro.carregar_liberacao_db()
+    if not df_lib_raw.empty:
+        buffer_lib = io.BytesIO()
+        with pd.ExcelWriter(buffer_lib, engine='xlsxwriter') as writer:
+            df_lib_raw.to_excel(writer, index=False, sheet_name='Liberacao')
+        
+        st.download_button(
+            label="🏦 Baixar Base Liberação (.xlsx)",
+            data=buffer_lib.getvalue(),
+            file_name=f"Base_Liberacao_{date.today()}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
+    else:
+        st.info("Base de Liberação vazia.")
+
+
 # --- MAIN: CARREGAMENTO DOS DADOS PARA O PAINEL ---
 st.markdown("<div class='section-title-center'>PAINEL FINANCEIRO (KPIS DO ANO)</div>", unsafe_allow_html=True)
 
 with st.spinner("Processando dados financeiros..."):
-    # AQUI ESTAVA O ERRO ANTES: A função carregar_dados_fin agora já está definida acima
     df_chamados_raw, lpu_f, lpu_s, lpu_e, df_books, df_lib = carregar_dados_fin()
 
 if df_chamados_raw.empty:
@@ -417,5 +446,3 @@ for nome_agencia, df_ag in agencias_view:
 if total_paginas > 1:
     st.divider()
     nav_controls("bottom")
-
-
