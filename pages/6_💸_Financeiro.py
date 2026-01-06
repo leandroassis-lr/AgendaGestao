@@ -35,7 +35,10 @@ utils_financeiro.criar_tabela_liberacao()
 
 if 'pag_fin_atual' not in st.session_state: st.session_state.pag_fin_atual = 0
 
-# --- FUNÇÕES AUXILIARES (DEFINIDAS NO TOPO) ---
+# ==============================================================================
+# 1. FUNÇÕES AUXILIARES (MOVIDAS PARA O TOPO)
+# ==============================================================================
+
 def formatar_agencia_excel(id_agencia, nome_agencia):
     try:
         id_agencia_limpo = str(id_agencia).split('.')[0]
@@ -48,8 +51,12 @@ def formatar_agencia_excel(id_agencia, nome_agencia):
 @st.cache_data(ttl=60)
 def carregar_dados_fin():
     df_chamados = utils_chamados.carregar_chamados_db()
-    if 'Cód. Agência' in df_chamados.columns and 'Nome Agência' in df_chamados.columns:
+    
+    # Cria coluna combinada se possível
+    if not df_chamados.empty and 'Cód. Agência' in df_chamados.columns and 'Nome Agência' in df_chamados.columns:
         df_chamados['Agencia_Combinada'] = df_chamados.apply(lambda x: formatar_agencia_excel(x['Cód. Agência'], x['Nome Agência']), axis=1)
+    elif not df_chamados.empty:
+        df_chamados['Agencia_Combinada'] = "N/A"
     
     return (
         df_chamados,
@@ -63,7 +70,7 @@ def carregar_dados_fin():
 def calcular_valor_linha(row, lpu_f, lpu_s, lpu_e):
     serv = str(row.get('Serviço', '')).strip().lower()
     equip = str(row.get('Equipamento', '')).strip().lower()
-    qtd = pd.to_numeric(row.get('Qtd.', errors='coerce'))
+    qtd = pd.to_numeric(row.get('Qtd.', 0), errors='coerce')
     if pd.isna(qtd) or qtd == 0: qtd = 1
     
     if serv in lpu_f: return lpu_f[serv]
@@ -96,13 +103,17 @@ def definir_status_financeiro(row, dict_books_info, set_liberados):
     # 3. POTENCIAL
     return "POTENCIAL", "#1565C0" # Azul
 
-# --- SIDEBAR COM EXPORTAÇÃO FINANCEIRA ---
+# ==============================================================================
+# 2. SIDEBAR E INTERFACE
+# ==============================================================================
+
 with st.sidebar:
     st.header("📤 Exportação Relatórios")
     
     # 1. Relatório Financeiro Calculado (Principal)
     if st.button("📊 Baixar Relatório Financeiro (.xlsx)"):
         with st.spinner("Gerando planilha financeira..."):
+            # AGORA A FUNÇÃO JÁ EXISTE POIS FOI DEFINIDA ACIMA
             df_raw, lpu_f, lpu_s, lpu_e, df_books, df_lib = carregar_dados_fin()
             
             if not df_raw.empty:
@@ -199,6 +210,7 @@ with st.sidebar:
 st.markdown("<div class='section-title-center'>PAINEL FINANCEIRO (KPIS DO ANO)</div>", unsafe_allow_html=True)
 
 with st.spinner("Processando dados financeiros..."):
+    # AGORA FUNCIONA PORQUE A FUNÇÃO JÁ FOI LIDA PELO PYTHON
     df_chamados_raw, lpu_f, lpu_s, lpu_e, df_books, df_lib = carregar_dados_fin()
 
 if df_chamados_raw.empty:
