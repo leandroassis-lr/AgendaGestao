@@ -533,7 +533,7 @@ def main():
     else:
         # --- SIDEBAR (Menu Lateral) ---
         with st.sidebar:
-            st.title(f"Seja bem vindo(a), {st.session_state.get('usuario','User')}")
+            st.title(f"Bem-vindo(a), {st.session_state.get('usuario','User')}")
             st.divider()
             
             st.header("📥 Importações")
@@ -575,5 +575,6 @@ def main():
 if __name__ == "__main__":
     utils.criar_tabelas_iniciais() 
     main()
+
 
 
