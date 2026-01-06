@@ -4,8 +4,8 @@ from datetime import date, datetime, timedelta
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-import utils          # Para CSS e estilos gerais
-import utils_chamados # <--- IMPORTANTE: Conexão com os dados da Pag 7
+import utils
+import utils_chamados
 import html
 
 st.set_page_config(page_title="Relatórios - GESTÃO", page_icon="📧", layout="wide")
@@ -219,3 +219,4 @@ if "logado" not in st.session_state or not st.session_state.logado:
     st.stop()
 
 tela_relatorios()
+
