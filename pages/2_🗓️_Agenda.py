@@ -50,52 +50,66 @@ def tela_calendario():
         st.error("ERRO: O componente de calendário não está instalado.")
         return
 
-    # --- 3. AGRUPAMENTO (A MÁGICA ACONTECE AQUI) ---
-    # Agrupa por: Data, Agência e Projeto.
-    # As outras colunas nós "juntamos" ou pegamos o primeiro valor.
-    
-    # Converte colunas para string para evitar erro no join
-    cols_to_str = ['Nº Chamado', 'Descrição', 'Status', 'Sub-Status', 'Analista', 'Técnico']
+    # --- 3. AGRUPAMENTO ---
+    # Convertemos colunas para string
+    cols_to_str = ['Nº Chamado', 'Descrição', 'Status', 'Sub-Status', 'Analista', 'Técnico', 'Cód. Agência'] # Adicionei Cód. Agência aqui por segurança
     for c in cols_to_str:
         if c in df_calendario.columns:
             df_calendario[c] = df_calendario[c].astype(str)
 
+    # Agrupa incluindo 'Cód. Agência' na chave para não perder essa informação
+    # Se uma agência tiver códigos diferentes para o mesmo nome (raro, mas possível), vai separar.
+    # Se preferir agrupar apenas por nome e pegar o primeiro código, mova 'Cód. Agência' para o dicionário agg com 'first'
+    
+    # Opção A: Agrupar por Código também (Mais seguro se tiver nomes iguais)
+    # df_agrupado = df_calendario.groupby(['Agendamento', 'Cód. Agência', 'Nome Agência', 'Projeto']).agg({ ...
+    
+    # Opção B: Manter agrupamento atual e pegar o código via 'first' (Mais simples para o código existente)
     df_agrupado = df_calendario.groupby(['Agendamento', 'Nome Agência', 'Projeto']).agg({
-        'Nº Chamado': lambda x: ', '.join(sorted(set(x))), # Junta chamados únicos (GTS-01, GTS-02)
-        'Descrição': lambda x: ' | '.join(x),              # Junta descrições (Câmera 1 | Câmera 2)
-        'Status': 'first',      # Pega o status principal (pode ajustar lógica se quiser)
+        'Nº Chamado': lambda x: ', '.join(sorted(set(x))), 
+        'Descrição': lambda x: ' | '.join(x),              
+        'Status': 'first',      
         'Sub-Status': 'first',
         'Analista': 'first',
         'Técnico': 'first',
-        'ID': 'first'           # Pega um ID de referência
+        'ID': 'first',
+        'Cód. Agência': 'first' # <--- ADICIONADO: Pega o código da agência
     }).reset_index()
 
-    # 4. MONTAGEM DOS EVENTOS COM O DF AGRUPADO
+    # 4. MONTAGEM DOS EVENTOS
     eventos = []
     for _, row in df_agrupado.iterrows():
         # Definição de cores
         cor_evento = utils_chamados.get_status_color(row.get('Status'))
         
-        nome_agencia = row.get('Nome Agência', 'N/A')
+        # --- MUDANÇA AQUI: Combina Código e Nome ---
+        cod = str(row.get('Cód. Agência', '')).replace('.0', '').strip() # Remove decimal se houver
+        nome = str(row.get('Nome Agência', 'N/A')).strip()
+        
+        # Se o código já estiver no nome, não repete
+        if cod and cod not in nome:
+            nome_agencia_display = f"{cod} - {nome}"
+        else:
+            nome_agencia_display = nome
+            
         nome_projeto = row.get('Projeto', 'N/A')
         
         eventos.append({
-            "title": f"{nome_agencia} - {nome_projeto}",
+            "title": f"{nome_agencia_display} - {nome_projeto}", # Usa o nome combinado
             "color": cor_evento,
             "start": row['Agendamento'].strftime('%Y-%m-%d'),
             "end": row['Agendamento'].strftime('%Y-%m-%d'),
             "allDay": True,
-            # Passamos os dados AGRUPADOS
             "extendedProps": {
                 "ID": str(row.get('ID', '')),
-                "Chamado": str(row.get('Nº Chamado', '')), # Agora mostra lista de chamados
+                "Chamado": str(row.get('Nº Chamado', '')),
                 "Projeto": nome_projeto,
-                "Agência": nome_agencia,
+                "Agência": nome_agencia_display, # Passa o nome combinado para o detalhe também
                 "Analista": str(row.get('Analista', '')),
                 "Técnico": str(row.get('Técnico', '')),
                 "Status": str(row.get('Status', '')),
                 "Sub-Status": str(row.get('Sub-Status', '')),
-                "Descrição": str(row.get('Descrição', '')) # Descrição completa
+                "Descrição": str(row.get('Descrição', ''))
             }
         })
     
@@ -110,7 +124,7 @@ def tela_calendario():
     
     state = calendar(events=eventos, options=opcoes_calendario, key="calendario_geral")
     
-    # 5. EXIBIÇÃO DOS DETALHES AO CLICAR
+    # 5. EXIBIÇÃO DOS DETALHES
     if state and state.get("eventClick"):
         st.session_state.evento_clicado = state["eventClick"]["event"]
 
@@ -119,7 +133,6 @@ def tela_calendario():
         props = evento.get('extendedProps', {})
         
         st.divider()
-        # Mostra todos os chamados no título
         st.markdown(f"### 🎫 Chamados: {props.get('Chamado', 'Detalhes')}")
         
         c1, c2, c3 = st.columns(3)
@@ -133,11 +146,10 @@ def tela_calendario():
         
         if props.get('Descrição') and props.get('Descrição') != 'nan':
             st.markdown("**📝 Itens/Descrição Agrupada:**")
-            # Formata a descrição para ficar uma lista bonitinha (troca | por nova linha)
             desc_formatada = props.get('Descrição').replace(' | ', '\n- ')
             st.info(f"- {desc_formatada}")
 
-# --- Controle Principal da Página ---
+# --- Controle Principal ---
 if "logado" not in st.session_state or not st.session_state.logado:
     st.warning("Por favor, faça o login na página principal.")
     st.stop()
