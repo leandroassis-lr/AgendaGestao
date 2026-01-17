@@ -3,7 +3,7 @@ import pandas as pd
 import utils_chamados
 import google.generativeai as genai
 
-st.set_page_config(page_title="IA Analyst (Gemini)", page_icon="🤖")
+st.set_page_config(page_title="IA Analyst", page_icon="🤖")
 
 # --- CSS CHAT ---
 st.markdown("""
@@ -14,29 +14,34 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- 1. CONFIGURAÇÃO API GOOGLE ---
+# Busca a chave no arquivo secrets.toml
 api_key = st.secrets.get("GOOGLE_API_KEY")
 
 if not api_key:
     st.error("🔑 Chave GOOGLE_API_KEY não configurada no secrets.toml")
     st.stop()
 
-# Configura o Gemini
+# Configura o Gemini com o modelo que você tem acesso
 genai.configure(api_key=api_key)
-model = genai.GenerativeModel('gemini-pro')
+model = genai.GenerativeModel('gemini-2.0-flash')
 
 # --- 2. CARREGAR DADOS (CONTEXTO) ---
 @st.cache_data(ttl=300)
 def preparar_dados_para_ia():
     df = utils_chamados.carregar_chamados_db()
-    if df.empty: return "A base de dados está vazia."
     
+    if df.empty:
+        return "A base de dados está vazia."
+    
+    # Seleciona as colunas mais importantes para a IA entender
     cols_uteis = ['Nº Chamado', 'Projeto', 'Nome Agência', 'Status', 'Sub-Status', 'Analista', 'Agendamento', 'Observação']
     cols_finais = [c for c in cols_uteis if c in df.columns]
     
-    # Pega apenas os últimos 100 registros para não estourar o limite de texto se for muito grande
-    # ou envie tudo se o volume for pequeno. O Gemini aguenta MUITO texto (1 milhão de tokens).
-    df_resumo = df[cols_finais].copy()
+    # Pega os dados mais recentes (ex: últimos 200) para garantir que cabe no contexto
+    # O Gemini 2.0 aguenta muito texto, mas é bom ser eficiente
+    df_resumo = df[cols_finais].tail(200).copy()
     
+    # Converte para texto (CSV)
     return df_resumo.to_csv(index=False)
 
 dados_csv = preparar_dados_para_ia()
@@ -44,28 +49,17 @@ dados_csv = preparar_dados_para_ia()
 # --- 3. INICIALIZA HISTÓRICO ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
-    # No Gemini, o contexto inicial enviamos junto com a primeira pergunta ou configuramos o chat
-    # Vamos manter simples enviando o contexto na instrução oculta.
 
 # --- 4. INTERFACE ---
-st.title("🤖 Allarmi AI (Gemini Grátis)")
-st.caption("Pergunte sobre atrasos, status por analista ou resumos.")
+st.title("🤖 Allarmi AI (Gemini 2.0)")
+st.caption("Pergunte sobre atrasos, status por analista ou resumos dos seus projetos.")
 
-# Mostra histórico
+# Mostra histórico de mensagens na tela
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# --- CÓDIGO DE TESTE (APAGUE DEPOIS) ---
-with st.expander("Ver modelos disponíveis"):
-    try:
-        for m in genai.list_models():
-            if 'generateContent' in m.supported_generation_methods:
-                st.write(m.name)
-    except Exception as e:
-        st.error(f"Erro ao listar: {e}")
-
-# --- 5. INTERAÇÃO ---
+# --- 5. INTERAÇÃO (CHAT) ---
 prompt = st.chat_input("Ex: Quais chamados estão atrasados?")
 
 if prompt:
@@ -76,28 +70,33 @@ if prompt:
 
     # B. Chama o Google Gemini
     with st.chat_message("assistant"):
-        with st.spinner("Pensando..."):
+        with st.spinner("Analisando dados..."):
             try:
                 # Monta a instrução completa (Contexto + Pergunta)
                 instrucao_sistema = f"""
-                Você é um especialista em Gestão de Projetos.
+                Você é um especialista em Gestão de Projetos e Financeiro.
                 Analise os dados CSV abaixo e responda à pergunta do usuário.
                 
-                DADOS:
+                DADOS DOS CHAMADOS (CSV):
                 {dados_csv}
                 
                 PERGUNTA DO USUÁRIO:
                 {prompt}
                 
-                Responda em português, de forma direta e resumida.
+                DIRETRIZES:
+                1. Responda em português.
+                2. Seja direto e use negrito para destacar números ou chamados (ex: **GTS-123**).
+                3. Se a resposta envolver listas, use tópicos (bullet points).
+                4. Se não encontrar a informação, diga que não consta na base fornecida.
                 """
                 
+                # Gera a resposta
                 response = model.generate_content(instrucao_sistema)
                 texto_resposta = response.text
                 
+                # Exibe e salva
                 st.markdown(texto_resposta)
                 st.session_state.messages.append({"role": "assistant", "content": texto_resposta})
                 
             except Exception as e:
-
                 st.error(f"Erro na IA: {e}")
