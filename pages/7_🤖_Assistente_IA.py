@@ -22,7 +22,7 @@ if not api_key:
 
 # Configura o Gemini
 genai.configure(api_key=api_key)
-model = genai.GenerativeModel('gemini-1.5-flash') # Modelo rápido e grátis
+model = genai.GenerativeModel('gemini-pro')
 
 # --- 2. CARREGAR DADOS (CONTEXTO) ---
 @st.cache_data(ttl=300)
@@ -55,6 +55,15 @@ st.caption("Pergunte sobre atrasos, status por analista ou resumos.")
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
+
+# --- CÓDIGO DE TESTE (APAGUE DEPOIS) ---
+with st.expander("Ver modelos disponíveis"):
+    try:
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods:
+                st.write(m.name)
+    except Exception as e:
+        st.error(f"Erro ao listar: {e}")
 
 # --- 5. INTERAÇÃO ---
 prompt = st.chat_input("Ex: Quais chamados estão atrasados?")
@@ -90,4 +99,5 @@ if prompt:
                 st.session_state.messages.append({"role": "assistant", "content": texto_resposta})
                 
             except Exception as e:
+
                 st.error(f"Erro na IA: {e}")
