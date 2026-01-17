@@ -8,3 +8,5 @@ streamlit-option-menu
 streamlit-aggrid
 sqlalchemy
 psycopg2-binary
+google-generativeai
+Pillow
