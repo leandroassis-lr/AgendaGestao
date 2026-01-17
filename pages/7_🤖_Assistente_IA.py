@@ -23,7 +23,7 @@ if not api_key:
 
 # Configura o Gemini (Usando a versão 1.5 Flash que é a estável e grátis)
 genai.configure(api_key=api_key)
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel('gemini-flash-latest')
 
 # --- 2. CARREGAR DADOS (CONTEXTO) ---
 @st.cache_data(ttl=300)
@@ -92,3 +92,4 @@ if prompt:
                     st.warning(msg_erro)
                 else:
                     st.error(f"Erro na IA: {e}")
+
