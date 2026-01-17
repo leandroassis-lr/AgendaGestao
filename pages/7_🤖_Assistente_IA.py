@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import utils_chamados
 import google.generativeai as genai
+import time
 
 st.set_page_config(page_title="IA Analyst", page_icon="🤖")
 
@@ -14,16 +15,15 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- 1. CONFIGURAÇÃO API GOOGLE ---
-# Busca a chave no arquivo secrets.toml
 api_key = st.secrets.get("GOOGLE_API_KEY")
 
 if not api_key:
     st.error("🔑 Chave GOOGLE_API_KEY não configurada no secrets.toml")
     st.stop()
 
-# Configura o Gemini com o modelo que você tem acesso
+# Configura o Gemini (Usando a versão 1.5 Flash que é a estável e grátis)
 genai.configure(api_key=api_key)
-model = genai.GenerativeModel('gemini-2.0-flash')
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 # --- 2. CARREGAR DADOS (CONTEXTO) ---
 @st.cache_data(ttl=300)
@@ -33,15 +33,12 @@ def preparar_dados_para_ia():
     if df.empty:
         return "A base de dados está vazia."
     
-    # Seleciona as colunas mais importantes para a IA entender
     cols_uteis = ['Nº Chamado', 'Projeto', 'Nome Agência', 'Status', 'Sub-Status', 'Analista', 'Agendamento', 'Observação']
     cols_finais = [c for c in cols_uteis if c in df.columns]
     
-    # Pega os dados mais recentes (ex: últimos 200) para garantir que cabe no contexto
-    # O Gemini 2.0 aguenta muito texto, mas é bom ser eficiente
-    df_resumo = df[cols_finais].tail(200).copy()
+    # Reduzido para 50 para economizar cota e ser mais rápido
+    df_resumo = df[cols_finais].tail(50).copy()
     
-    # Converte para texto (CSV)
     return df_resumo.to_csv(index=False)
 
 dados_csv = preparar_dados_para_ia()
@@ -51,52 +48,47 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 # --- 4. INTERFACE ---
-st.title("🤖 Allarmi AI (Gemini 2.0)")
-st.caption("Pergunte sobre atrasos, status por analista ou resumos dos seus projetos.")
+st.title("🤖 Allarmi AI Analyst")
+st.caption("Pergunte sobre atrasos, status por analista ou resumos (Base: Últimos 50 chamados).")
 
-# Mostra histórico de mensagens na tela
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# --- 5. INTERAÇÃO (CHAT) ---
+# --- 5. INTERAÇÃO ---
 prompt = st.chat_input("Ex: Quais chamados estão atrasados?")
 
 if prompt:
-    # A. Mostra msg do usuário
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # B. Chama o Google Gemini
     with st.chat_message("assistant"):
-        with st.spinner("Analisando dados..."):
+        with st.spinner("Analisando..."):
             try:
-                # Monta a instrução completa (Contexto + Pergunta)
                 instrucao_sistema = f"""
-                Você é um especialista em Gestão de Projetos e Financeiro.
-                Analise os dados CSV abaixo e responda à pergunta do usuário.
+                Você é um especialista em Gestão de Projetos.
+                Use os dados CSV abaixo para responder.
                 
-                DADOS DOS CHAMADOS (CSV):
+                DADOS:
                 {dados_csv}
                 
-                PERGUNTA DO USUÁRIO:
+                PERGUNTA:
                 {prompt}
                 
-                DIRETRIZES:
-                1. Responda em português.
-                2. Seja direto e use negrito para destacar números ou chamados (ex: **GTS-123**).
-                3. Se a resposta envolver listas, use tópicos (bullet points).
-                4. Se não encontrar a informação, diga que não consta na base fornecida.
+                Responda em português, curto e direto.
                 """
                 
-                # Gera a resposta
                 response = model.generate_content(instrucao_sistema)
                 texto_resposta = response.text
                 
-                # Exibe e salva
                 st.markdown(texto_resposta)
                 st.session_state.messages.append({"role": "assistant", "content": texto_resposta})
                 
             except Exception as e:
-                st.error(f"Erro na IA: {e}")
+                # Se der erro de cota de novo, avisamos de forma amigável
+                if "429" in str(e):
+                    msg_erro = "⏳ **Muitas perguntas seguidas!** O plano gratuito tem um limite de velocidade. Aguarde 30 segundos e tente novamente."
+                    st.warning(msg_erro)
+                else:
+                    st.error(f"Erro na IA: {e}")
