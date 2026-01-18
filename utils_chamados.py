@@ -448,6 +448,7 @@ def atualizar_chamado_db(chamado_id_interno, updates: dict):
             
             cur.execute(query, vals)
             conn.commit()
+            st.cache_data.clear()
             
         return True
         
@@ -519,6 +520,7 @@ def recriar_banco_do_zero():
 # Mantido para compatibilidade, caso chame a função antiga
 def resetar_tabela_chamados():
     return recriar_banco_do_zero()
+
 
 
 
