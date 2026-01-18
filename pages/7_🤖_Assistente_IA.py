@@ -6,6 +6,7 @@ import google.generativeai as genai
 from datetime import datetime, timedelta
 import json
 import re
+import time
 
 st.set_page_config(page_title="Agente IA", page_icon="🕵️", layout="wide")
 
@@ -197,6 +198,7 @@ if prompt:
 if "logado" not in st.session_state or not st.session_state.logado:
     st.warning("Faça login na página principal.")
     st.stop()
+
 
 
 
