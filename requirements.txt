@@ -10,3 +10,4 @@ sqlalchemy
 psycopg2-binary
 google-generativeai>=0.7.0
 Pillow
+fpdf
