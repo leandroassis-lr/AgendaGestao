@@ -28,7 +28,7 @@ api_key = st.secrets.get("GOOGLE_API_KEY")
 if not api_key: st.error("🔑 Chave GOOGLE_API_KEY ausente."); st.stop()
 
 genai.configure(api_key=api_key)
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel('gemini-flash-latest')
 
 # --- 3. FUNÇÃO GERADORA DE PDF ---
 def criar_pdf_chamado(id_chamado):
@@ -221,6 +221,7 @@ if prompt:
 if "logado" not in st.session_state or not st.session_state.logado:
     st.warning("Faça login na página principal.")
     st.stop()
+
 
 
 
