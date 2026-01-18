@@ -3,156 +3,160 @@ import pandas as pd
 import utils_chamados
 import google.generativeai as genai
 from datetime import datetime
+import json
+import re
 
 # Configuração da Página
-st.set_page_config(page_title="Assistente IA", page_icon="🤖", layout="wide")
+st.set_page_config(page_title="Agente IA", page_icon="🕵️", layout="wide")
 
-# --- 1. CSS PARA VISUAL MODERNO ---
+# --- 1. CSS ---
 st.markdown("""
 <style>
-    /* Cabeçalho Personalizado */
-    .chat-header {
-        padding: 1rem;
-        background-color: #f0f2f6;
-        border-radius: 10px;
-        margin-bottom: 2rem;
-        border-left: 5px solid #4CAF50;
-    }
-    .chat-header h2 {
-        margin: 0;
-        color: #1f1f1f;
-        font-size: 1.8rem;
-    }
-    .chat-header p {
-        margin: 5px 0 0 0;
-        color: #666;
-    }
-    
-    /* Estilo das Mensagens */
-    .stChatMessage {
-        padding: 1rem;
-        border-radius: 15px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        margin-bottom: 15px;
-    }
-    div[data-testid="stChatMessageContent"] {
-        font-size: 1.05rem;
-        line-height: 1.6;
-    }
+    .chat-header { padding: 1rem; background-color: #e8f5e9; border-radius: 10px; margin-bottom: 2rem; border-left: 5px solid #2E7D32; }
+    .chat-header h2 { margin: 0; color: #1b5e20; font-size: 1.8rem; }
+    .stChatMessage { padding: 1rem; border-radius: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 15px; }
 </style>
 """, unsafe_allow_html=True)
 
 # --- 2. CONFIGURAÇÃO API ---
 api_key = st.secrets.get("GOOGLE_API_KEY")
 if not api_key:
-    st.error("🔑 Chave GOOGLE_API_KEY não configurada.")
-    st.stop()
+    st.error("🔑 Chave GOOGLE_API_KEY não configurada."); st.stop()
 
 genai.configure(api_key=api_key)
-# Usando o modelo que funcionou para você (pode trocar se necessário)
-model = genai.GenerativeModel('gemini-flash-latest')
+model = genai.GenerativeModel('gemini-flash-latest') # Modelo rápido
 
-# --- 3. CARREGAR DADOS COM INTELIGÊNCIA ---
+# --- 3. FUNÇÕES DE AÇÃO (BRAÇOS DO ROBÔ) ---
+def buscar_id_por_numero(numero_chamado):
+    """Encontra o ID interno do banco baseado no texto do chamado (ex: GTS-123)"""
+    df = utils_chamados.carregar_chamados_db()
+    if df.empty: return None
+    # Tenta limpar espaços
+    filtro = df[df['Nº Chamado'].astype(str).str.strip() == str(numero_chamado).strip()]
+    if not filtro.empty:
+        return filtro.iloc[0]['ID']
+    return None
+
+def executar_comando_ia(comando_json):
+    """Recebe o JSON da IA e executa a atualização no banco"""
+    try:
+        dados = json.loads(comando_json)
+        acao = dados.get("acao")
+        
+        if acao == "atualizar_status":
+            num_chamado = dados.get("chamado")
+            novo_status = dados.get("status")
+            obs = dados.get("observacao", "")
+            
+            id_banco = buscar_id_por_numero(num_chamado)
+            
+            if id_banco:
+                updates = {"Status": novo_status}
+                if obs: updates["Observação"] = obs
+                
+                # Executa no banco
+                utils_chamados.atualizar_chamado_db(id_banco, updates)
+                st.cache_data.clear() # Limpa cache para ver a mudança
+                return True, f"✅ Feito! O chamado **{num_chamado}** foi atualizado para **{novo_status}**."
+            else:
+                return False, f"⚠️ Não encontrei o chamado **{num_chamado}** no banco de dados."
+                
+    except Exception as e:
+        return False, f"Erro ao processar comando: {e}"
+    
+    return False, "Comando não reconhecido."
+
+# --- 4. PREPARAR DADOS ---
 @st.cache_data(ttl=300)
 def preparar_dados_para_ia():
     df = utils_chamados.carregar_chamados_db()
-    
-    if df.empty:
-        return "A base de dados está vazia."
-    
-    # Seleção estratégica de colunas
-    cols_uteis = ['Nº Chamado', 'Projeto', 'Nome Agência', 'Status', 'Sub-Status', 'Analista', 'Agendamento', 'Observação']
-    cols_finais = [c for c in cols_uteis if c in df.columns]
-    
-    # Pega os 100 mais recentes para análise rápida
-    df_resumo = df[cols_finais].tail(100).copy()
-    
-    return df_resumo.to_csv(index=False)
+    if df.empty: return "Base vazia."
+    # Envia colunas essenciais
+    cols = ['Nº Chamado', 'Projeto', 'Nome Agência', 'Status', 'Analista', 'Agendamento']
+    cols_finais = [c for c in cols if c in df.columns]
+    return df[cols_finais].tail(100).to_csv(index=False)
 
 dados_csv = preparar_dados_para_ia()
 
-# --- 4. SIDEBAR (SUGESTÕES) ---
+# --- 5. SIDEBAR ---
 with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/4712/4712027.png", width=50)
-    st.header("Dicas de Perguntas")
+    st.header("⚡ Comandos Disponíveis")
+    st.info("Agora eu posso atualizar o sistema!")
     st.markdown("""
-    Tente perguntar algo como:
-    
-    - 🚩 *Quais chamados estão atrasados?*
-    - 📊 *Faça um resumo dos status.*
-    - 👤 *O que a Analista Giovana tem pendente?*
-    - 🏢 *Como está a situação da Agência Centro?*
-    - 📅 *O que temos agendado para esta semana?*
+    **Tente:**
+    - "Mude o status do GTS-XXXX para Concluído"
+    - "Coloque o chamado YYYY em Andamento"
     """)
-    st.divider()
     if st.button("🗑️ Limpar Conversa"):
         st.session_state.messages = []
         st.rerun()
 
-# --- 5. CABEÇALHO PERSONALIZADO ---
-nome_usuario = st.session_state.get('usuario', 'Colaborador').split()[0].title()
+# --- 6. CABEÇALHO ---
+nome = st.session_state.get('usuario', 'User').split()[0].title()
+st.markdown(f"""<div class="chat-header"><h2>🕵️ Agente IA: {nome}</h2><p>Analiso dados e executo atualizações nos chamados.</p></div>""", unsafe_allow_html=True)
 
-st.markdown(f"""
-<div class="chat-header">
-    <h2>🤖 Olá, {nome_usuario}!</h2>
-    <p>Sou seu analista virtual. Em que posso ajudar na gestão hoje?</p>
-</div>
-""", unsafe_allow_html=True)
+# --- 7. CHAT ---
+if "messages" not in st.session_state: st.session_state.messages = []
 
-# --- 6. HISTÓRICO DE CHAT ---
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-# Exibe mensagens anteriores
 for msg in st.session_state.messages:
-    # Define avatares
-    avatar = "👤" if msg["role"] == "user" else "🤖"
+    avatar = "👤" if msg["role"] == "user" else "🕵️"
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
 
-# --- 7. LÓGICA DE INTERAÇÃO ---
-prompt = st.chat_input("Digite sua pergunta sobre os projetos...")
+prompt = st.chat_input("Digite uma análise ou uma ordem de atualização...")
 
 if prompt:
-    # A. Exibe mensagem do usuário
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user", avatar="👤"):
-        st.markdown(prompt)
+    with st.chat_message("user", avatar="👤"): st.markdown(prompt)
 
-    # B. Processa resposta da IA
-    with st.chat_message("assistant", avatar="🤖"):
-        with st.spinner("🔍 Analisando dados..."):
+    with st.chat_message("assistant", avatar="🕵️"):
+        with st.spinner("Processando..."):
             try:
-                # Dados contextuais importantes
-                hoje = datetime.now().strftime("%d/%m/%Y")
-                dia_semana = datetime.now().strftime("%A")
+                # --- O SEGREDO: INSTRUÇÃO DE COMANDO ---
+                instrucao = f"""
+                ATUE COMO: Um Agente de Gestão do sistema Allarmi.
                 
-                instrucao_sistema = f"""
-                ATUE COMO: Um Analista Sênior de Projetos do sistema Allarmi.
-                
-                CONTEXTO TEMPORAL:
-                - Hoje é: {hoje} ({dia_semana}).
-                - Use essa data para calcular atrasos (se Agendamento < Hoje).
-                
-                DADOS DOS CHAMADOS (CSV):
+                SEUS DADOS:
                 {dados_csv}
                 
-                PERGUNTA DO USUÁRIO ({nome_usuario}):
-                "{prompt}"
+                SUA MISSÃO:
+                1. Se o usuário pedir apenas INFORMAÇÃO, responda normalmente em texto.
+                2. Se o usuário pedir para ALTERAR/ATUALIZAR/MUDAR um status, NÃO RESPONDA TEXTO.
+                   Retorne APENAS um JSON estrito neste formato:
+                   
+                   {{
+                     "acao": "atualizar_status",
+                     "chamado": "NUMERO_EXATO_DO_CHAMADO",
+                     "status": "NOVO_STATUS_NORMALIZADO",
+                     "observacao": "Resumo do motivo se houver"
+                   }}
+                   
+                Status Válidos: AGENDADO, EM ANDAMENTO, CONCLUÍDO, FINALIZADO, PENDÊNCIA, CANCELADO.
+                Se o usuário falar "Terminado", use "CONCLUÍDO". Se falar "Ok", use "FINALIZADO".
                 
-                DIRETRIZES DE RESPOSTA:
-                1. Seja cordial, profissional e direto.
-                2. Use formatação Markdown: **Negrito** para chamados/números, tabelas se necessário.
-                3. Se encontrar problemas (atrasos, pendências), destaque com emojis (🚨, ⚠️).
-                4. Responda APENAS com base nos dados fornecidos.
+                PERGUNTA: {prompt}
                 """
                 
-                response = model.generate_content(instrucao_sistema)
-                texto_resposta = response.text
+                response = model.generate_content(instrucao)
+                texto_resp = response.text.strip()
                 
-                st.markdown(texto_resposta)
-                st.session_state.messages.append({"role": "assistant", "content": texto_resposta})
-                
+                # Tenta detectar se é um JSON (Comando)
+                if "{" in texto_resp and "atualizar_status" in texto_resp:
+                    # Limpa o texto caso a IA tenha colocado ```json ... ```
+                    json_limpo = re.search(r'\{.*\}', texto_resp, re.DOTALL).group()
+                    
+                    sucesso, msg_retorno = executar_comando_ia(json_limpo)
+                    st.markdown(msg_retorno)
+                    st.session_state.messages.append({"role": "assistant", "content": msg_retorno})
+                    
+                    if sucesso:
+                        time.sleep(2)
+                        st.rerun() # Recarrega para atualizar os dados
+                        
+                else:
+                    # Resposta Normal
+                    st.markdown(texto_resp)
+                    st.session_state.messages.append({"role": "assistant", "content": texto_resp})
+                    
             except Exception as e:
-                msg_erro = f"Desculpe, tive um problema técnico: {e}"
-                st.error(msg_erro)
+                st.error(f"Erro: {e}")
