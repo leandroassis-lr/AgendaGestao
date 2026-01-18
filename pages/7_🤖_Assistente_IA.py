@@ -161,11 +161,11 @@ for msg in st.session_state.messages:
         st.markdown(msg["content"])
         # Se tiver PDF nessa mensagem antiga, mostra botão (opcional, simplificado aqui)
 
-prompt = st.chat_input("Ex: Gere o PDF do chamado GTS-756499")
+prompt = st.chat_input("Ex: Gere o PDF do chamado X")
 
 if prompt:
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user", avatar="👤 {nome}"): st.markdown(prompt)
+    with st.chat_message("user", avatar="👤"): st.markdown(prompt)
 
     with st.chat_message("assistant", avatar="🕵️"):
         with st.spinner("Processando..."):
@@ -221,5 +221,6 @@ if prompt:
 if "logado" not in st.session_state or not st.session_state.logado:
     st.warning("Faça login na página principal.")
     st.stop()
+
 
 
