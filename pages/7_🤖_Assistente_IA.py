@@ -144,16 +144,14 @@ with st.sidebar:
     st.header("⚡ Comandos")
     st.markdown("""
     **Novidade:**
-    - "Gere um PDF do chamado X"
-    
-    **Outros:**
+    - "Gere um PDF"
     - "Mude o status..."
     - "Atribua o técnico..."
     """)
     if st.button("🗑️ Limpar"): st.session_state.messages = []; st.rerun()
 
 nome = st.session_state.get('usuario', 'User').split()[0].title()
-st.markdown(f"""<div class="chat-header"><h2>🕵️ Agente IA: {nome}</h2><p>Gestão e Relatórios.</p></div>""", unsafe_allow_html=True)
+st.markdown(f"""<div class="chat-header"><h2>🕵️ Bem vindo ao seu Agente IA: {nome}</h2><p>Gestão e Relatórios.</p></div>""", unsafe_allow_html=True)
 
 if "messages" not in st.session_state: st.session_state.messages = []
 
@@ -167,7 +165,7 @@ prompt = st.chat_input("Ex: Gere o PDF do chamado GTS-756499")
 
 if prompt:
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user", avatar="👤"): st.markdown(prompt)
+    with st.chat_message("user", avatar="👤 {nome}"): st.markdown(prompt)
 
     with st.chat_message("assistant", avatar="🕵️"):
         with st.spinner("Processando..."):
@@ -223,4 +221,5 @@ if prompt:
 if "logado" not in st.session_state or not st.session_state.logado:
     st.warning("Faça login na página principal.")
     st.stop()
+
 
