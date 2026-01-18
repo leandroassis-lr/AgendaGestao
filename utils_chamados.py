@@ -6,7 +6,7 @@ import html
 import psycopg2
 from psycopg2 import sql
 import numpy as np 
-import sqlite3 # Mantido caso use em outro lugar, mas o foco aqui é Postgres
+import sqlite3
 import unicodedata
 
 # --- 1. GERENCIAMENTO DE CONEXÃO ROBUSTO (POSTGRESQL) ---
@@ -330,6 +330,8 @@ def bulk_insert_chamados_db(df: pd.DataFrame):
 # --- 5. FUNÇÃO PARA ATUALIZAR CHAMADO ---
 
 def atualizar_chamado_db(chamado_id_interno, updates: dict):
+    chamado_id_interno = int(chamado_id_interno) 
+
     conn = get_valid_conn()
     if not conn: return False
     
@@ -517,5 +519,6 @@ def recriar_banco_do_zero():
 # Mantido para compatibilidade, caso chame a função antiga
 def resetar_tabela_chamados():
     return recriar_banco_do_zero()
+
 
 
