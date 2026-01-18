@@ -191,3 +191,10 @@ if prompt:
             except Exception as e:
                 st.error(f"Erro: {e}")
 
+# --- CONTROLE DE LOGIN ---
+if "logado" not in st.session_state or not st.session_state.logado:
+    st.warning("Faça login na página principal.")
+    st.stop()
+
+
+
