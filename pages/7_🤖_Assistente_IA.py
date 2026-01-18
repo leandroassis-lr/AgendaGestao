@@ -1,12 +1,15 @@
 import streamlit as st
 import pandas as pd
 import utils_chamados
+import utils
 import google.generativeai as genai
 from datetime import datetime
 import json
 import re
 
 st.set_page_config(page_title="Agente IA", page_icon="🕵️", layout="wide")
+
+utils.load_css()
 
 # --- 1. CSS ---
 st.markdown("""
@@ -187,3 +190,4 @@ if prompt:
                     
             except Exception as e:
                 st.error(f"Erro: {e}")
+
