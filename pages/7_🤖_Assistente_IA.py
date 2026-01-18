@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import utils_chamados
+import utils
 import google.generativeai as genai
 from datetime import datetime, timedelta
 import json
@@ -222,3 +223,4 @@ if prompt:
 if "logado" not in st.session_state or not st.session_state.logado:
     st.warning("Faça login na página principal.")
     st.stop()
+
